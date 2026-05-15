@@ -49,6 +49,8 @@ class SubscriptionService:
     ) -> Subscription:
         """Create a new subscription for user.
 
+        Deactivates any existing subscription before creating new one.
+
         Args:
             user_id: Rubika user ID
             tier: Subscription tier (basic, pro, enterprise)
@@ -57,6 +59,9 @@ class SubscriptionService:
         Returns:
             Created Subscription instance
         """
+        # Deactivate any existing subscriptions
+        await self.deactivate_subscription(user_id)
+
         start = date.today()
         end = start + timedelta(days=days)
 

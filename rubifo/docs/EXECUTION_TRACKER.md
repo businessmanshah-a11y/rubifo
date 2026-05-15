@@ -38,7 +38,7 @@
 | T14 | Payment verification (polling) | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 | T15 | Transaction history storage | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 | T16 | Subscription tier enforcement | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
-| T17 | Create /buy command flow | Claude | 🔄 In Progress | 2026-05-15 | - | - | - |
+| T17 | Create /buy command flow | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 | T18 | Implement /renew command | Claude | ⏳ Pending | - | - | - | - |
 | T19 | Admin payment dashboard | Claude | ⏳ Pending | - | - | - | - |
 
@@ -262,9 +262,9 @@
 
 ```
 Total Tasks: 75
-Pending:     58 ⏳
-In Progress: 1  🔄
-Done:        16 ✅
+Pending:     57 ⏳
+In Progress: 0  🔄
+Done:        17 ✅
 Blocked:     0  🚫
 Deferred:    0  📅
 
@@ -273,7 +273,7 @@ Completed Milestones:
 - M1: 7/7 (100%) ✅
 
 In Progress:
-- M2: 5/7 (71%) 🔄 (T13-T16 done، T17 in progress)
+- M2: 6/7 (86%) 🔄 (T13-T17 done, T18-T19 pending)
 
 Pending:
 - M3: 0/9 (0%) ⏳
@@ -286,9 +286,9 @@ Pending:
 Total Issues:  0
 Total Risks:   0
 
-Progress: 21.3% ▰▰▭▭▭▭▭▭▭▭
+Progress: 22.7% ▰▰▰▭▭▭▭▭▭▭
 ```
 
 **آخرین به‌روزرسانی**: ۱۴۰۵/۰۲/۲۵ (2026-05-15)
-**بعدی**: T17 (Complete /buy command payment flow)
+**بعدی**: T18 (Implement /renew command)
 

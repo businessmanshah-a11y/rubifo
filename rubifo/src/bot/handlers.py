@@ -16,6 +16,12 @@ async def route_message(client, user_id: int, message: dict) -> None:
                 await commands.handle_start(client, user_id)
             elif command == "/buy":
                 await commands.handle_buy(client, user_id)
+            elif command == "/buy_basic":
+                await commands.handle_buy_basic(client, user_id)
+            elif command == "/buy_pro":
+                await commands.handle_buy_pro(client, user_id)
+            elif command == "/buy_enterprise":
+                await commands.handle_buy_enterprise(client, user_id)
             elif command == "/help":
                 await commands.handle_help(client, user_id)
             elif command == "/addroute":
