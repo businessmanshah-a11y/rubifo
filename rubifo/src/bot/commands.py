@@ -346,6 +346,14 @@ async def handle_conversation_response(client, user_id: int, text: str) -> None:
         await handle_addroute_conversation(client, user_id, text)
     elif command == "removeroute":
         await handle_removeroute_confirmation(client, user_id, text)
+    elif command == "addplan_route_select":
+        await handle_addplan_route_selection(client, user_id, text)
+    elif command == "addplan_type_select":
+        await handle_addplan_type_selection(client, user_id, text)
+    elif command == "addplan_interval":
+        await handle_addplan_interval_input(client, user_id, text)
+    elif command == "addplan_daily_count":
+        await handle_addplan_daily_count_input(client, user_id, text)
 
 
 async def handle_addroute_conversation(client, user_id: int, text: str) -> None:
@@ -499,6 +507,175 @@ async def populate_route_queue(
         await client.send_message(
             user_id, "خطایی در جمع‌آوری پست‌ها رخ داد. مسیر ایجاد شد اما بدون پست."
         )
+
+
+async def handle_addplan_route_selection(client, user_id: int, text: str) -> None:
+    """Handle route selection for /addplan (T30-T31).
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        text: Route ID input
+    """
+    state = conversation_states.get(user_id, {})
+    if state.get("command") != "addplan_route_select":
+        return
+
+    try:
+        route_id = int(text.strip())
+    except ValueError:
+        await client.send_message(user_id, "❌ شناسه مسیر باید عدد باشد.")
+        return
+
+    routes = state.get("routes", {})
+    if route_id not in routes:
+        await client.send_message(user_id, "❌ مسیر یافت نشد.")
+        return
+
+    # Move to schedule type selection
+    state["route_id"] = route_id
+    state["command"] = "addplan_type_select"
+    state["step"] = 2
+
+    schedule_type_message = (
+        "🔄 نوع برنامه‌ریزی را انتخاب کنید:\n\n"
+        "1️⃣ بازه‌ای (interval)\n"
+        "   ارسال یک پیام هر N دقیقه\n\n"
+        "2️⃣ توزیع روزانه (daily_count)\n"
+        "   ارسال N پیام در اوقات مشخص هر روز\n\n"
+        "شماره را وارد کنید (1 یا 2):"
+    )
+    await client.send_message(user_id, schedule_type_message)
+    logger.info(f"User {user_id} selected route {route_id} for scheduling")
+
+
+async def handle_addplan_type_selection(client, user_id: int, text: str) -> None:
+    """Handle schedule type selection for /addplan.
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        text: Type selection (1 or 2)
+    """
+    state = conversation_states.get(user_id, {})
+    if state.get("command") != "addplan_type_select":
+        return
+
+    response = text.strip()
+
+    if response == "1":
+        # Interval type
+        state["command"] = "addplan_interval"
+        state["step"] = 3
+
+        message = (
+            "⏱️ هر چند دقیقه یک پیام ارسال شود؟\n\n"
+            "مثال: 60\n"
+            "معنی: یک پیام هر 60 دقیقه"
+        )
+        await client.send_message(user_id, message)
+
+    elif response == "2":
+        # Daily count type
+        state["command"] = "addplan_daily_count"
+        state["step"] = 3
+        state["sub_step"] = 1  # Get daily count
+
+        message = (
+            "📊 چند پیام باید هر روز ارسال شود؟\n\n"
+            "مثال: 3\n"
+            "معنی: 3 پیام در روز در اوقات معینی"
+        )
+        await client.send_message(user_id, message)
+
+    else:
+        await client.send_message(user_id, "❌ عدد 1 یا 2 را وارد کنید.")
+
+
+async def handle_addplan_interval_input(client, user_id: int, text: str) -> None:
+    """Handle interval minutes input for /addplan (T30).
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        text: Interval in minutes
+    """
+    try:
+        interval_minutes = int(text.strip())
+    except ValueError:
+        await client.send_message(user_id, "❌ بازه باید عدد باشد (به دقیقه).")
+        return
+
+    if interval_minutes < 1 or interval_minutes > 10080:  # Max 1 week
+        await client.send_message(user_id, "❌ بازه باید بین 1 و 10080 دقیقه باشد.")
+        return
+
+    await handle_addplan_interval(client, user_id, interval_minutes)
+
+
+async def handle_addplan_daily_count_input(client, user_id: int, text: str) -> None:
+    """Handle daily count input for /addplan (T31).
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        text: Count or time input
+    """
+    state = conversation_states.get(user_id, {})
+    sub_step = state.get("sub_step", 1)
+
+    if sub_step == 1:
+        # Getting daily count
+        try:
+            daily_count = int(text.strip())
+        except ValueError:
+            await client.send_message(user_id, "❌ تعداد باید عدد باشد.")
+            return
+
+        if daily_count < 1 or daily_count > 48:  # Max 48 times per day
+            await client.send_message(user_id, "❌ تعداد باید بین 1 و 48 باشد.")
+            return
+
+        state["daily_count"] = daily_count
+        state["sub_step"] = 2
+        state["times"] = []
+
+        message = (
+            f"✅ {daily_count} پیام هر روز\n\n"
+            f"اوقات توزیع را وارد کنید:\n\n"
+            f"فرمت: HH:MM HH:MM HH:MM ...\n"
+            f"مثال: 09:00 14:00 19:00\n\n"
+            f"({daily_count} وقت را وارد کنید)"
+        )
+        await client.send_message(user_id, message)
+
+    elif sub_step == 2:
+        # Getting times
+        times_str = text.strip()
+        times_list = []
+
+        try:
+            for time_part in times_str.split():
+                parts = time_part.split(":")
+                if len(parts) != 2:
+                    raise ValueError
+                hour = int(parts[0])
+                minute = int(parts[1])
+                if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+                    raise ValueError
+                times_list.append((hour, minute))
+        except (ValueError, IndexError):
+            await client.send_message(user_id, "❌ فرمت اوقات اشتباه است.")
+            return
+
+        daily_count = state.get("daily_count", 0)
+        if len(times_list) != daily_count:
+            await client.send_message(
+                user_id, f"❌ باید دقیقاً {daily_count} وقت وارد کنید."
+            )
+            return
+
+        await handle_addplan_daily_count(client, user_id, daily_count, times_list)
 
 
 async def handle_removeroute_confirmation(client, user_id: int, text: str) -> None:
@@ -881,6 +1058,177 @@ async def handle_sync(client, user_id: int, route_id: int) -> None:
     except Exception as e:
         logger.error(f"Error in /sync command: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_addplan(client, user_id: int) -> None:
+    """Handle /addplan command to create a message schedule.
+
+    Starts multi-step conversation for schedule creation.
+    """
+    logger.info(f"Handling /addplan command for user {user_id}")
+
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+
+        route_service = RouteService(pool)
+
+        # Get user's routes
+        routes = await route_service.get_user_routes(user_id)
+
+        if not routes:
+            await client.send_message(
+                user_id,
+                "شما مسیری برای اضافه کردن برنامه ندارید.\n"
+                "/addroute برای ایجاد مسیر.",
+            )
+            return
+
+        # Show route selection
+        message = "📅 برای کدام مسیر برنامه‌ریزی می‌خواهید؟\n\n"
+
+        for i, route in enumerate(routes, 1):
+            route_id = route["id"]
+            source = route["source_channel_id"]
+            target = route["target_channel_id"]
+            message += f"{i}. مسیر #{route_id}: {source} → {target}\n"
+
+        message += "\nشماره مسیر را وارد کنید:"
+        await client.send_message(user_id, message)
+
+        # Initialize conversation state
+        conversation_states[user_id] = {
+            "command": "addplan_route_select",
+            "routes": {r["id"]: r for r in routes},
+            "step": 1,
+        }
+
+        logger.info(f"Started /addplan conversation for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /addplan command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_addplan_interval(client, user_id: int, interval_minutes: int) -> None:
+    """Handle /addplan with interval method (T30).
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        interval_minutes: Minutes between each message
+    """
+    logger.info(f"Creating interval schedule for user {user_id}: every {interval_minutes} min")
+
+    try:
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+
+        # Route ID from conversation state
+        if user_id not in conversation_states:
+            await client.send_message(user_id, "❌ جلسه منقضی شد. /addplan را دوباره بفرستید.")
+            return
+
+        state = conversation_states.get(user_id, {})
+        route_id = state.get("route_id")
+
+        if not route_id:
+            await client.send_message(user_id, "❌ مسیر انتخاب نشده. /addplan را دوباره بفرستید.")
+            return
+
+        schedule_service = ScheduleService(pool)
+
+        # Create schedule
+        schedule = await schedule_service.create_schedule(
+            user_id=user_id,
+            route_id=route_id,
+            schedule_type="interval",
+            interval_minutes=interval_minutes,
+        )
+
+        # Clean up conversation state
+        del conversation_states[user_id]
+
+        confirmation = (
+            f"✅ برنامه‌ریزی ایجاد شد!\n\n"
+            f"شناسه برنامه: {schedule.id}\n"
+            f"نوع: بازه‌ای ({interval_minutes} دقیقه)\n"
+            f"اجرای بعدی: {schedule.next_run}\n\n"
+            f"/listplans برای مشاهده برنامه‌ها"
+        )
+        await client.send_message(user_id, confirmation)
+        logger.info(f"Interval schedule {schedule.id} created for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error creating interval schedule: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+        if user_id in conversation_states:
+            del conversation_states[user_id]
+
+
+async def handle_addplan_daily_count(
+    client, user_id: int, daily_count: int, times: List[Tuple[int, int]]
+) -> None:
+    """Handle /addplan with daily_count method (T31).
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        daily_count: Number of messages per day
+        times: List of (hour, minute) tuples for distribution
+    """
+    logger.info(
+        f"Creating daily_count schedule for user {user_id}: {daily_count} messages/day"
+    )
+
+    try:
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+
+        if user_id not in conversation_states:
+            await client.send_message(user_id, "❌ جلسه منقضی شد. /addplan را دوباره بفرستید.")
+            return
+
+        state = conversation_states.get(user_id, {})
+        route_id = state.get("route_id")
+
+        if not route_id:
+            await client.send_message(user_id, "❌ مسیر انتخاب نشده. /addplan را دوباره بفرستید.")
+            return
+
+        schedule_service = ScheduleService(pool)
+
+        # Create schedule
+        schedule = await schedule_service.create_schedule(
+            user_id=user_id,
+            route_id=route_id,
+            schedule_type="daily_count",
+            daily_count=daily_count,
+            times=times,
+        )
+
+        # Clean up conversation state
+        del conversation_states[user_id]
+
+        # Format times for display
+        times_str = ", ".join([f"{h:02d}:{m:02d}" for h, m in sorted(times)])
+
+        confirmation = (
+            f"✅ برنامه‌ریزی ایجاد شد!\n\n"
+            f"شناسه برنامه: {schedule.id}\n"
+            f"نوع: روزانه ({daily_count} پیام/روز)\n"
+            f"اوقات: {times_str}\n"
+            f"اجرای بعدی: {schedule.next_run}\n\n"
+            f"/listplans برای مشاهده برنامه‌ها"
+        )
+        await client.send_message(user_id, confirmation)
+        logger.info(f"Daily_count schedule {schedule.id} created for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error creating daily_count schedule: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+        if user_id in conversation_states:
+            del conversation_states[user_id]
 
 
 async def handle_renew(client, user_id: int) -> None:
