@@ -1235,18 +1235,75 @@ async def handle_updatesource(client, user_id: int, route_id: int) -> None:
             logger.warning(f"Unauthorized updatesource attempt by user {user_id} for route {route_id}")
             return
 
-        # Get latest source_date from post_queue for this route
-        latest_row = await pool.fetchrow(
-            "SELECT MAX(source_date) as max_date FROM post_queue WHERE route_id = $1",
-            route_id,
-        )
-        latest_date = latest_row["max_date"] if latest_row and latest_row["max_date"] else None
-
-        # Fetch new posts from source channel
         source_channel_id = route["source_channel_id"]
-        new_posts = await fetch_channel_posts_since(client, source_channel_id, latest_date)
+        cached_guid = route.get("source_guid")
 
-        # Get current queue stats
+        # Try to use user client for real channel reading
+        try:
+            from src.bot.main import _get_user_client
+            user_client = _get_user_client()
+        except Exception:
+            user_client = None
+
+        new_count = 0
+        if user_client and user_client.is_ready:
+            await client.send_message(user_id, "🔄 در حال بروزرسانی پست‌های کانال...")
+
+            # Resolve GUID if not cached
+            object_guid = cached_guid
+            if not object_guid:
+                object_guid = await user_client.resolve_channel(source_channel_id)
+                if object_guid:
+                    await pool.execute(
+                        "UPDATE routes SET source_guid = $1 WHERE id = $2",
+                        object_guid, route_id
+                    )
+
+            if object_guid:
+                # Get last known message_id for this route
+                last = await pool.fetchrow(
+                    "SELECT MAX(message_id_in_source::bigint) as max_id FROM post_queue WHERE route_id = $1",
+                    route_id
+                )
+                min_id = str(last["max_id"]) if last and last["max_id"] else None
+
+                messages = await user_client.get_channel_messages(
+                    object_guid=object_guid,
+                    min_id=min_id,
+                    limit=100,
+                )
+
+                from datetime import datetime
+                for msg in messages:
+                    mid = msg["message_id"]
+                    ts = datetime.fromtimestamp(msg["time"]) if msg["time"] else datetime.now()
+                    try:
+                        await pool.execute(
+                            "INSERT INTO post_queue (route_id, message_id_in_source, source_date, status) "
+                            "VALUES ($1, $2, $3, 'pending') ON CONFLICT DO NOTHING",
+                            route_id, mid, ts,
+                        )
+                        new_count += 1
+                    except Exception:
+                        pass
+            else:
+                await client.send_message(
+                    user_id,
+                    "❌ نتوانستم کانال مبدأ را پیدا کنم. مطمئن شوید کاربری صحیح است.",
+                    with_keypad=True,
+                )
+                return
+        else:
+            await client.send_message(
+                user_id,
+                "⚠️ User session راه‌اندازی نشده.\n"
+                "ابتدا اجرا کنید:\n\n"
+                "python setup_session.py",
+                with_keypad=True,
+            )
+            return
+
+        # Show final stats
         pending = await pool.fetchrow(
             "SELECT COUNT(*) as c FROM post_queue WHERE route_id=$1 AND status='pending'", route_id
         )
@@ -1254,18 +1311,14 @@ async def handle_updatesource(client, user_id: int, route_id: int) -> None:
 
         await client.send_message(
             user_id,
-            f"📊 وضعیت مسیر #{route_id}\n\n"
-            f"📤 مبدأ: {route['source_channel_id']}\n"
+            f"✅ بروزرسانی انجام شد!\n\n"
+            f"📤 مبدأ: {source_channel_id}\n"
             f"📥 مقصد: {route['target_channel_id']}\n"
-            f"🗂 پست‌های در صف: {pending_count}\n\n"
-            f"─────────────────\n"
-            f"💡 نحوه اضافه کردن پست به صف:\n\n"
-            f"پست‌هایی که می‌خواهید فوروارد شوند را از کانال مبدأ\n"
-            f"به این ربات فوروارد کنید.\n\n"
-            f"ربات آن‌ها را شناسایی و به صف اضافه می‌کند.",
+            f"🆕 پست‌های جدید اضافه شده: {new_count}\n"
+            f"🗂 جمع پست‌های در صف: {pending_count}",
             with_keypad=True,
         )
-        logger.info(f"Route {route_id}: updatesource info sent to user {user_id}")
+        logger.info(f"Route {route_id}: updatesource added {new_count} posts for user {user_id}")
 
     except Exception as e:
         logger.error(f"Error in /updatesource command: {e}")

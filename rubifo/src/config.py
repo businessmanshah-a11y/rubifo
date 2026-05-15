@@ -27,6 +27,10 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 TRIAL_DURATION_HOURS = int(os.getenv("TRIAL_DURATION_HOURS", "48"))
 TRIAL_REMINDER_HOURS = int(os.getenv("TRIAL_REMINDER_HOURS", "24"))
 
+# Rubika User Session (for reading channel posts)
+USER_SESSION_NAME = os.getenv("USER_SESSION_NAME", "rubifo_user")
+CHANNEL_POLL_INTERVAL = int(os.getenv("CHANNEL_POLL_INTERVAL", "60"))  # seconds between polls
+
 # API Rate Limiting
 API_RATE_LIMIT_DELAY = float(os.getenv("API_RATE_LIMIT_DELAY", "0.5"))
 

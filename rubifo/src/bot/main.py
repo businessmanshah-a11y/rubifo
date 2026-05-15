@@ -7,7 +7,7 @@ from rubpy.bot.models import Keypad, KeypadRow, Button
 from rubpy.bot.enums import ChatKeypadTypeEnum, ButtonTypeEnum
 from src.database import init_db, close_db
 from src.logger import logger
-from src.config import BOT_TOKEN
+from src.config import BOT_TOKEN, USER_SESSION_NAME, CHANNEL_POLL_INTERVAL
 
 OFFSET_FILE = "logs/bot_offset.json"
 
@@ -154,6 +154,17 @@ class RufifoBot:
         logger.info("Rubika client initialized")
         self.running = True
 
+        # Start user client for channel reading (if session file exists)
+        from src.integrations.rubika import RubikaUserClient
+        self.user_client = RubikaUserClient(session_name=USER_SESSION_NAME)
+        try:
+            await self.user_client.start()
+            logger.info("Rubika user client started — channel monitoring active")
+            self.background_tasks.append(asyncio.create_task(self._channel_monitor_loop()))
+        except Exception as e:
+            logger.warning(f"User client failed to start (run setup_session.py first): {e}")
+            self.user_client = None
+
         self.background_tasks.append(asyncio.create_task(self._polling_loop()))
         self.background_tasks.append(asyncio.create_task(self._trial_reminder_loop()))
 
@@ -169,6 +180,8 @@ class RufifoBot:
         self.running = False
         for task in self.background_tasks:
             task.cancel()
+        if self.user_client:
+            await self.user_client.stop()
         await close_db()
 
     async def _polling_loop(self) -> None:
@@ -206,6 +219,83 @@ class RufifoBot:
             return False
         return await self.client.send_message(user_id, text, with_keypad=with_keypad)
 
+    async def _channel_monitor_loop(self) -> None:
+        """Poll source channels for new posts and add them to post_queue."""
+        from src.database import fetch
+        from datetime import datetime
+        logger.info("Channel monitor loop started")
+
+        while self.running:
+            try:
+                await asyncio.sleep(CHANNEL_POLL_INTERVAL)
+
+                # Get all active routes with their channel GUIDs
+                routes = await fetch(
+                    "SELECT id, user_id, source_channel_id, source_guid FROM routes WHERE is_active = true"
+                )
+
+                for route in routes:
+                    route_id = route["id"]
+                    source_input = route["source_channel_id"]
+                    cached_guid = route.get("source_guid")
+
+                    try:
+                        # Resolve channel to object_guid if not cached
+                        object_guid = cached_guid
+                        if not object_guid:
+                            object_guid = await self.user_client.resolve_channel(source_input)
+                            if object_guid:
+                                # Cache the resolved guid in DB
+                                from src.database import execute
+                                await execute(
+                                    "UPDATE routes SET source_guid = $1 WHERE id = $2",
+                                    object_guid, route_id
+                                )
+                            else:
+                                logger.warning(f"Route {route_id}: could not resolve channel '{source_input}'")
+                                continue
+
+                        # Get last seen message_id for this route
+                        last = await fetch(
+                            "SELECT MAX(message_id_in_source::bigint) as max_id FROM post_queue WHERE route_id = $1",
+                            route_id
+                        )
+                        min_id = str(last[0]["max_id"]) if last and last[0]["max_id"] else None
+
+                        # Fetch new messages
+                        messages = await self.user_client.get_channel_messages(
+                            object_guid=object_guid,
+                            min_id=min_id,
+                            limit=50,
+                        )
+
+                        inserted = 0
+                        from src.database import execute as db_execute
+                        for msg in messages:
+                            mid = msg["message_id"]
+                            ts = datetime.fromtimestamp(msg["time"]) if msg["time"] else datetime.now()
+                            try:
+                                await db_execute(
+                                    "INSERT INTO post_queue (route_id, message_id_in_source, source_date, status) "
+                                    "VALUES ($1, $2, $3, 'pending') ON CONFLICT DO NOTHING",
+                                    route_id, mid, ts,
+                                )
+                                inserted += 1
+                            except Exception:
+                                pass
+
+                        if inserted:
+                            logger.info(f"Route {route_id}: {inserted} new posts added from {object_guid}")
+
+                    except Exception as e:
+                        logger.error(f"Monitor error for route {route_id}: {e}")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Channel monitor loop error: {e}")
+                await asyncio.sleep(30)
+
     async def _trial_reminder_loop(self) -> None:
         from src.database import fetch
         from datetime import datetime
@@ -238,8 +328,20 @@ class RufifoBot:
                 await asyncio.sleep(60)
 
 
+_bot_instance: Optional["RufifoBot"] = None
+
+
+def _get_user_client():
+    """Return the running bot's user client (for use in command handlers)."""
+    if _bot_instance and _bot_instance.user_client:
+        return _bot_instance.user_client
+    return None
+
+
 async def main() -> None:
+    global _bot_instance
     bot = RufifoBot(BOT_TOKEN)
+    _bot_instance = bot
     try:
         await bot.start()
     except KeyboardInterrupt:
