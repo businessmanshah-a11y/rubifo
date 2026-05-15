@@ -8,6 +8,15 @@ async def route_message(client, user_id: int, message: dict) -> None:
     try:
         text = message.get("text", "").strip()
 
+        # Check if user is in an active conversation
+        if user_id in commands.conversation_states:
+            if not text.startswith("/"):
+                await commands.handle_addroute_conversation(client, user_id, text)
+                return
+            else:
+                # Cancel conversation if user sends a command
+                del commands.conversation_states[user_id]
+
         if text.startswith("/"):
             parts = text.split()
             command = parts[0].lower()

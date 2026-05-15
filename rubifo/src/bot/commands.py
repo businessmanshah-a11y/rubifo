@@ -10,6 +10,9 @@ from src.integrations.zarinpal import create_zarinpal_gateway
 # In-memory storage for pending payments (authority -> {tier, amount, user_id})
 pending_payments: Dict[str, Dict[str, Any]] = {}
 
+# In-memory storage for conversation states (user_id -> conversation_data)
+conversation_states: Dict[int, Dict[str, Any]] = {}
+
 
 async def handle_start(client, user_id: int, username: Optional[str] = None) -> None:
     """Handle /start command for user registration."""
@@ -277,9 +280,149 @@ async def handle_help(client, user_id: int) -> None:
 
 
 async def handle_addroute(client, user_id: int) -> None:
-    """Handle /addroute command."""
+    """Handle /addroute command - start multi-step route creation.
+
+    Step 1: Validate subscription and ask for source channel ID.
+    """
     logger.info(f"Handling /addroute command for user {user_id}")
-    await client.send_message(user_id, "درحال توسعه...")
+
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+        from src.core.user_service import UserService
+
+        user_service = UserService(pool)
+        route_service = RouteService(pool)
+
+        # Check if user account is active
+        user = await user_service.get_user(user_id)
+        if not user:
+            await client.send_message(user_id, "ابتدا /start را بفرستید.")
+            return
+
+        # Check if can create route
+        can_create, error_msg = await route_service.can_create_route(user_id)
+        if not can_create:
+            await client.send_message(user_id, error_msg)
+            return
+
+        # Initialize conversation state
+        conversation_states[user_id] = {
+            "command": "addroute",
+            "step": 1,
+            "source_channel_id": None,
+            "target_channel_id": None,
+        }
+
+        # Ask for source channel ID
+        prompt = (
+            "یک مسیر جدید ایجاد کنید:\n\n"
+            "1️⃣ شناسه کانال منبع را وارد کنید:\n"
+            "(کانالی که می‌خواهید پست‌ها را از آن فوروارد کنید)"
+        )
+        await client.send_message(user_id, prompt)
+        logger.info(f"Started /addroute conversation for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /addroute command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_addroute_conversation(client, user_id: int, text: str) -> None:
+    """Handle conversation steps for /addroute command.
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        text: User input text
+    """
+    if user_id not in conversation_states:
+        return
+
+    state = conversation_states[user_id]
+    if state.get("command") != "addroute":
+        return
+
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+
+        route_service = RouteService(pool)
+
+        step = state.get("step", 1)
+
+        if step == 1:
+            # Parse source channel ID
+            try:
+                source_channel_id = int(text.strip())
+            except ValueError:
+                await client.send_message(user_id, "❌ شناسه کانال باید عدد باشد.")
+                return
+
+            # Verify bot has access to source channel
+            # For now, we accept it (Rubika API verification would go here)
+            state["source_channel_id"] = source_channel_id
+            state["step"] = 2
+
+            prompt = (
+                "✅ کانال منبع ثبت شد.\n\n"
+                "2️⃣ شناسه کانال مقصد را وارد کنید:\n"
+                "(کانالی که می‌خواهید پست‌ها را به آن فوروارد کنید)"
+            )
+            await client.send_message(user_id, prompt)
+            logger.info(f"User {user_id} provided source channel: {source_channel_id}")
+
+        elif step == 2:
+            # Parse target channel ID
+            try:
+                target_channel_id = int(text.strip())
+            except ValueError:
+                await client.send_message(user_id, "❌ شناسه کانال باید عدد باشد.")
+                return
+
+            source_channel_id = state["source_channel_id"]
+
+            if source_channel_id == target_channel_id:
+                await client.send_message(
+                    user_id, "❌ کانال‌های منبع و مقصد نمی‌تواند یکی باشند."
+                )
+                return
+
+            # Verify bot has access to target channel
+            # For now, we accept it (Rubika API verification would go here)
+            state["target_channel_id"] = target_channel_id
+            state["step"] = 3
+
+            # Create the route
+            route_id = await route_service.create_route(
+                user_id, source_channel_id, target_channel_id
+            )
+
+            confirmation = (
+                f"✅ مسیر ایجاد شد!\n\n"
+                f"شناسه مسیر: {route_id}\n"
+                f"منبع: {source_channel_id}\n"
+                f"مقصد: {target_channel_id}\n\n"
+                "در حال جمع‌آوری پست‌های قدیمی..."
+            )
+            await client.send_message(user_id, confirmation)
+
+            # Remove from conversation states
+            del conversation_states[user_id]
+
+            # Proceed to queue population (T22)
+            # For now, just send completion message
+            await client.send_message(
+                user_id, "✅ مسیر آماده است. /listroutes برای دیدن مسیرهایتان."
+            )
+
+            logger.info(f"Route created for user {user_id}: {route_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /addroute conversation for user {user_id}: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+        if user_id in conversation_states:
+            del conversation_states[user_id]
 
 
 async def handle_listroutes(client, user_id: int) -> None:
