@@ -1,11 +1,40 @@
 from typing import Optional
+from datetime import datetime
 from src.logger import logger
+from src.database import get_db
+from src.core.user_service import UserService
 
 
 async def handle_start(client, user_id: int, username: Optional[str] = None) -> None:
     """Handle /start command for user registration."""
     logger.info(f"Handling /start command for user {user_id}")
-    await client.send_message(user_id, "سلام! خوش آمدید به Rubifo.")
+
+    try:
+        from src.database import pool
+        user_service = UserService(pool)
+        user = await user_service.get_or_create_user(user_id, username)
+
+        if user.is_trial_active:
+            hours_left = (user.trial_end_at - datetime.now()).total_seconds() / 3600
+            message = (
+                f"سلام! خوش آمدید به Rubifo 🎉\n\n"
+                f"تریال شما {hours_left:.0f} ساعت فعال است.\n\n"
+                f"دستورات:\n"
+                f"/buy - خرید اشتراک\n"
+                f"/help - راهنما"
+            )
+        else:
+            message = (
+                "سلام! تریال شما تمام شد.\n"
+                "/buy را برای خرید اشتراک بفرستید."
+            )
+
+        await client.send_message(user_id, message)
+        logger.info(f"Welcome message sent to user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /start command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
 async def handle_buy(client, user_id: int) -> None:
