@@ -12,6 +12,12 @@ pending_payments: Dict[str, Dict[str, Any]] = {}
 conversation_states: Dict[int, Dict[str, Any]] = {}
 
 
+async def _db_uid(pool, user_id) -> Optional[int]:
+    """Return integer DB PK (users.id) for a Rubika user_id GUID."""
+    row = await pool.fetchrow("SELECT id FROM users WHERE user_id = $1", user_id)
+    return row["id"] if row else None
+
+
 # ─────────────────────────────────────────────
 # /start
 # ─────────────────────────────────────────────
@@ -26,8 +32,9 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
         from src.core.subscription_service import SubscriptionService
 
         user = await UserService(pool).get_or_create_user(user_id, username)
-        sources = await SourceService(pool).get_user_sources(user_id)
-        routes = await RouteService(pool).get_user_routes(user_id)
+        db_uid = user.id  # integer PK — used for all DB joins
+        sources = await SourceService(pool).get_user_sources(db_uid)
+        routes = await RouteService(pool).get_user_routes(db_uid)
         active_routes = [r for r in routes if r["is_active"]]
 
         def _sub_line(u) -> str:
@@ -37,7 +44,6 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
             return "⚠️ تریال تمام شده — /buy برای اشتراک"
 
         if not sources:
-            # Onboarding — new user with no sources
             sub_line = _sub_line(user)
             msg = (
                 "👋 خوش آمدید به Rubifo!\n\n"
@@ -50,7 +56,6 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
                 "▶️ شروع کنید: دکمه «✏️ سورس جدید»"
             )
         elif not active_routes:
-            # Has sources but no active route
             sub_line = _sub_line(user)
             src_count = len(sources)
             msg = (
@@ -61,17 +66,15 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
                 "⚡ قدم بعدی: دکمه «➕ مسیر جدید»"
             )
         else:
-            # Active user — show dashboard
             total_posts = 0
             for s in sources:
-                from src.core.source_service import SourceService as SS
-                total_posts += await SS(pool).count_posts(s.id)
+                total_posts += await SourceService(pool).count_posts(s.id)
 
             sent_row = await pool.fetchrow(
                 "SELECT COUNT(*) as c FROM post_queue pq "
                 "JOIN routes r ON pq.route_id = r.id "
                 "WHERE r.user_id = $1 AND pq.status = 'sent'",
-                user_id,
+                db_uid,
             )
             total_sent = sent_row["c"] if sent_row else 0
 
@@ -79,11 +82,11 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
                 "SELECT COUNT(*) as c FROM post_queue pq "
                 "JOIN routes r ON pq.route_id = r.id "
                 "WHERE r.user_id = $1 AND pq.status = 'pending'",
-                user_id,
+                db_uid,
             )
             total_pending = pending_row["c"] if pending_row else 0
 
-            sub = await SubscriptionService(pool).get_active_subscription(user_id)
+            sub = await SubscriptionService(pool).get_active_subscription(db_uid)
             if sub:
                 days_left = (sub.end_date - datetime.now().date()).days
                 tier_fa = {"basic": "پایه", "pro": "حرفه‌ای", "enterprise": "ویژه"}.get(sub.tier, sub.tier)
@@ -131,7 +134,11 @@ async def handle_source_name_input(client, user_id: int, name: str) -> None:
     try:
         from src.database import pool
         from src.core.source_service import SourceService
-        source = await SourceService(pool).create_source(user_id, name)
+        db_id = await _db_uid(pool, user_id)
+        if not db_id:
+            await client.send_message(user_id, "ابتدا /start را بفرستید.")
+            return
+        source = await SourceService(pool).create_source(db_id, name)
 
         conversation_states[user_id] = {
             "command": "collecting_source",
@@ -238,8 +245,9 @@ async def handle_mysources(client, user_id: int) -> None:
     try:
         from src.database import pool
         from src.core.source_service import SourceService
+        db_id = await _db_uid(pool, user_id)
         ss = SourceService(pool)
-        sources = await ss.get_user_sources(user_id)
+        sources = await ss.get_user_sources(db_id) if db_id else []
 
         if not sources:
             await client.send_message(
@@ -271,10 +279,11 @@ async def handle_viewsource(client, user_id: int, source_id: int) -> None:
     try:
         from src.database import pool
         from src.core.source_service import SourceService
+        db_id = await _db_uid(pool, user_id)
         ss = SourceService(pool)
         source = await ss.get_source(source_id)
 
-        if not source or source.user_id != user_id:
+        if not source or source.user_id != db_id:
             await client.send_message(user_id, "❌ سورس یافت نشد.")
             return
 
@@ -307,9 +316,10 @@ async def handle_addpost(client, user_id: int, source_id: int) -> None:
     try:
         from src.database import pool
         from src.core.source_service import SourceService
+        db_id = await _db_uid(pool, user_id)
         source = await SourceService(pool).get_source(source_id)
 
-        if not source or source.user_id != user_id:
+        if not source or source.user_id != db_id:
             await client.send_message(user_id, "❌ سورس یافت نشد.")
             return
 
@@ -335,6 +345,7 @@ async def handle_removepost(client, user_id: int, post_id: int) -> None:
     try:
         from src.database import pool
         from src.core.source_service import SourceService
+        db_id = await _db_uid(pool, user_id)
         ss = SourceService(pool)
         post = await ss.get_post(post_id)
 
@@ -343,7 +354,7 @@ async def handle_removepost(client, user_id: int, post_id: int) -> None:
             return
 
         source = await ss.get_source(post.source_id)
-        if not source or source.user_id != user_id:
+        if not source or source.user_id != db_id:
             await client.send_message(user_id, "❌ دسترسی مجاز نیست.")
             return
 
@@ -359,9 +370,10 @@ async def handle_deletesource(client, user_id: int, source_id: int) -> None:
     try:
         from src.database import pool
         from src.core.source_service import SourceService
+        db_id = await _db_uid(pool, user_id)
         source = await SourceService(pool).get_source(source_id)
 
-        if not source or source.user_id != user_id:
+        if not source or source.user_id != db_id:
             await client.send_message(user_id, "❌ سورس یافت نشد.")
             return
 
@@ -427,7 +439,8 @@ async def handle_addroute(client, user_id: int) -> None:
             await client.send_message(user_id, error_msg)
             return
 
-        sources = await SourceService(pool).get_user_sources(user_id)
+        db_id = await _db_uid(pool, user_id)
+        sources = await SourceService(pool).get_user_sources(db_id) if db_id else []
         if not sources:
             await client.send_message(
                 user_id,
@@ -978,6 +991,7 @@ async def handle_addplan(client, user_id: int) -> None:
 
         route_map: Dict[str, int] = {}
         msg = "📅 برای کدام مسیر برنامه‌ریزی می‌کنید؟\n\n"
+        from src.core.source_service import SourceService
         for i, r in enumerate(active, 1):
             source_name = "؟"
             if r.get("source_id"):
