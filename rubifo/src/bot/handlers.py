@@ -55,6 +55,28 @@ async def route_message(client, user_id: int, message: dict) -> None:
                     await commands.handle_sync(client, user_id, route_id)
                 except (ValueError, IndexError):
                     await client.send_message(user_id, "فرمت دستور اشتباه است.")
+            elif command == "/addplan":
+                await commands.handle_addplan(client, user_id)
+            elif command == "/listplans":
+                await commands.handle_listplans(client, user_id)
+            elif command == "/editplan" and len(parts) > 1:
+                try:
+                    schedule_id = int(parts[1])
+                    await commands.handle_editplan(client, user_id, schedule_id)
+                except (ValueError, IndexError):
+                    await client.send_message(user_id, "فرمت دستور اشتباه است.")
+            elif command == "/removeplan" and len(parts) > 1:
+                try:
+                    schedule_id = int(parts[1])
+                    await commands.handle_removeplan(client, user_id, schedule_id)
+                except (ValueError, IndexError):
+                    await client.send_message(user_id, "فرمت دستور اشتباه است.")
+            elif command == "/toggleplan" and len(parts) > 1:
+                try:
+                    schedule_id = int(parts[1])
+                    await commands.handle_toggleplan(client, user_id, schedule_id)
+                except (ValueError, IndexError):
+                    await client.send_message(user_id, "فرمت دستور اشتباه است.")
             elif command == "/renew":
                 await commands.handle_renew(client, user_id)
             else:

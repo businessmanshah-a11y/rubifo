@@ -346,6 +346,8 @@ async def handle_conversation_response(client, user_id: int, text: str) -> None:
         await handle_addroute_conversation(client, user_id, text)
     elif command == "removeroute":
         await handle_removeroute_confirmation(client, user_id, text)
+    elif command == "removeplan":
+        await handle_removeplan_confirmation(client, user_id, text)
     elif command == "addplan_route_select":
         await handle_addplan_route_selection(client, user_id, text)
     elif command == "addplan_type_select":
@@ -676,6 +678,50 @@ async def handle_addplan_daily_count_input(client, user_id: int, text: str) -> N
             return
 
         await handle_addplan_daily_count(client, user_id, daily_count, times_list)
+
+
+async def handle_removeplan_confirmation(client, user_id: int, text: str) -> None:
+    """Handle confirmation for schedule removal (T35).
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        text: User response
+    """
+    state = conversation_states.get(user_id, {})
+    if state.get("command") != "removeplan":
+        return
+
+    schedule_id = state.get("schedule_id")
+    response = text.strip().lower()
+
+    if response in ["بله", "yes", "y"]:
+        try:
+            from src.database import pool
+            from src.core.schedule_service import ScheduleService
+
+            schedule_service = ScheduleService(pool)
+
+            # Delete schedule
+            await schedule_service.delete_schedule(schedule_id)
+
+            # Remove from conversation
+            del conversation_states[user_id]
+
+            confirmation = f"✅ برنامه #{schedule_id} حذف شد."
+            await client.send_message(user_id, confirmation)
+            logger.info(f"Schedule {schedule_id} removed by user {user_id}")
+
+        except Exception as e:
+            logger.error(f"Error removing schedule {schedule_id}: {e}")
+            await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+            if user_id in conversation_states:
+                del conversation_states[user_id]
+
+    else:
+        # Cancel removal
+        del conversation_states[user_id]
+        await client.send_message(user_id, "❌ حذف لغو شد.")
 
 
 async def handle_removeroute_confirmation(client, user_id: int, text: str) -> None:
@@ -1229,6 +1275,190 @@ async def handle_addplan_daily_count(
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
         if user_id in conversation_states:
             del conversation_states[user_id]
+
+
+async def handle_listplans(client, user_id: int) -> None:
+    """Handle /listplans command (T33).
+
+    Display all schedules for user with status.
+    """
+    logger.info(f"Handling /listplans command for user {user_id}")
+
+    try:
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+
+        schedule_service = ScheduleService(pool)
+
+        # Get all schedules
+        schedules = await schedule_service.get_user_schedules(user_id)
+
+        if not schedules:
+            await client.send_message(user_id, "شما هیچ برنامه‌ریزی ندارید.\n/addplan برای اضافه کردن.")
+            return
+
+        # Build message
+        message = "📅 برنامه‌ریزی‌های شما:\n\n"
+
+        for i, sched in enumerate(schedules, 1):
+            sched_id = sched.id
+            route_id = sched.route_id
+            sched_type = sched.schedule_type
+            is_active = "✅" if sched.is_active else "⛔"
+            next_run = sched.next_run.strftime("%H:%M") if sched.next_run else "---"
+
+            if sched_type == "interval":
+                type_info = f"بازه‌ای ({sched.interval_minutes} دقیقه)"
+            else:
+                type_info = f"روزانه ({sched.daily_count} پیام)"
+
+            schedule_info = (
+                f"{i}. {is_active} برنامه #{sched_id}\n"
+                f"   مسیر: #{route_id}\n"
+                f"   نوع: {type_info}\n"
+                f"   اجرای بعدی: {next_run}\n\n"
+            )
+            message += schedule_info
+
+        message += (
+            "دستورات:\n"
+            "/editplan [شناسه] - تغییر برنامه\n"
+            "/removeplan [شناسه] - حذف برنامه\n"
+            "/toggleplan [شناسه] - فعال/غیرفعال کردن\n"
+        )
+
+        await client.send_message(user_id, message)
+        logger.info(f"Listed {len(schedules)} schedules for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /listplans command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_toggleplan(client, user_id: int, schedule_id: int) -> None:
+    """Handle /toggleplan command (T36).
+
+    Toggle schedule active/inactive status.
+    """
+    logger.info(f"Handling /toggleplan command for user {user_id}, schedule {schedule_id}")
+
+    try:
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+
+        schedule_service = ScheduleService(pool)
+
+        # Get schedule
+        schedule = await schedule_service.get_schedule(schedule_id)
+
+        if not schedule:
+            await client.send_message(user_id, "❌ برنامه یافت نشد.")
+            return
+
+        # Check ownership
+        if schedule.user_id != user_id:
+            await client.send_message(user_id, "❌ این برنامه متعلق به شما نیست.")
+            return
+
+        # Toggle
+        if schedule.is_active:
+            await schedule_service.deactivate_schedule(schedule_id)
+            status_msg = "⛔ غیرفعال شد"
+        else:
+            await schedule_service.activate_schedule(schedule_id)
+            status_msg = "✅ فعال شد"
+
+        confirmation = f"{status_msg}\n\nبرنامه #{schedule_id}"
+        await client.send_message(user_id, confirmation)
+        logger.info(f"Schedule {schedule_id} toggled by user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /toggleplan command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_removeplan(client, user_id: int, schedule_id: int) -> None:
+    """Handle /removeplan command (T35).
+
+    Delete a schedule.
+    """
+    logger.info(f"Handling /removeplan command for user {user_id}, schedule {schedule_id}")
+
+    try:
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+
+        schedule_service = ScheduleService(pool)
+
+        # Get schedule
+        schedule = await schedule_service.get_schedule(schedule_id)
+
+        if not schedule:
+            await client.send_message(user_id, "❌ برنامه یافت نشد.")
+            return
+
+        # Check ownership
+        if schedule.user_id != user_id:
+            await client.send_message(user_id, "❌ این برنامه متعلق به شما نیست.")
+            return
+
+        # Ask for confirmation
+        confirmation_prompt = (
+            f"🗑️ حذف برنامه #{schedule_id}؟\n\n"
+            f"برای تأیید \"بله\" را بفرستید."
+        )
+
+        conversation_states[user_id] = {
+            "command": "removeplan",
+            "schedule_id": schedule_id,
+        }
+
+        await client.send_message(user_id, confirmation_prompt)
+        logger.info(f"Removal confirmation requested for schedule {schedule_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /removeplan command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_editplan(client, user_id: int, schedule_id: int) -> None:
+    """Handle /editplan command (T34).
+
+    Stub - editing would follow similar pattern to /addplan.
+    """
+    logger.info(f"Handling /editplan command for user {user_id}, schedule {schedule_id}")
+
+    try:
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+
+        schedule_service = ScheduleService(pool)
+
+        # Get schedule
+        schedule = await schedule_service.get_schedule(schedule_id)
+
+        if not schedule:
+            await client.send_message(user_id, "❌ برنامه یافت نشد.")
+            return
+
+        # Check ownership
+        if schedule.user_id != user_id:
+            await client.send_message(user_id, "❌ این برنامه متعلق به شما نیست.")
+            return
+
+        # For MVP, editing not fully implemented
+        # Would need to modify _calculate_next_run and update logic
+        edit_message = (
+            f"برنامه #{schedule_id}\n"
+            f"نوع: {schedule.schedule_type}\n\n"
+            f"ویرایش کامل برنامه‌ها در دسترس نیست.\n"
+            f"لطفا برنامه را حذف کرده و یک برنامه جدید اضافه کنید."
+        )
+        await client.send_message(user_id, edit_message)
+
+    except Exception as e:
+        logger.error(f"Error in /editplan command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
 async def handle_renew(client, user_id: int) -> None:
