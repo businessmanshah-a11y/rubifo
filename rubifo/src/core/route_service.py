@@ -23,14 +23,13 @@ class RouteService:
         subscription = await self.subscription_service.get_active_subscription(user_id)
 
         if not subscription:
-            # Check if user has active trial — trial allows 1 route
             from src.database import fetchrow
             user = await fetchrow(
                 "SELECT is_trial_active FROM users WHERE user_id = $1", user_id
             )
             if not user or not user["is_trial_active"]:
                 return False, "⚠️ تریال یا اشتراک فعالی ندارید.\n💳 /buy برای خرید اشتراک"
-            limit = 1  # trial: 1 route
+            limit = 1
         else:
             # Get route limit for tier
             limit = self.subscription_service.TIER_LIMITS.get(subscription.tier, 0)
@@ -54,27 +53,27 @@ class RouteService:
         return True, ""
 
     async def create_route(
-        self, user_id: int, source_channel_id: int, target_channel_id: int
+        self, user_id: int, source_id: int, target_channel_id: str
     ) -> int:
         """Create a new route for user.
 
         Args:
             user_id: Rubika user ID
-            source_channel_id: Source channel ID
-            target_channel_id: Target channel ID
+            source_id: Source ID (FK to sources table)
+            target_channel_id: Target channel @username or numeric ID
 
         Returns:
             Created route ID
         """
         result = await self.db.fetchrow(
-            "INSERT INTO routes (user_id, source_channel_id, target_channel_id, is_active) "
+            "INSERT INTO routes (user_id, source_id, target_channel_id, is_active) "
             "VALUES ($1, $2, $3, true) RETURNING id",
             user_id,
-            source_channel_id,
+            source_id,
             target_channel_id,
         )
 
-        logger.info(f"Route created for user {user_id}: {source_channel_id}->{target_channel_id}")
+        logger.info(f"Route created for user {user_id}: source {source_id} → {target_channel_id}")
         return result["id"]
 
     async def get_user_routes(self, user_id: int) -> List[Dict[str, Any]]:

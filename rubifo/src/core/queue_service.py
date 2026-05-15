@@ -9,26 +9,24 @@ class QueueService:
     def __init__(self, db):
         self.db = db
 
-    async def get_next_pending(self, route_id: int) -> Optional[PostQueueItem]:
-        """Get next pending post in FIFO order (by source_date ASC).
+    async def get_next_pending(self, route_id: int):
+        """Get next pending post in FIFO order (by source_date then id).
 
-        Args:
-            route_id: Route ID to get pending post from
-
-        Returns:
-            PostQueueItem if found, None otherwise
+        Joins source_posts to get order_index for proper ordering.
+        Returns raw dict so execution engine can access source_post_id.
         """
         result = await self.db.fetchrow(
             """
-            SELECT * FROM post_queue
-            WHERE route_id = $1 AND status = 'pending'
-            ORDER BY source_date ASC
+            SELECT pq.*, sp.order_index
+            FROM post_queue pq
+            LEFT JOIN source_posts sp ON pq.source_post_id = sp.id
+            WHERE pq.route_id = $1 AND pq.status = 'pending'
+            ORDER BY sp.order_index ASC NULLS LAST, pq.id ASC
             LIMIT 1
             """,
             route_id,
         )
-
-        return PostQueueItem(**result) if result else None
+        return dict(result) if result else None
 
     async def mark_sent(self, queue_id: int) -> None:
         """Mark a queued post as successfully sent.

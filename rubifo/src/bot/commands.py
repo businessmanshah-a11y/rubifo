@@ -1,480 +1,528 @@
-from typing import Optional, Dict, Any, Set, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
 import asyncio
 from src.logger import logger
-from src.core.user_service import UserService
 from src.config import SUBSCRIPTION_TIERS
 from src.integrations.zarinpal import create_zarinpal_gateway
-
-def _parse_channel_input(text: str) -> Optional[str]:
-    """Parse channel input — accepts @username, rubika.ir URL, or numeric ID."""
-    t = text.strip()
-    # rubika.ir URL: https://rubika.ir/username or rubika.ir/username
-    if "rubika.ir/" in t:
-        username = t.rstrip("/").split("rubika.ir/")[-1].strip()
-        return f"@{username}" if username else None
-    # @username
-    if t.startswith("@"):
-        username = t[1:].strip()
-        return f"@{username}" if username else None
-    # numeric ID
-    try:
-        int(t)
-        return t
-    except ValueError:
-        pass
-    # plain username without @
-    if t.isalnum() or (t.replace("_", "").isalnum() and len(t) > 3):
-        return f"@{t}"
-    return None
-
-
-MAIN_MENU_TEXT = (
-    "➕ /addroute — مسیر جدید\n"
-    "📋 /listroutes — مسیرهای من\n"
-    "💳 /buy — خرید اشتراک\n"
-    "📅 /listplans — برنامه‌ریزی\n"
-    "📊 /logs — گزارش‌ها\n"
-    "❓ /help — راهنما"
-)
 
 # In-memory storage for pending payments (authority -> {tier, amount, user_id})
 pending_payments: Dict[str, Dict[str, Any]] = {}
 
-# In-memory storage for conversation states (user_id -> conversation_data)
+# In-memory conversation states (user_id -> conversation_data)
 conversation_states: Dict[int, Dict[str, Any]] = {}
 
 
-async def handle_start(client, user_id: int, username: Optional[str] = None) -> None:
-    """Handle /start command for user registration."""
-    logger.info(f"Handling /start command for user {user_id}")
+# ─────────────────────────────────────────────
+# /start
+# ─────────────────────────────────────────────
 
+async def handle_start(client, user_id: int, username: Optional[str] = None) -> None:
+    logger.info(f"/start for user {user_id}")
     try:
         from src.database import pool
-        user_service = UserService(pool)
-        user = await user_service.get_or_create_user(user_id, username)
+        from src.core.user_service import UserService
+        user = await UserService(pool).get_or_create_user(user_id, username)
 
         if user.is_trial_active:
             hours_left = (user.trial_end_at - datetime.now()).total_seconds() / 3600
-            message = (
-                f"👋 سلام! خوش آمدید به Rubifo\n\n"
-                f"⏳ تریال: {hours_left:.0f} ساعت باقیمانده"
-            )
+            msg = f"👋 خوش آمدید به Rubifo\n\n⏳ تریال: {hours_left:.0f} ساعت باقیمانده"
         else:
-            message = (
-                f"👋 سلام! خوش آمدید به Rubifo\n\n"
-                f"⚠️ تریال شما تمام شده"
-            )
+            msg = "👋 خوش آمدید به Rubifo\n\n⚠️ تریال شما تمام شده"
 
-        await client.send_message(user_id, message, with_keypad=True)
-        logger.info(f"Welcome message sent to user {user_id}")
-
+        await client.send_message(user_id, msg, with_keypad=True)
     except Exception as e:
-        logger.error(f"Error in /start command: {e}")
+        logger.error(f"/start error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
-async def handle_buy(client, user_id: int) -> None:
-    """Handle /buy command to display subscription tiers."""
-    logger.info(f"Handling /buy command for user {user_id}")
+# ─────────────────────────────────────────────
+# SOURCE MANAGEMENT
+# ─────────────────────────────────────────────
 
-    try:
-        from src.database import pool
-        from src.core.subscription_service import SubscriptionService
-        from src.core.user_service import UserService
-
-        user_service = UserService(pool)
-        subscription_service = SubscriptionService(pool)
-
-        # Check if user already has active subscription
-        active_sub = await subscription_service.get_active_subscription(user_id)
-
-        if active_sub:
-            message = (
-                f"شما در حال حاضر اشتراک {active_sub.tier} دارید.\n"
-                f"تاریخ پایان: {active_sub.end_date}\n\n"
-                f"/renew برای تمدید"
-            )
-            await client.send_message(user_id, message)
-            return
-
-        # Display tier options
-        tiers_message = (
-            "سطح‌های اشتراک Rubifo:\n\n"
-            "📦 پایه (Basic)\n"
-            "   • 1 مسیر فوروارد\n"
-            "   • قیمت: 50,000 تومان/ماهانه\n"
-            "   /buy_basic\n\n"
-            "⭐ حرفه‌ای (Pro)\n"
-            "   • 3 مسیر فوروارد\n"
-            "   • قیمت: 120,000 تومان/ماهانه\n"
-            "   /buy_pro\n\n"
-            "👑 ویژه (Enterprise)\n"
-            "   • 10 مسیر فوروارد\n"
-            "   • قیمت: 350,000 تومان/ماهانه\n"
-            "   /buy_enterprise"
-        )
-
-        await client.send_message(user_id, tiers_message)
-        logger.info(f"Subscription tiers displayed to user {user_id}")
-
-    except Exception as e:
-        logger.error(f"Error in /buy command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+async def handle_addsource(client, user_id: int) -> None:
+    """Start creating a new source — ask for name."""
+    logger.info(f"/addsource for user {user_id}")
+    conversation_states[user_id] = {"command": "source_naming"}
+    await client.send_message(
+        user_id,
+        "✏️ سورس جدید\n\n"
+        "یک نام برای این سورس وارد کنید:\n"
+        "(مثال: تبلیغات محصول الف، محتوای هفتگی)"
+    )
 
 
-async def handle_buy_tier(client, user_id: int, tier: str) -> None:
-    """Handle tier selection and initiate payment.
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        tier: Subscription tier (basic, pro, enterprise)
-    """
-    logger.info(f"Handling /buy_{tier} command for user {user_id}")
-
-    if tier not in SUBSCRIPTION_TIERS:
-        await client.send_message(user_id, "سطح اشتراک نامعتبر است.")
+async def handle_source_name_input(client, user_id: int, name: str) -> None:
+    """Create source with given name and enter collecting mode."""
+    name = name.strip()
+    if not name or len(name) > 100:
+        await client.send_message(user_id, "❌ نام باید بین ۱ تا ۱۰۰ کاراکتر باشد.")
         return
 
     try:
         from src.database import pool
-        from src.core.subscription_service import SubscriptionService
+        from src.core.source_service import SourceService
+        source = await SourceService(pool).create_source(user_id, name)
 
-        subscription_service = SubscriptionService(pool)
-
-        # Get tier info
-        tier_info = SUBSCRIPTION_TIERS[tier]
-        amount = tier_info["price_monthly"]
-
-        # Create payment request
-        gateway = create_zarinpal_gateway(sandbox=True)
-        success, result = await gateway.request_payment(
-            amount=amount,
-            description=f"اشتراک {tier} - Rubifo",
-            callback_url=None,
-        )
-
-        if not success:
-            logger.error(f"Payment request failed for user {user_id}: {result}")
-            await client.send_message(user_id, f"خطا در درخواست پرداخت: {result}")
-            return
-
-        # Extract authority from result (payment_url)
-        # URL format: https://sandbox.zarinpal.com/pg/StartPay/{authority}
-        authority = result.split("/StartPay/")[-1]
-
-        # Store pending payment
-        pending_payments[authority] = {
-            "user_id": user_id,
-            "tier": tier,
-            "amount": amount,
+        conversation_states[user_id] = {
+            "command": "collecting_source",
+            "source_id": source.id,
+            "source_name": name,
+            "post_count": 0,
         }
-
-        # Send payment link to user
-        payment_message = (
-            f"درخواست پرداخت برای اشتراک {tier} ایجاد شد.\n\n"
-            f"لطفا بر روی لینک کلیک کنید و پرداخت را تکمیل کنید:\n"
-            f"{result}\n\n"
-            f"لطفا منتظر تأیید بمانید..."
-        )
-        await client.send_message(user_id, payment_message)
-
-        # Start payment verification polling as background task
-        asyncio.create_task(
-            verify_payment_polling(client, subscription_service, authority, amount)
-        )
-
-        logger.info(f"Payment link sent to user {user_id}, authority: {authority}")
-
-    except Exception as e:
-        logger.error(f"Error in /buy_{tier} command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-
-
-async def verify_payment_polling(
-    client, subscription_service: "SubscriptionService", authority: str, amount: int
-) -> None:
-    """Poll Zarinpal for payment verification.
-
-    Args:
-        client: Rubpy bot client
-        subscription_service: SubscriptionService instance
-        authority: Payment authority from Zarinpal
-        amount: Payment amount in Rials
-    """
-    MAX_ATTEMPTS = 30  # 5 minutes with 10-second intervals
-    attempt = 0
-
-    while attempt < MAX_ATTEMPTS:
-        try:
-            # Check if payment data exists
-            if authority not in pending_payments:
-                logger.warning(f"Payment {authority} no longer pending")
-                break
-
-            payment_data = pending_payments[authority]
-            user_id = payment_data["user_id"]
-            tier = payment_data["tier"]
-
-            # Verify payment with Zarinpal
-            gateway = create_zarinpal_gateway(sandbox=True)
-            success, ref_id = await gateway.verify_payment(authority, amount)
-
-            if success:
-                # Payment verified - create subscription
-                from src.database import pool
-                from src.core.transaction_service import TransactionService
-
-                transaction_service = TransactionService(pool)
-
-                # Create subscription
-                subscription = await subscription_service.create_subscription(user_id, tier, days=30)
-
-                # Insert transaction
-                await transaction_service.insert_transaction(
-                    user_id=user_id,
-                    amount=amount,
-                    tier=tier,
-                    status="completed",
-                    reference_id=ref_id,
-                )
-
-                # Remove from pending
-                del pending_payments[authority]
-
-                # Send confirmation
-                confirmation_message = (
-                    f"✅ پرداخت تأیید شد!\n\n"
-                    f"اشتراک {tier} شما فعال شد.\n"
-                    f"تاریخ پایان: {subscription.end_date}\n\n"
-                    f"اکنون می‌توانید از /addroute استفاده کنید."
-                )
-                await client.send_message(user_id, confirmation_message)
-
-                logger.info(
-                    f"Payment verified for user {user_id}, subscription {subscription.id} created"
-                )
-                return
-
-            attempt += 1
-            if attempt < MAX_ATTEMPTS:
-                await asyncio.sleep(10)
-
-        except Exception as e:
-            logger.error(f"Error in payment verification for {authority}: {e}")
-            attempt += 1
-            if attempt < MAX_ATTEMPTS:
-                await asyncio.sleep(10)
-
-    # Timeout - send error message
-    if authority in pending_payments:
-        payment_data = pending_payments.pop(authority)
-        user_id = payment_data["user_id"]
-
-        timeout_message = (
-            "⏱ مهلت تأیید پرداخت تمام شد.\n"
-            "لطفا دوباره /buy را بفرستید."
-        )
-        await client.send_message(user_id, timeout_message)
-        logger.warning(f"Payment verification timeout for {authority}")
-
-
-async def handle_buy_basic(client, user_id: int) -> None:
-    """Handle /buy_basic command."""
-    await handle_buy_tier(client, user_id, "basic")
-
-
-async def handle_buy_pro(client, user_id: int) -> None:
-    """Handle /buy_pro command."""
-    await handle_buy_tier(client, user_id, "pro")
-
-
-async def handle_buy_enterprise(client, user_id: int) -> None:
-    """Handle /buy_enterprise command."""
-    await handle_buy_tier(client, user_id, "enterprise")
-
-
-async def handle_help(client, user_id: int) -> None:
-    """Handle /help command (T41).
-
-    Display comprehensive help with all commands.
-    """
-    logger.info(f"Handling /help command for user {user_id}")
-    from src.localization import HELP_TEXT
-
-    await client.send_message(user_id, HELP_TEXT)
-
-
-async def handle_calendar(client, user_id: int) -> None:
-    """Handle /calendar command (T43).
-
-    Show calendar of scheduled activities.
-    """
-    logger.info(f"Handling /calendar command for user {user_id}")
-
-    try:
-        from src.database import pool
-        from src.core.schedule_service import ScheduleService
-        from datetime import datetime
-
-        schedule_service = ScheduleService(pool)
-
-        # Get user's schedules
-        schedules = await schedule_service.get_user_schedules(user_id)
-
-        if not schedules:
-            await client.send_message(user_id, "شما هیچ برنامه‌ریزی ندارید.\n/addplan برای ایجاد.")
-            return
-
-        # Build calendar view (simplified - current month)
-        now = datetime.now()
-        calendar_text = f"📅 برنامه‌ریزی‌های {now.strftime('%B %Y')}:\n\n"
-
-        for sched in schedules:
-            sched_type = sched.schedule_type
-            if sched_type == "interval":
-                type_str = f"⏱️ {sched.interval_minutes} دقیقه"
-            else:
-                type_str = f"📊 {sched.daily_count} پیام/روز"
-
-            calendar_text += f"#{sched.id}: {type_str}\n"
-            calendar_text += f"   بعدی: {sched.next_run.strftime('%d/%m %H:%M')}\n\n"
-
-        await client.send_message(user_id, calendar_text)
-        logger.info(f"Calendar displayed for user {user_id}")
-
-    except Exception as e:
-        logger.error(f"Error in /calendar command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-
-
-async def handle_logs(client, user_id: int) -> None:
-    """Handle /logs command (T44).
-
-    Show recent activity logs.
-    """
-    logger.info(f"Handling /logs command for user {user_id}")
-
-    try:
-        from src.database import pool
-
-        # Get recent queue activities (sent/failed)
-        logs = await pool.fetch(
-            """
-            SELECT pq.id, pq.status, pq.created_at, pq.last_error,
-                   r.source_channel_id, r.target_channel_id
-            FROM post_queue pq
-            JOIN routes r ON pq.route_id = r.id
-            WHERE r.user_id = $1
-            ORDER BY pq.created_at DESC
-            LIMIT 20
-            """,
+        await client.send_message(
             user_id,
+            f"✅ سورس «{name}» ساخته شد!\n\n"
+            f"📨 حالا پست‌هایی که می‌خواهید ذخیره شوند را ارسال کنید.\n"
+            f"(عکس، ویدیو، ویس، موزیک، فایل، متن — همه قبول است)\n\n"
+            f"وقتی تمام شد /savesource بفرستید."
         )
-
-        if not logs:
-            await client.send_message(user_id, "هیچ فعالیتی برای نمایش وجود ندارد.")
-            return
-
-        # Build log message
-        log_text = "📋 **فعالیت‌های اخیر:**\n\n"
-
-        for log in logs:
-            status_emoji = "✅" if log["status"] == "sent" else "❌"
-            time_str = log["created_at"].strftime("%H:%M")
-            source = log["source_channel_id"]
-            target = log["target_channel_id"]
-
-            log_text += f"{status_emoji} {time_str} | {source} → {target}\n"
-
-            if log["status"] == "failed" and log["last_error"]:
-                log_text += f"   ❗ {log['last_error'][:50]}\n"
-
-        await client.send_message(user_id, log_text)
-        logger.info(f"Logs displayed for user {user_id}")
-
     except Exception as e:
-        logger.error(f"Error in /logs command: {e}")
+        logger.error(f"source_name_input error: {e}")
+        if user_id in conversation_states:
+            del conversation_states[user_id]
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
+
+async def handle_source_collecting_message(client, user_id: int, message: Dict[str, Any]) -> None:
+    """Store an incoming message as a source post during collecting mode."""
+    state = conversation_states.get(user_id, {})
+    source_id = state.get("source_id")
+    if not source_id:
+        return
+
+    try:
+        from src.database import pool
+        from src.core.source_service import SourceService
+        post = await SourceService(pool).add_post_from_message(source_id, message)
+
+        state["post_count"] = state.get("post_count", 0) + 1
+        count = state["post_count"]
+
+        await client.send_message(
+            user_id,
+            f"✅ پست {count} ذخیره شد ({post.display_type})\n"
+            f"ادامه دهید یا /savesource برای پایان."
+        )
+    except Exception as e:
+        logger.error(f"collecting message error for user {user_id}: {e}")
+        await client.send_message(user_id, "❌ خطا در ذخیره پست. دوباره ارسال کنید.")
+
+
+async def handle_savesource(client, user_id: int) -> None:
+    """Finish collecting and show source summary."""
+    state = conversation_states.pop(user_id, {})
+    source_id = state.get("source_id")
+    source_name = state.get("source_name", "")
+    post_count = state.get("post_count", 0)
+
+    if not source_id:
+        await client.send_message(user_id, "❌ هیچ سورس فعالی برای ذخیره وجود ندارد.")
+        return
+
+    await client.send_message(
+        user_id,
+        f"✅ سورس «{source_name}» ذخیره شد!\n\n"
+        f"📊 تعداد پست‌ها: {post_count}\n\n"
+        f"📦 /mysources — مشاهده همه سورس‌ها\n"
+        f"➕ /addroute — اتصال این سورس به کانال",
+        with_keypad=True,
+    )
+
+
+async def handle_mysources(client, user_id: int) -> None:
+    """List all sources for user."""
+    logger.info(f"/mysources for user {user_id}")
+    try:
+        from src.database import pool
+        from src.core.source_service import SourceService
+        ss = SourceService(pool)
+        sources = await ss.get_user_sources(user_id)
+
+        if not sources:
+            await client.send_message(
+                user_id,
+                "📦 هیچ سورسی ندارید.\n✏️ /addsource برای ساختن سورس جدید.",
+                with_keypad=True,
+            )
+            return
+
+        msg = "📦 سورس‌های شما:\n\n"
+        for s in sources:
+            count = await ss.count_posts(s.id)
+            msg += f"#{s.id} — {s.name}\n   📝 {count} پست\n\n"
+
+        msg += (
+            "دستورات:\n"
+            "/viewsource [شناسه] — مشاهده پست‌ها\n"
+            "/addpost [شناسه] — افزودن پست\n"
+            "/deletesource [شناسه] — حذف سورس"
+        )
+        await client.send_message(user_id, msg, with_keypad=True)
+    except Exception as e:
+        logger.error(f"/mysources error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_viewsource(client, user_id: int, source_id: int) -> None:
+    """Show posts in a source."""
+    try:
+        from src.database import pool
+        from src.core.source_service import SourceService
+        ss = SourceService(pool)
+        source = await ss.get_source(source_id)
+
+        if not source or source.user_id != user_id:
+            await client.send_message(user_id, "❌ سورس یافت نشد.")
+            return
+
+        posts = await ss.get_posts(source_id)
+        if not posts:
+            await client.send_message(
+                user_id,
+                f"📦 سورس «{source.name}» خالی است.\n"
+                f"/addpost {source_id} برای افزودن پست."
+            )
+            return
+
+        msg = f"📦 سورس «{source.name}» — {len(posts)} پست:\n\n"
+        for p in posts[:20]:
+            valid = "" if p.file_id_valid else " ⚠️منقضی"
+            msg += f"#{p.id} {p.display_type}{valid} — {p.short_preview[:35]}\n"
+
+        if len(posts) > 20:
+            msg += f"\n... و {len(posts) - 20} پست دیگر"
+
+        msg += f"\n\n/removepost [شناسه‌پست] برای حذف"
+        await client.send_message(user_id, msg)
+    except Exception as e:
+        logger.error(f"/viewsource error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_addpost(client, user_id: int, source_id: int) -> None:
+    """Enter collecting mode for an existing source."""
+    try:
+        from src.database import pool
+        from src.core.source_service import SourceService
+        source = await SourceService(pool).get_source(source_id)
+
+        if not source or source.user_id != user_id:
+            await client.send_message(user_id, "❌ سورس یافت نشد.")
+            return
+
+        conversation_states[user_id] = {
+            "command": "collecting_source",
+            "source_id": source.id,
+            "source_name": source.name,
+            "post_count": 0,
+        }
+        await client.send_message(
+            user_id,
+            f"📨 افزودن پست به سورس «{source.name}»\n\n"
+            f"پست‌های جدید را ارسال کنید.\n"
+            f"برای پایان /savesource بفرستید."
+        )
+    except Exception as e:
+        logger.error(f"/addpost error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_removepost(client, user_id: int, post_id: int) -> None:
+    """Remove a single post from a source."""
+    try:
+        from src.database import pool
+        from src.core.source_service import SourceService
+        ss = SourceService(pool)
+        post = await ss.get_post(post_id)
+
+        if not post:
+            await client.send_message(user_id, "❌ پست یافت نشد.")
+            return
+
+        source = await ss.get_source(post.source_id)
+        if not source or source.user_id != user_id:
+            await client.send_message(user_id, "❌ دسترسی مجاز نیست.")
+            return
+
+        await ss.remove_post(post_id)
+        await client.send_message(user_id, f"✅ پست #{post_id} حذف شد.")
+    except Exception as e:
+        logger.error(f"/removepost error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_deletesource(client, user_id: int, source_id: int) -> None:
+    """Ask confirmation before deleting a source."""
+    try:
+        from src.database import pool
+        from src.core.source_service import SourceService
+        source = await SourceService(pool).get_source(source_id)
+
+        if not source or source.user_id != user_id:
+            await client.send_message(user_id, "❌ سورس یافت نشد.")
+            return
+
+        conversation_states[user_id] = {
+            "command": "deletesource",
+            "source_id": source_id,
+            "source_name": source.name,
+        }
+        await client.send_message(
+            user_id,
+            f"🗑️ حذف سورس «{source.name}»؟\n\n"
+            f"تمام پست‌های این سورس و مسیرهای مرتبط حذف می‌شوند.\n\n"
+            f"برای تأیید «بله» بفرستید."
+        )
+    except Exception as e:
+        logger.error(f"/deletesource error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_deletesource_confirmation(client, user_id: int, text: str) -> None:
+    state = conversation_states.pop(user_id, {})
+    source_id = state.get("source_id")
+    source_name = state.get("source_name", "")
+
+    if text.strip().lower() not in ("بله", "yes", "y"):
+        await client.send_message(user_id, "❌ حذف لغو شد.")
+        return
+
+    try:
+        from src.database import pool
+        from src.core.source_service import SourceService
+        await SourceService(pool).delete_source(source_id)
+        await client.send_message(
+            user_id,
+            f"✅ سورس «{source_name}» حذف شد.",
+            with_keypad=True,
+        )
+    except Exception as e:
+        logger.error(f"deletesource_confirmation error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+# ─────────────────────────────────────────────
+# ROUTE MANAGEMENT (source-based)
+# ─────────────────────────────────────────────
 
 async def handle_addroute(client, user_id: int) -> None:
-    """Handle /addroute command - start multi-step route creation.
-
-    Step 1: Validate subscription and ask for source channel ID.
-    """
-    logger.info(f"Handling /addroute command for user {user_id}")
-
+    """Start route creation — user picks a source, then a target channel."""
+    logger.info(f"/addroute for user {user_id}")
     try:
         from src.database import pool
+        from src.core.source_service import SourceService
         from src.core.route_service import RouteService
         from src.core.user_service import UserService
 
-        user_service = UserService(pool)
-        route_service = RouteService(pool)
-
-        # Check if user account is active
-        user = await user_service.get_user(user_id)
+        user = await UserService(pool).get_user(user_id)
         if not user:
             await client.send_message(user_id, "ابتدا /start را بفرستید.")
             return
 
-        # Check if can create route
-        can_create, error_msg = await route_service.can_create_route(user_id)
+        can_create, error_msg = await RouteService(pool).can_create_route(user_id)
         if not can_create:
             await client.send_message(user_id, error_msg)
             return
 
-        # Initialize conversation state
+        sources = await SourceService(pool).get_user_sources(user_id)
+        if not sources:
+            await client.send_message(
+                user_id,
+                "📦 ابتدا باید یک سورس بسازید.\n✏️ /addsource",
+                with_keypad=True,
+            )
+            return
+
+        source_map = {}
+        msg = "➕ مسیر جدید\n\nکدام سورس را می‌خواهید به کانال وصل کنید؟\n\n"
+        for i, s in enumerate(sources, 1):
+            post_count = await SourceService(pool).count_posts(s.id)
+            msg += f"{i}️⃣ #{s.id} — {s.name} ({post_count} پست)\n"
+            source_map[str(i)] = s.id
+
+        msg += "\nشماره سورس را وارد کنید:"
+        await client.send_message(user_id, msg)
+
         conversation_states[user_id] = {
             "command": "addroute",
             "step": 1,
-            "source_channel_id": None,
-            "target_channel_id": None,
+            "source_map": source_map,
         }
-
-        prompt = (
-            "➕ ایجاد مسیر جدید\n\n"
-            "1️⃣ آیدی کانال مبدأ را وارد کنید:\n"
-            "(کانالی که پست‌ها از آن فوروارد می‌شوند)\n\n"
-            "فرمت قابل قبول:\n"
-            "• @channel_username\n"
-            "• https://rubika.ir/channel_username\n"
-            "• شناسه عددی کانال"
-        )
-        await client.send_message(user_id, prompt)
-        logger.info(f"Started /addroute conversation for user {user_id}")
-
     except Exception as e:
-        logger.error(f"Error in /addroute command: {e}")
+        logger.error(f"/addroute error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
-async def handle_conversation_response(client, user_id: int, text: str) -> None:
-    """Handle conversation responses for various commands.
+async def handle_addroute_conversation(client, user_id: int, text: str) -> None:
+    """Handle multi-step addroute conversation."""
+    state = conversation_states.get(user_id, {})
+    step = state.get("step", 1)
 
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        text: User input text
-    """
-    if user_id not in conversation_states:
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+        from src.core.source_service import SourceService
+
+        if step == 1:
+            source_map = state.get("source_map", {})
+            source_id = source_map.get(text.strip())
+            if not source_id:
+                await client.send_message(user_id, "❌ شماره نامعتبر. دوباره وارد کنید.")
+                return
+
+            source = await SourceService(pool).get_source(source_id)
+            state["source_id"] = source_id
+            state["source_name"] = source.name if source else str(source_id)
+            state["step"] = 2
+
+            await client.send_message(
+                user_id,
+                f"✅ سورس «{state['source_name']}» انتخاب شد.\n\n"
+                f"آیدی کانال مقصد را وارد کنید:\n"
+                f"(ربات @Rubifo باید ادمین آن کانال باشد)\n\n"
+                f"فرمت:\n"
+                f"• @channel_username\n"
+                f"• https://rubika.ir/channel_username"
+            )
+
+        elif step == 2:
+            target = text.strip()
+            if not target:
+                await client.send_message(user_id, "❌ آیدی کانال نامعتبر است.")
+                return
+
+            # Normalize channel input
+            if "rubika.ir/" in target:
+                target = "@" + target.rstrip("/").split("rubika.ir/")[-1].strip()
+            elif not target.startswith("@"):
+                target = "@" + target.lstrip("@")
+
+            source_id = state["source_id"]
+            source_name = state["source_name"]
+
+            route_id = await RouteService(pool).create_route(user_id, source_id, target)
+            del conversation_states[user_id]
+
+            await client.send_message(
+                user_id,
+                f"✅ مسیر #{route_id} ساخته شد!\n\n"
+                f"📦 سورس: {source_name}\n"
+                f"📥 مقصد: {target}\n\n"
+                f"⚠️ مطمئن شوید ربات @Rubifo ادمین کانال مقصد است.\n\n"
+                f"📅 /addplan برای تنظیم زمان‌بندی ارسال",
+                with_keypad=True,
+            )
+
+    except Exception as e:
+        logger.error(f"addroute conversation error: {e}")
+        conversation_states.pop(user_id, None)
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_listroutes(client, user_id: int) -> None:
+    logger.info(f"/listroutes for user {user_id}")
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+        from src.core.source_service import SourceService
+
+        routes = await RouteService(pool).get_user_routes(user_id)
+        if not routes:
+            await client.send_message(
+                user_id,
+                "شما هیچ مسیری ندارید.\n➕ /addroute برای ایجاد مسیر.",
+                with_keypad=True,
+            )
+            return
+
+        msg = "📋 مسیرهای شما:\n\n"
+        for route in routes:
+            route_id = route["id"]
+            source_id = route.get("source_id")
+            target = route.get("target_channel_id", "?")
+            active = "✅" if route["is_active"] else "⛔"
+
+            source_name = "?"
+            if source_id:
+                source = await SourceService(pool).get_source(source_id)
+                source_name = source.name if source else str(source_id)
+
+            pending = await RouteService(pool).get_route_queue_count(route_id, "pending")
+            sent = await RouteService(pool).get_route_queue_count(route_id, "sent")
+
+            msg += (
+                f"{active} مسیر #{route_id}\n"
+                f"   📦 {source_name} → {target}\n"
+                f"   صف: {pending} در انتظار | {sent} ارسال شده\n\n"
+            )
+
+        msg += "/removeroute [شناسه] — حذف مسیر"
+        await client.send_message(user_id, msg, with_keypad=True)
+    except Exception as e:
+        logger.error(f"/listroutes error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_removeroute(client, user_id: int, route_id: int) -> None:
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+        route = await RouteService(pool).get_route(route_id)
+
+        if not route:
+            await client.send_message(user_id, "❌ مسیر یافت نشد.")
+            return
+        if route["user_id"] != user_id:
+            await client.send_message(user_id, "❌ این مسیر متعلق به شما نیست.")
+            return
+
+        conversation_states[user_id] = {"command": "removeroute", "route_id": route_id}
+        await client.send_message(
+            user_id,
+            f"🗑️ حذف مسیر #{route_id}؟\n"
+            f"مقصد: {route.get('target_channel_id', '?')}\n\n"
+            f"برای تأیید «بله» بفرستید."
+        )
+    except Exception as e:
+        logger.error(f"/removeroute error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_removeroute_confirmation(client, user_id: int, text: str) -> None:
+    state = conversation_states.pop(user_id, {})
+    route_id = state.get("route_id")
+
+    if text.strip().lower() not in ("بله", "yes", "y"):
+        await client.send_message(user_id, "❌ حذف لغو شد.")
         return
 
-    state = conversation_states[user_id]
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+        await pool.execute("UPDATE post_queue SET status='removed' WHERE route_id=$1", route_id)
+        await RouteService(pool).deactivate_route(route_id)
+        await client.send_message(user_id, f"✅ مسیر #{route_id} حذف شد.", with_keypad=True)
+    except Exception as e:
+        logger.error(f"removeroute_confirmation error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+# ─────────────────────────────────────────────
+# CONVERSATION ROUTER
+# ─────────────────────────────────────────────
+
+async def handle_conversation_response(client, user_id: int, text: str) -> None:
+    """Route text responses for active multi-step conversations."""
+    state = conversation_states.get(user_id, {})
     command = state.get("command")
 
-    if command == "addroute":
-        await handle_addroute_conversation(client, user_id, text)
-    elif command == "updatesource_select":
-        route_map = state.get("route_map", {})
-        route_id = route_map.get(text.strip())
-        if not route_id:
-            await client.send_message(user_id, "❌ شماره نامعتبر. دوباره وارد کنید.")
-            return
+    if command == "source_naming":
         del conversation_states[user_id]
-        await handle_updatesource(client, user_id, route_id)
+        await handle_source_name_input(client, user_id, text)
+    elif command == "addroute":
+        await handle_addroute_conversation(client, user_id, text)
+    elif command == "deletesource":
+        await handle_deletesource_confirmation(client, user_id, text)
     elif command == "removeroute":
         await handle_removeroute_confirmation(client, user_id, text)
     elif command == "removeplan":
@@ -489,1436 +537,477 @@ async def handle_conversation_response(client, user_id: int, text: str) -> None:
         await handle_addplan_daily_count_input(client, user_id, text)
 
 
-async def handle_addroute_conversation(client, user_id: int, text: str) -> None:
-    """Handle conversation steps for /addroute command.
+# ─────────────────────────────────────────────
+# PAYMENT
+# ─────────────────────────────────────────────
 
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        text: User input text
-    """
-    if user_id not in conversation_states:
-        return
-
-    state = conversation_states[user_id]
-    if state.get("command") != "addroute":
-        return
-
+async def handle_buy(client, user_id: int) -> None:
+    logger.info(f"/buy for user {user_id}")
     try:
         from src.database import pool
-        from src.core.route_service import RouteService
-
-        route_service = RouteService(pool)
-
-        step = state.get("step", 1)
-
-        if step == 1:
-            source_channel_id = _parse_channel_input(text)
-            if not source_channel_id:
-                await client.send_message(
-                    user_id,
-                    "❌ فرمت اشتباه است. لطفاً یکی از این فرمت‌ها را وارد کنید:\n"
-                    "• @channel_username\n"
-                    "• https://rubika.ir/channel_username\n"
-                    "• شناسه عددی"
-                )
-                return
-
-            state["source_channel_id"] = source_channel_id
-            state["step"] = 2
-
-            prompt = (
-                f"✅ کانال مبدأ ثبت شد: {source_channel_id}\n\n"
-                "2️⃣ آیدی کانال مقصد را وارد کنید:\n"
-                "(کانالی که پست‌ها به آن فوروارد می‌شوند)\n\n"
-                "فرمت قابل قبول:\n"
-                "• @channel_username\n"
-                "• https://rubika.ir/channel_username\n"
-                "• شناسه عددی کانال"
-            )
-            await client.send_message(user_id, prompt)
-            logger.info(f"User {user_id} provided source channel: {source_channel_id}")
-
-        elif step == 2:
-            target_channel_id = _parse_channel_input(text)
-            if not target_channel_id:
-                await client.send_message(
-                    user_id,
-                    "❌ فرمت اشتباه است. لطفاً یکی از این فرمت‌ها را وارد کنید:\n"
-                    "• @channel_username\n"
-                    "• https://rubika.ir/channel_username\n"
-                    "• شناسه عددی"
-                )
-                return
-
-            source_channel_id = state["source_channel_id"]
-
-            if source_channel_id == target_channel_id:
-                await client.send_message(
-                    user_id, "❌ کانال‌های منبع و مقصد نمی‌تواند یکی باشند."
-                )
-                return
-
-            # Verify bot has access to target channel
-            # For now, we accept it (Rubika API verification would go here)
-            state["target_channel_id"] = target_channel_id
-            state["step"] = 3
-
-            # Create the route
-            route_id = await route_service.create_route(
-                user_id, source_channel_id, target_channel_id
-            )
-
-            confirmation = (
-                f"✅ مسیر #{route_id} ثبت شد!\n\n"
-                f"📤 مبدأ: {source_channel_id}\n"
-                f"📥 مقصد: {target_channel_id}\n\n"
-                f"─────────────────\n"
-                f"⚠️ مرحله بعد — ربات را ادمین کنید:\n\n"
-                f"1️⃣ وارد کانال مبدأ شوید\n"
-                f"   ({source_channel_id})\n"
-                f"   ربات @Rubifo را با دسترسی کامل ادمین کنید\n\n"
-                f"2️⃣ وارد کانال مقصد شوید\n"
-                f"   ({target_channel_id})\n"
-                f"   ربات @Rubifo را با دسترسی کامل ادمین کنید\n\n"
-                f"✅ بعد از ادمین کردن، دکمه\n"
-                f"🔄 بروزرسانی مبدأ را بزنید\n"
-                f"تا پست‌های کانال شناسایی شوند."
-            )
-            await client.send_message(user_id, confirmation, with_keypad=True)
-
-            # Remove from conversation states
-            del conversation_states[user_id]
-
-            # Populate queue with existing posts from source channel
-            await populate_route_queue(client, user_id, route_id, source_channel_id)
-
-            logger.info(f"Route created and queue populated for user {user_id}: {route_id}")
-
-    except Exception as e:
-        logger.error(f"Error in /addroute conversation for user {user_id}: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-        if user_id in conversation_states:
-            del conversation_states[user_id]
-
-
-async def populate_route_queue(
-    client, user_id: int, route_id: int, source_channel_id: int
-) -> None:
-    """Populate queue with existing posts from source channel (T22).
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        route_id: Route ID
-        source_channel_id: Source channel ID
-    """
-    try:
-        from src.database import pool
-        from datetime import datetime, timedelta
-
-        # Fetch posts from source channel via Rubika API
-        # For MVP, we'll create a stub that can be replaced with real API calls
-        posts = await fetch_channel_posts(client, source_channel_id)
-
-        if not posts:
+        from src.core.subscription_service import SubscriptionService
+        active_sub = await SubscriptionService(pool).get_active_subscription(user_id)
+        if active_sub:
             await client.send_message(
-                user_id, "✅ مسیر ایجاد شد! (هیچ پست قدیمی برای فوروارد نیافت)"
+                user_id,
+                f"شما اشتراک {active_sub.tier} دارید.\nتاریخ پایان: {active_sub.end_date}\n\n/renew برای تمدید"
             )
             return
 
-        # Insert posts into post_queue table, ordered by source_date ASC
-        inserted_count = 0
-        for post in sorted(posts, key=lambda p: p.get("date", 0)):
-            try:
-                await pool.execute(
-                    """
-                    INSERT INTO post_queue
-                    (route_id, message_id_in_source, source_date, status)
-                    VALUES ($1, $2, $3, 'pending')
-                    """,
-                    route_id,
-                    post.get("message_id"),
-                    datetime.fromtimestamp(post.get("date", 0)),
-                )
-                inserted_count += 1
-            except Exception as e:
-                logger.error(f"Error inserting post {post.get('message_id')}: {e}")
-                continue
-
-        completion_message = (
-            f"✅ مسیر ایجاد شد!\n\n"
-            f"تعداد پست‌های درج شده: {inserted_count}\n\n"
-            f"/listroutes برای دیدن مسیرهایتان."
-        )
-        await client.send_message(user_id, completion_message)
-        logger.info(f"Route {route_id}: {inserted_count} posts added to queue")
-
-    except Exception as e:
-        logger.error(f"Error populating queue for route {route_id}: {e}")
         await client.send_message(
-            user_id, "خطایی در جمع‌آوری پست‌ها رخ داد. مسیر ایجاد شد اما بدون پست."
+            user_id,
+            "سطح‌های اشتراک Rubifo:\n\n"
+            "📦 پایه (Basic)\n   • 1 مسیر | 50,000 تومان/ماه\n   /buy_basic\n\n"
+            "⭐ حرفه‌ای (Pro)\n   • 3 مسیر | 120,000 تومان/ماه\n   /buy_pro\n\n"
+            "👑 ویژه (Enterprise)\n   • 10 مسیر | 350,000 تومان/ماه\n   /buy_enterprise"
         )
+    except Exception as e:
+        logger.error(f"/buy error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
-async def handle_addplan_route_selection(client, user_id: int, text: str) -> None:
-    """Handle route selection for /addplan (T30-T31).
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        text: Route ID input
-    """
-    state = conversation_states.get(user_id, {})
-    if state.get("command") != "addplan_route_select":
+async def handle_buy_tier(client, user_id: int, tier: str) -> None:
+    logger.info(f"/buy_{tier} for user {user_id}")
+    if tier not in SUBSCRIPTION_TIERS:
+        await client.send_message(user_id, "سطح اشتراک نامعتبر است.")
         return
-
     try:
-        route_id = int(text.strip())
-    except ValueError:
-        await client.send_message(user_id, "❌ شناسه مسیر باید عدد باشد.")
-        return
+        from src.database import pool
+        from src.core.subscription_service import SubscriptionService
+        amount = SUBSCRIPTION_TIERS[tier]["price_monthly"]
+        gateway = create_zarinpal_gateway(sandbox=True)
+        success, result = await gateway.request_payment(
+            amount=amount, description=f"اشتراک {tier} - Rubifo", callback_url=None
+        )
+        if not success:
+            await client.send_message(user_id, f"خطا در درخواست پرداخت: {result}")
+            return
 
-    routes = state.get("routes", {})
-    if route_id not in routes:
-        await client.send_message(user_id, "❌ مسیر یافت نشد.")
-        return
+        authority = result.split("/StartPay/")[-1]
+        pending_payments[authority] = {"user_id": user_id, "tier": tier, "amount": amount}
+        await client.send_message(user_id, f"لینک پرداخت:\n{result}\n\nلطفا منتظر تأیید بمانید...")
+        asyncio.create_task(
+            verify_payment_polling(client, SubscriptionService(pool), authority, amount)
+        )
+    except Exception as e:
+        logger.error(f"/buy_{tier} error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
-    # Move to schedule type selection
-    state["route_id"] = route_id
-    state["command"] = "addplan_type_select"
-    state["step"] = 2
 
-    schedule_type_message = (
-        "🔄 نوع برنامه‌ریزی را انتخاب کنید:\n\n"
-        "1️⃣ بازه‌ای (interval)\n"
-        "   ارسال یک پیام هر N دقیقه\n\n"
-        "2️⃣ توزیع روزانه (daily_count)\n"
-        "   ارسال N پیام در اوقات مشخص هر روز\n\n"
-        "شماره را وارد کنید (1 یا 2):"
+async def verify_payment_polling(client, subscription_service, authority: str, amount: int) -> None:
+    MAX_ATTEMPTS = 30
+    for attempt in range(MAX_ATTEMPTS):
+        try:
+            if authority not in pending_payments:
+                break
+            data = pending_payments[authority]
+            user_id, tier = data["user_id"], data["tier"]
+            gateway = create_zarinpal_gateway(sandbox=True)
+            success, ref_id = await gateway.verify_payment(authority, amount)
+            if success:
+                from src.database import pool
+                from src.core.transaction_service import TransactionService
+                sub = await subscription_service.create_subscription(user_id, tier, days=30)
+                await TransactionService(pool).insert_transaction(user_id, amount, tier, "completed", ref_id)
+                del pending_payments[authority]
+                await client.send_message(
+                    user_id,
+                    f"✅ پرداخت تأیید شد!\n\nاشتراک {tier} فعال شد.\nتاریخ پایان: {sub.end_date}"
+                )
+                return
+            await asyncio.sleep(10)
+        except Exception as e:
+            logger.error(f"payment polling error {authority}: {e}")
+            await asyncio.sleep(10)
+
+    if authority in pending_payments:
+        uid = pending_payments.pop(authority)["user_id"]
+        await client.send_message(uid, "⏱ مهلت پرداخت تمام شد. /buy را دوباره بفرستید.")
+
+
+async def handle_buy_basic(client, user_id: int) -> None:
+    await handle_buy_tier(client, user_id, "basic")
+
+
+async def handle_buy_pro(client, user_id: int) -> None:
+    await handle_buy_tier(client, user_id, "pro")
+
+
+async def handle_buy_enterprise(client, user_id: int) -> None:
+    await handle_buy_tier(client, user_id, "enterprise")
+
+
+async def handle_renew(client, user_id: int) -> None:
+    logger.info(f"/renew for user {user_id}")
+    try:
+        from src.database import pool
+        from src.core.subscription_service import SubscriptionService
+        sub = await SubscriptionService(pool).get_active_subscription(user_id)
+        if not sub:
+            await client.send_message(user_id, "اشتراک فعالی ندارید.\n/buy برای خرید.")
+            return
+
+        tier = sub.tier
+        amount = SUBSCRIPTION_TIERS.get(tier, {}).get("price_monthly", 0)
+        gateway = create_zarinpal_gateway(sandbox=True)
+        success, result = await gateway.request_payment(
+            amount=amount, description=f"تمدید اشتراک {tier} - Rubifo", callback_url=None
+        )
+        if not success:
+            await client.send_message(user_id, f"خطا: {result}")
+            return
+
+        authority = result.split("/StartPay/")[-1]
+        pending_payments[authority] = {"user_id": user_id, "tier": tier, "amount": amount, "is_renewal": True}
+        await client.send_message(user_id, f"لینک تمدید:\n{result}\n\nلطفا منتظر تأیید بمانید...")
+        asyncio.create_task(
+            verify_renewal_payment_polling(client, SubscriptionService(pool), authority, amount)
+        )
+    except Exception as e:
+        logger.error(f"/renew error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def verify_renewal_payment_polling(client, subscription_service, authority: str, amount: int) -> None:
+    MAX_ATTEMPTS = 30
+    for attempt in range(MAX_ATTEMPTS):
+        try:
+            if authority not in pending_payments:
+                break
+            data = pending_payments[authority]
+            user_id, tier = data["user_id"], data["tier"]
+            gateway = create_zarinpal_gateway(sandbox=True)
+            success, ref_id = await gateway.verify_payment(authority, amount)
+            if success:
+                from src.database import pool
+                from src.core.transaction_service import TransactionService
+                sub = await subscription_service.extend_subscription(user_id, days=30)
+                await TransactionService(pool).insert_transaction(user_id, amount, tier, "completed", ref_id)
+                del pending_payments[authority]
+                await client.send_message(
+                    user_id,
+                    f"✅ تمدید انجام شد!\nتاریخ پایان جدید: {sub.end_date}"
+                )
+                return
+            await asyncio.sleep(10)
+        except Exception as e:
+            logger.error(f"renewal polling error {authority}: {e}")
+            await asyncio.sleep(10)
+
+    if authority in pending_payments:
+        uid = pending_payments.pop(authority)["user_id"]
+        await client.send_message(uid, "⏱ مهلت پرداخت تمام شد. /renew را دوباره بفرستید.")
+
+
+# ─────────────────────────────────────────────
+# HELP & LOGS
+# ─────────────────────────────────────────────
+
+async def handle_help(client, user_id: int) -> None:
+    logger.info(f"/help for user {user_id}")
+    msg = (
+        "📖 راهنمای Rubifo\n\n"
+        "✏️ سورس‌ها:\n"
+        "/addsource — سورس جدید\n"
+        "/mysources — سورس‌های من\n"
+        "/addpost [شناسه] — افزودن پست به سورس\n"
+        "/viewsource [شناسه] — مشاهده پست‌ها\n"
+        "/removepost [شناسه] — حذف پست\n"
+        "/deletesource [شناسه] — حذف سورس\n\n"
+        "➕ مسیرها:\n"
+        "/addroute — مسیر جدید\n"
+        "/listroutes — مسیرهای من\n"
+        "/removeroute [شناسه] — حذف مسیر\n\n"
+        "📅 برنامه‌ریزی:\n"
+        "/addplan — برنامه جدید\n"
+        "/listplans — برنامه‌های من\n"
+        "/toggleplan [شناسه] — فعال/غیرفعال\n"
+        "/removeplan [شناسه] — حذف برنامه\n\n"
+        "💳 اشتراک:\n"
+        "/buy — خرید اشتراک\n"
+        "/renew — تمدید اشتراک\n\n"
+        "📊 /logs — گزارش فعالیت‌ها"
     )
-    await client.send_message(user_id, schedule_type_message)
-    logger.info(f"User {user_id} selected route {route_id} for scheduling")
+    await client.send_message(user_id, msg, with_keypad=True)
 
 
-async def handle_addplan_type_selection(client, user_id: int, text: str) -> None:
-    """Handle schedule type selection for /addplan.
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        text: Type selection (1 or 2)
-    """
-    state = conversation_states.get(user_id, {})
-    if state.get("command") != "addplan_type_select":
-        return
-
-    response = text.strip()
-
-    if response == "1":
-        # Interval type
-        state["command"] = "addplan_interval"
-        state["step"] = 3
-
-        message = (
-            "⏱️ هر چند دقیقه یک پیام ارسال شود؟\n\n"
-            "مثال: 60\n"
-            "معنی: یک پیام هر 60 دقیقه"
-        )
-        await client.send_message(user_id, message)
-
-    elif response == "2":
-        # Daily count type
-        state["command"] = "addplan_daily_count"
-        state["step"] = 3
-        state["sub_step"] = 1  # Get daily count
-
-        message = (
-            "📊 چند پیام باید هر روز ارسال شود؟\n\n"
-            "مثال: 3\n"
-            "معنی: 3 پیام در روز در اوقات معینی"
-        )
-        await client.send_message(user_id, message)
-
-    else:
-        await client.send_message(user_id, "❌ عدد 1 یا 2 را وارد کنید.")
-
-
-async def handle_addplan_interval_input(client, user_id: int, text: str) -> None:
-    """Handle interval minutes input for /addplan (T30).
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        text: Interval in minutes
-    """
-    try:
-        interval_minutes = int(text.strip())
-    except ValueError:
-        await client.send_message(user_id, "❌ بازه باید عدد باشد (به دقیقه).")
-        return
-
-    if interval_minutes < 1 or interval_minutes > 10080:  # Max 1 week
-        await client.send_message(user_id, "❌ بازه باید بین 1 و 10080 دقیقه باشد.")
-        return
-
-    await handle_addplan_interval(client, user_id, interval_minutes)
-
-
-async def handle_addplan_daily_count_input(client, user_id: int, text: str) -> None:
-    """Handle daily count input for /addplan (T31).
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        text: Count or time input
-    """
-    state = conversation_states.get(user_id, {})
-    sub_step = state.get("sub_step", 1)
-
-    if sub_step == 1:
-        # Getting daily count
-        try:
-            daily_count = int(text.strip())
-        except ValueError:
-            await client.send_message(user_id, "❌ تعداد باید عدد باشد.")
-            return
-
-        if daily_count < 1 or daily_count > 48:  # Max 48 times per day
-            await client.send_message(user_id, "❌ تعداد باید بین 1 و 48 باشد.")
-            return
-
-        state["daily_count"] = daily_count
-        state["sub_step"] = 2
-        state["times"] = []
-
-        message = (
-            f"✅ {daily_count} پیام هر روز\n\n"
-            f"اوقات توزیع را وارد کنید:\n\n"
-            f"فرمت: HH:MM HH:MM HH:MM ...\n"
-            f"مثال: 09:00 14:00 19:00\n\n"
-            f"({daily_count} وقت را وارد کنید)"
-        )
-        await client.send_message(user_id, message)
-
-    elif sub_step == 2:
-        # Getting times
-        times_str = text.strip()
-        times_list = []
-
-        try:
-            for time_part in times_str.split():
-                parts = time_part.split(":")
-                if len(parts) != 2:
-                    raise ValueError
-                hour = int(parts[0])
-                minute = int(parts[1])
-                if hour < 0 or hour > 23 or minute < 0 or minute > 59:
-                    raise ValueError
-                times_list.append((hour, minute))
-        except (ValueError, IndexError):
-            await client.send_message(user_id, "❌ فرمت اوقات اشتباه است.")
-            return
-
-        daily_count = state.get("daily_count", 0)
-        if len(times_list) != daily_count:
-            await client.send_message(
-                user_id, f"❌ باید دقیقاً {daily_count} وقت وارد کنید."
-            )
-            return
-
-        await handle_addplan_daily_count(client, user_id, daily_count, times_list)
-
-
-async def handle_removeplan_confirmation(client, user_id: int, text: str) -> None:
-    """Handle confirmation for schedule removal (T35).
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        text: User response
-    """
-    state = conversation_states.get(user_id, {})
-    if state.get("command") != "removeplan":
-        return
-
-    schedule_id = state.get("schedule_id")
-    response = text.strip().lower()
-
-    if response in ["بله", "yes", "y"]:
-        try:
-            from src.database import pool
-            from src.core.schedule_service import ScheduleService
-
-            schedule_service = ScheduleService(pool)
-
-            # Delete schedule
-            await schedule_service.delete_schedule(schedule_id)
-
-            # Remove from conversation
-            del conversation_states[user_id]
-
-            confirmation = f"✅ برنامه #{schedule_id} حذف شد."
-            await client.send_message(user_id, confirmation)
-            logger.info(f"Schedule {schedule_id} removed by user {user_id}")
-
-        except Exception as e:
-            logger.error(f"Error removing schedule {schedule_id}: {e}")
-            await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-            if user_id in conversation_states:
-                del conversation_states[user_id]
-
-    else:
-        # Cancel removal
-        del conversation_states[user_id]
-        await client.send_message(user_id, "❌ حذف لغو شد.")
-
-
-async def handle_removeroute_confirmation(client, user_id: int, text: str) -> None:
-    """Handle confirmation for route removal.
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        text: User response (بله/خیر)
-    """
-    state = conversation_states.get(user_id, {})
-    if state.get("command") != "removeroute":
-        return
-
-    route_id = state.get("route_id")
-    response = text.strip().lower()
-
-    if response in ["بله", "yes", "y"]:
-        try:
-            from src.database import pool
-            from src.core.route_service import RouteService
-
-            route_service = RouteService(pool)
-
-            # Mark all queue items as removed
-            await pool.execute(
-                "UPDATE post_queue SET status = 'removed' WHERE route_id = $1",
-                route_id,
-            )
-
-            # Deactivate the route
-            await route_service.deactivate_route(route_id)
-
-            # Remove from conversation
-            del conversation_states[user_id]
-
-            confirmation = (
-                f"✅ مسیر #{route_id} حذف شد.\n\n"
-                f"تمام پست‌های صف نیز حذف شدند."
-            )
-            await client.send_message(user_id, confirmation)
-            logger.info(f"Route {route_id} removed by user {user_id}")
-
-        except Exception as e:
-            logger.error(f"Error removing route {route_id}: {e}")
-            await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-            if user_id in conversation_states:
-                del conversation_states[user_id]
-
-    else:
-        # Cancel removal
-        del conversation_states[user_id]
-        await client.send_message(user_id, "❌ حذف لغو شد.")
-
-
-async def handle_forwarded_post(client, user_id: int, from_chat: str, message_id: str) -> None:
-    """Handle a post forwarded from a channel — match to a route and add to queue."""
-    logger.info(f"Forwarded post from {user_id}: chat={from_chat}, msg={message_id}")
+async def handle_logs(client, user_id: int) -> None:
+    logger.info(f"/logs for user {user_id}")
     try:
         from src.database import pool
-        from datetime import datetime
-
-        # Find active routes where source_channel_id matches the forwarded channel
-        routes = await pool.fetch(
-            "SELECT id FROM routes WHERE user_id = $1 AND source_channel_id = $2 AND is_active = true",
-            user_id,
-            from_chat,
-        )
-
-        if not routes:
-            await client.send_message(
-                user_id,
-                f"❌ هیچ مسیر فعالی برای کانال {from_chat} یافت نشد.\n"
-                f"➕ /addroute برای ایجاد مسیر جدید."
-            )
-            return
-
-        added = 0
-        for route in routes:
-            route_id = route["id"]
-            # Skip duplicate
-            existing = await pool.fetchrow(
-                "SELECT id FROM post_queue WHERE route_id = $1 AND message_id_in_source = $2",
-                route_id,
-                message_id,
-            )
-            if existing:
-                continue
-            await pool.execute(
-                "INSERT INTO post_queue (route_id, message_id_in_source, source_date, status) "
-                "VALUES ($1, $2, $3, 'pending')",
-                route_id,
-                message_id,
-                datetime.now(),
-            )
-            added += 1
-
-        if added > 0:
-            total = await pool.fetchrow(
-                "SELECT COUNT(*) as c FROM post_queue WHERE route_id = ANY($1::int[]) AND status = 'pending'",
-                [r["id"] for r in routes],
-            )
-            total_count = total["c"] if total else added
-            await client.send_message(
-                user_id,
-                f"✅ پست به صف اضافه شد!\n\n"
-                f"📊 جمع پست‌های در صف: {total_count}",
-                with_keypad=True,
-            )
-        else:
-            await client.send_message(user_id, "⚠️ این پست قبلاً در صف بود.")
-
-    except Exception as e:
-        logger.error(f"Error handling forwarded post from {user_id}: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-
-
-async def fetch_channel_posts(client, channel_id: int) -> list:
-    """Fetch recent posts from a channel via Rubika API.
-
-    This is a stub that returns an empty list.
-    Should be replaced with real Rubika API calls.
-
-    Args:
-        client: Rubpy bot client
-        channel_id: Channel ID to fetch posts from
-
-    Returns:
-        List of post dictionaries with message_id and date
-    """
-    try:
-        # Stub: would use client.get_channel_messages() or similar
-        # For now, return empty list - real implementation depends on Rubpy/Rubika API
-        logger.info(f"Fetching posts from channel {channel_id} (stub implementation)")
-        return []
-
-    except Exception as e:
-        logger.error(f"Error fetching posts from channel {channel_id}: {e}")
-        return []
-
-
-async def fetch_channel_posts_since(client, channel_id: int, since_date) -> list:
-    """Fetch posts from a channel after a specific date via Rubika API.
-
-    This is a stub that returns an empty list.
-    Should be replaced with real Rubika API calls.
-
-    Args:
-        client: Rubpy bot client
-        channel_id: Channel ID to fetch posts from
-        since_date: Fetch only posts after this datetime
-
-    Returns:
-        List of post dictionaries with message_id and date
-    """
-    try:
-        # Stub: would use client.get_channel_messages() with date filter
-        # For now, return empty list - real implementation depends on Rubpy/Rubika API
-        logger.info(f"Fetching posts from channel {channel_id} since {since_date} (stub)")
-        return []
-
-    except Exception as e:
-        logger.error(f"Error fetching posts from channel {channel_id}: {e}")
-        return []
-
-
-async def fetch_channel_post_ids(client, channel_id: int) -> Optional[set]:
-    """Fetch all current post IDs from a channel via Rubika API.
-
-    This is a stub that returns None (API error).
-    Should be replaced with real Rubika API calls.
-
-    Args:
-        client: Rubpy bot client
-        channel_id: Channel ID to fetch post IDs from
-
-    Returns:
-        Set of current message IDs, or None if API error
-    """
-    try:
-        # Stub: would use client.get_channel_messages()
-        # For now, return None (API error) - real implementation depends on Rubpy/Rubika API
-        logger.info(f"Fetching post IDs from channel {channel_id} (stub)")
-        return None
-
-    except Exception as e:
-        logger.error(f"Error fetching post IDs from channel {channel_id}: {e}")
-        return None
-
-
-async def handle_listroutes(client, user_id: int) -> None:
-    """Handle /listroutes command to show all user routes.
-
-    Displays routes with queue counts and status.
-    """
-    logger.info(f"Handling /listroutes command for user {user_id}")
-
-    try:
-        from src.database import pool
-        from src.core.route_service import RouteService
-
-        route_service = RouteService(pool)
-
-        # Get all routes for user
-        routes = await route_service.get_user_routes(user_id)
-
-        if not routes:
-            await client.send_message(user_id, "شما هیچ مسیری ندارید.\n/addroute برای اضافه کردن مسیر.")
-            return
-
-        # Build message with route list
-        message = "📍 مسیرهای شما:\n\n"
-
-        for i, route in enumerate(routes, 1):
-            route_id = route["id"]
-            source = route["source_channel_id"]
-            target = route["target_channel_id"]
-            is_active = "✅" if route["is_active"] else "⛔"
-
-            # Get queue count
-            pending_count = await route_service.get_route_queue_count(route_id, "pending")
-            sent_count = await route_service.get_route_queue_count(route_id, "sent")
-            failed_count = await route_service.get_route_queue_count(route_id, "failed")
-
-            route_info = (
-                f"{i}. {is_active} مسیر #{route_id}\n"
-                f"   {source} ← → {target}\n"
-                f"   صف: {pending_count} درانتظار | {sent_count} ارسال شده | {failed_count} ناموفق\n\n"
-            )
-            message += route_info
-
-        # Add action buttons/instructions
-        message += (
-            "دستورات:\n"
-            "/removeroute [شناسه] - حذف مسیر\n"
-            "/updatesource [شناسه] - بروزرسانی پست‌های جدید\n"
-            "/sync [شناسه] - همگام‌سازی مسیر\n"
-        )
-
-        await client.send_message(user_id, message)
-        logger.info(f"Listed {len(routes)} routes for user {user_id}")
-
-    except Exception as e:
-        logger.error(f"Error in /listroutes command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-
-
-async def handle_removeroute(client, user_id: int, route_id: int) -> None:
-    """Handle /removeroute command to deactivate a route.
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        route_id: Route ID to remove
-    """
-    logger.info(f"Handling /removeroute command for user {user_id}, route {route_id}")
-
-    try:
-        from src.database import pool
-        from src.core.route_service import RouteService
-
-        route_service = RouteService(pool)
-
-        # Get route details
-        route = await route_service.get_route(route_id)
-
-        if not route:
-            await client.send_message(user_id, "❌ مسیر یافت نشد.")
-            return
-
-        # Verify ownership
-        if route["user_id"] != user_id:
-            await client.send_message(user_id, "❌ این مسیر متعلق به شما نیست.")
-            logger.warning(f"Unauthorized removeroute attempt by user {user_id} for route {route_id}")
-            return
-
-        # Ask for confirmation
-        confirmation_prompt = (
-            f"🗑️ حذف مسیر #{route_id}؟\n\n"
-            f"منبع: {route['source_channel_id']}\n"
-            f"مقصد: {route['target_channel_id']}\n\n"
-            f"برای تأیید \"بله\" یا \"خیر\" را بفرستید."
-        )
-
-        # Store removal confirmation state
-        conversation_states[user_id] = {
-            "command": "removeroute",
-            "route_id": route_id,
-            "step": 1,
-        }
-
-        await client.send_message(user_id, confirmation_prompt)
-        logger.info(f"Removal confirmation requested for route {route_id}")
-
-    except Exception as e:
-        logger.error(f"Error in /removeroute command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-
-
-async def handle_updatesource_menu(client, user_id: int) -> None:
-    """Show list of routes for user to pick which source to update."""
-    logger.info(f"Handling updatesource menu for user {user_id}")
-    try:
-        from src.database import pool
-        from src.core.route_service import RouteService
-
-        route_service = RouteService(pool)
-        routes = await route_service.get_user_routes(user_id)
-
-        active_routes = [r for r in routes if r["is_active"]]
-        if not active_routes:
-            await client.send_message(user_id, "📋 شما هیچ مسیر فعالی ندارید.\n➕ /addroute برای ایجاد مسیر")
-            return
-
-        message = "🔄 بروزرسانی مبدأ\n\nکدام مسیر را بروزرسانی کنیم؟\n\n"
-        route_map = {}
-        for i, route in enumerate(active_routes, 1):
-            message += f"{i}️⃣ مسیر #{route['id']}\n   📤 {route['source_channel_id']} → 📥 {route['target_channel_id']}\n\n"
-            route_map[str(i)] = route["id"]
-
-        message += "شماره مسیر را وارد کنید:"
-        await client.send_message(user_id, message)
-
-        conversation_states[user_id] = {
-            "command": "updatesource_select",
-            "route_map": route_map,
-        }
-
-    except Exception as e:
-        logger.error(f"Error in updatesource menu: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-
-
-async def handle_updatesource(client, user_id: int, route_id: int) -> None:
-    """Handle /updatesource command to add new posts to queue.
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        route_id: Route ID to update
-    """
-    logger.info(f"Handling /updatesource command for user {user_id}, route {route_id}")
-
-    try:
-        from src.database import pool
-        from src.core.route_service import RouteService
-        from datetime import datetime
-
-        route_service = RouteService(pool)
-
-        # Get route details
-        route = await route_service.get_route(route_id)
-
-        if not route:
-            await client.send_message(user_id, "❌ مسیر یافت نشد.")
-            return
-
-        # Verify ownership
-        if route["user_id"] != user_id:
-            await client.send_message(user_id, "❌ این مسیر متعلق به شما نیست.")
-            logger.warning(f"Unauthorized updatesource attempt by user {user_id} for route {route_id}")
-            return
-
-        source_channel_id = route["source_channel_id"]
-        cached_guid = route.get("source_guid")
-
-        # Try to use user client for real channel reading
-        try:
-            from src.bot.main import _get_user_client
-            user_client = _get_user_client()
-        except Exception:
-            user_client = None
-
-        new_count = 0
-        if user_client and user_client.is_ready:
-            await client.send_message(user_id, "🔄 در حال بروزرسانی پست‌های کانال...")
-
-            # Resolve GUID if not cached
-            object_guid = cached_guid
-            if not object_guid:
-                object_guid = await user_client.resolve_channel(source_channel_id)
-                if object_guid:
-                    await pool.execute(
-                        "UPDATE routes SET source_guid = $1 WHERE id = $2",
-                        object_guid, route_id
-                    )
-
-            if object_guid:
-                # Get last known message_id for this route
-                last = await pool.fetchrow(
-                    "SELECT MAX(message_id_in_source::bigint) as max_id FROM post_queue WHERE route_id = $1",
-                    route_id
-                )
-                min_id = str(last["max_id"]) if last and last["max_id"] else None
-
-                messages = await user_client.get_channel_messages(
-                    object_guid=object_guid,
-                    min_id=min_id,
-                    limit=100,
-                )
-
-                from datetime import datetime
-                for msg in messages:
-                    mid = msg["message_id"]
-                    ts = datetime.fromtimestamp(msg["time"]) if msg["time"] else datetime.now()
-                    try:
-                        await pool.execute(
-                            "INSERT INTO post_queue (route_id, message_id_in_source, source_date, status) "
-                            "VALUES ($1, $2, $3, 'pending') ON CONFLICT DO NOTHING",
-                            route_id, mid, ts,
-                        )
-                        new_count += 1
-                    except Exception:
-                        pass
-            else:
-                await client.send_message(
-                    user_id,
-                    "❌ نتوانستم کانال مبدأ را پیدا کنم. مطمئن شوید کاربری صحیح است.",
-                    with_keypad=True,
-                )
-                return
-        else:
-            await client.send_message(
-                user_id,
-                "⚠️ User session راه‌اندازی نشده.\n"
-                "ابتدا اجرا کنید:\n\n"
-                "python setup_session.py",
-                with_keypad=True,
-            )
-            return
-
-        # Show final stats
-        pending = await pool.fetchrow(
-            "SELECT COUNT(*) as c FROM post_queue WHERE route_id=$1 AND status='pending'", route_id
-        )
-        pending_count = pending["c"] if pending else 0
-
-        await client.send_message(
-            user_id,
-            f"✅ بروزرسانی انجام شد!\n\n"
-            f"📤 مبدأ: {source_channel_id}\n"
-            f"📥 مقصد: {route['target_channel_id']}\n"
-            f"🆕 پست‌های جدید اضافه شده: {new_count}\n"
-            f"🗂 جمع پست‌های در صف: {pending_count}",
-            with_keypad=True,
-        )
-        logger.info(f"Route {route_id}: updatesource added {new_count} posts for user {user_id}")
-
-    except Exception as e:
-        logger.error(f"Error in /updatesource command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-
-
-async def handle_sync(client, user_id: int, route_id: int) -> None:
-    """Handle /sync command to synchronize route with source channel.
-
-    Removes posts that no longer exist in source channel.
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        route_id: Route ID to sync
-    """
-    logger.info(f"Handling /sync command for user {user_id}, route {route_id}")
-
-    try:
-        from src.database import pool
-        from src.core.route_service import RouteService
-
-        route_service = RouteService(pool)
-
-        # Get route details
-        route = await route_service.get_route(route_id)
-
-        if not route:
-            await client.send_message(user_id, "❌ مسیر یافت نشد.")
-            return
-
-        # Verify ownership
-        if route["user_id"] != user_id:
-            await client.send_message(user_id, "❌ این مسیر متعلق به شما نیست.")
-            logger.warning(f"Unauthorized sync attempt by user {user_id} for route {route_id}")
-            return
-
-        # Fetch all current post IDs from source channel
-        source_channel_id = route["source_channel_id"]
-        current_post_ids = await fetch_channel_post_ids(client, source_channel_id)
-
-        if current_post_ids is None:
-            # API error or stub
-            await client.send_message(user_id, "✅ همگام‌سازی انجام شد.")
-            return
-
-        # Get all pending posts in queue for this route
-        pending_posts = await pool.fetch(
+        logs = await pool.fetch(
             """
-            SELECT id, message_id_in_source FROM post_queue
-            WHERE route_id = $1 AND status = 'pending'
+            SELECT pq.id, pq.status, pq.created_at, pq.last_error,
+                   r.target_channel_id, s.name as source_name
+            FROM post_queue pq
+            JOIN routes r ON pq.route_id = r.id
+            LEFT JOIN sources s ON r.source_id = s.id
+            WHERE r.user_id = $1
+            ORDER BY pq.created_at DESC
+            LIMIT 20
             """,
-            route_id,
+            user_id,
         )
+        if not logs:
+            await client.send_message(user_id, "هیچ فعالیتی برای نمایش وجود ندارد.")
+            return
 
-        # Mark posts as removed if not in current list
-        removed_count = 0
-        for post in pending_posts:
-            if post["message_id_in_source"] not in current_post_ids:
-                await pool.execute(
-                    "UPDATE post_queue SET status = 'removed' WHERE id = $1",
-                    post["id"],
-                )
-                removed_count += 1
+        msg = "📊 فعالیت‌های اخیر:\n\n"
+        for log in logs:
+            emoji = "✅" if log["status"] == "sent" else "❌"
+            t = log["created_at"].strftime("%H:%M")
+            src = log["source_name"] or "?"
+            tgt = log["target_channel_id"] or "?"
+            msg += f"{emoji} {t} | {src} → {tgt}\n"
+            if log["status"] == "failed" and log["last_error"]:
+                msg += f"   ❗ {log['last_error'][:50]}\n"
 
-        confirmation_message = (
-            f"✅ همگام‌سازی تکمیل شد!\n\n"
-            f"{removed_count} پست حذف شده علامت‌گذاری شد."
-        )
-        await client.send_message(user_id, confirmation_message)
-        logger.info(f"Route {route_id}: {removed_count} posts marked as removed")
-
+        await client.send_message(user_id, msg, with_keypad=True)
     except Exception as e:
-        logger.error(f"Error in /sync command: {e}")
+        logger.error(f"/logs error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
+
+# ─────────────────────────────────────────────
+# SCHEDULE / PLAN
+# ─────────────────────────────────────────────
 
 async def handle_addplan(client, user_id: int) -> None:
-    """Handle /addplan command to create a message schedule.
-
-    Starts multi-step conversation for schedule creation.
-    """
-    logger.info(f"Handling /addplan command for user {user_id}")
-
+    logger.info(f"/addplan for user {user_id}")
     try:
         from src.database import pool
         from src.core.route_service import RouteService
-
-        route_service = RouteService(pool)
-
-        # Get user's routes
-        routes = await route_service.get_user_routes(user_id)
-
+        routes = await RouteService(pool).get_user_routes(user_id)
         if not routes:
-            await client.send_message(
-                user_id,
-                "شما مسیری برای اضافه کردن برنامه ندارید.\n"
-                "/addroute برای ایجاد مسیر.",
-            )
+            await client.send_message(user_id, "ابتدا یک مسیر بسازید.\n/addroute")
             return
 
-        # Show route selection
-        message = "📅 برای کدام مسیر برنامه‌ریزی می‌خواهید؟\n\n"
-
-        for i, route in enumerate(routes, 1):
-            route_id = route["id"]
-            source = route["source_channel_id"]
-            target = route["target_channel_id"]
-            message += f"{i}. مسیر #{route_id}: {source} → {target}\n"
-
-        message += "\nشماره مسیر را وارد کنید:"
-        await client.send_message(user_id, message)
-
-        # Initialize conversation state
+        msg = "📅 برای کدام مسیر برنامه‌ریزی؟\n\n"
+        for r in routes:
+            msg += f"#{r['id']}: → {r.get('target_channel_id', '?')}\n"
+        msg += "\nشناسه مسیر را وارد کنید:"
+        await client.send_message(user_id, msg)
         conversation_states[user_id] = {
             "command": "addplan_route_select",
             "routes": {r["id"]: r for r in routes},
             "step": 1,
         }
-
-        logger.info(f"Started /addplan conversation for user {user_id}")
-
     except Exception as e:
-        logger.error(f"Error in /addplan command: {e}")
+        logger.error(f"/addplan error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_addplan_route_selection(client, user_id: int, text: str) -> None:
+    state = conversation_states.get(user_id, {})
+    try:
+        route_id = int(text.strip())
+    except ValueError:
+        await client.send_message(user_id, "❌ شناسه باید عدد باشد.")
+        return
+
+    if route_id not in state.get("routes", {}):
+        await client.send_message(user_id, "❌ مسیر یافت نشد.")
+        return
+
+    state["route_id"] = route_id
+    state["command"] = "addplan_type_select"
+    await client.send_message(
+        user_id,
+        "نوع برنامه:\n\n1️⃣ بازه‌ای — هر N دقیقه\n2️⃣ روزانه — N پیام در اوقات مشخص\n\n1 یا 2 وارد کنید:"
+    )
+
+
+async def handle_addplan_type_selection(client, user_id: int, text: str) -> None:
+    state = conversation_states.get(user_id, {})
+    if text.strip() == "1":
+        state["command"] = "addplan_interval"
+        await client.send_message(user_id, "⏱️ هر چند دقیقه یک پیام؟ (مثال: 60)")
+    elif text.strip() == "2":
+        state["command"] = "addplan_daily_count"
+        state["sub_step"] = 1
+        await client.send_message(user_id, "📊 چند پیام در روز؟ (مثال: 3)")
+    else:
+        await client.send_message(user_id, "❌ عدد 1 یا 2 وارد کنید.")
+
+
+async def handle_addplan_interval_input(client, user_id: int, text: str) -> None:
+    try:
+        minutes = int(text.strip())
+    except ValueError:
+        await client.send_message(user_id, "❌ عدد وارد کنید.")
+        return
+    if not 1 <= minutes <= 10080:
+        await client.send_message(user_id, "❌ بین 1 و 10080 دقیقه.")
+        return
+    await handle_addplan_interval(client, user_id, minutes)
+
+
+async def handle_addplan_daily_count_input(client, user_id: int, text: str) -> None:
+    state = conversation_states.get(user_id, {})
+    sub_step = state.get("sub_step", 1)
+
+    if sub_step == 1:
+        try:
+            count = int(text.strip())
+        except ValueError:
+            await client.send_message(user_id, "❌ عدد وارد کنید.")
+            return
+        if not 1 <= count <= 48:
+            await client.send_message(user_id, "❌ بین 1 و 48.")
+            return
+        state["daily_count"] = count
+        state["sub_step"] = 2
+        await client.send_message(
+            user_id,
+            f"{count} وقت را وارد کنید:\nفرمت: HH:MM HH:MM ...\nمثال: 09:00 14:00 19:00"
+        )
+    elif sub_step == 2:
+        times = []
+        try:
+            for part in text.strip().split():
+                h, m = part.split(":")
+                times.append((int(h), int(m)))
+        except Exception:
+            await client.send_message(user_id, "❌ فرمت اشتباه.")
+            return
+        if len(times) != state.get("daily_count", 0):
+            await client.send_message(user_id, f"❌ باید دقیقاً {state['daily_count']} وقت وارد کنید.")
+            return
+        await handle_addplan_daily_count(client, user_id, state["daily_count"], times)
 
 
 async def handle_addplan_interval(client, user_id: int, interval_minutes: int) -> None:
-    """Handle /addplan with interval method (T30).
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        interval_minutes: Minutes between each message
-    """
-    logger.info(f"Creating interval schedule for user {user_id}: every {interval_minutes} min")
-
     try:
         from src.database import pool
         from src.core.schedule_service import ScheduleService
-
-        # Route ID from conversation state
-        if user_id not in conversation_states:
-            await client.send_message(user_id, "❌ جلسه منقضی شد. /addplan را دوباره بفرستید.")
-            return
-
-        state = conversation_states.get(user_id, {})
+        state = conversation_states.pop(user_id, {})
         route_id = state.get("route_id")
-
         if not route_id:
-            await client.send_message(user_id, "❌ مسیر انتخاب نشده. /addplan را دوباره بفرستید.")
+            await client.send_message(user_id, "❌ جلسه منقضی شد.")
             return
-
-        schedule_service = ScheduleService(pool)
-
-        # Create schedule
-        schedule = await schedule_service.create_schedule(
-            user_id=user_id,
-            route_id=route_id,
-            schedule_type="interval",
-            interval_minutes=interval_minutes,
+        sched = await ScheduleService(pool).create_schedule(
+            user_id=user_id, route_id=route_id,
+            schedule_type="interval", interval_minutes=interval_minutes
         )
-
-        # Clean up conversation state
-        del conversation_states[user_id]
-
-        confirmation = (
-            f"✅ برنامه‌ریزی ایجاد شد!\n\n"
-            f"شناسه برنامه: {schedule.id}\n"
-            f"نوع: بازه‌ای ({interval_minutes} دقیقه)\n"
-            f"اجرای بعدی: {schedule.next_run}\n\n"
-            f"/listplans برای مشاهده برنامه‌ها"
+        await client.send_message(
+            user_id,
+            f"✅ برنامه ساخته شد!\nنوع: هر {interval_minutes} دقیقه\nاجرای بعدی: {sched.next_run}",
+            with_keypad=True,
         )
-        await client.send_message(user_id, confirmation)
-        logger.info(f"Interval schedule {schedule.id} created for user {user_id}")
-
     except Exception as e:
-        logger.error(f"Error creating interval schedule: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-        if user_id in conversation_states:
-            del conversation_states[user_id]
+        logger.error(f"addplan_interval error: {e}")
+        conversation_states.pop(user_id, None)
+        await client.send_message(user_id, "خطایی رخ داد.")
 
 
 async def handle_addplan_daily_count(
     client, user_id: int, daily_count: int, times: List[Tuple[int, int]]
 ) -> None:
-    """Handle /addplan with daily_count method (T31).
-
-    Args:
-        client: Rubpy bot client
-        user_id: Rubika user ID
-        daily_count: Number of messages per day
-        times: List of (hour, minute) tuples for distribution
-    """
-    logger.info(
-        f"Creating daily_count schedule for user {user_id}: {daily_count} messages/day"
-    )
-
     try:
         from src.database import pool
         from src.core.schedule_service import ScheduleService
-
-        if user_id not in conversation_states:
-            await client.send_message(user_id, "❌ جلسه منقضی شد. /addplan را دوباره بفرستید.")
-            return
-
-        state = conversation_states.get(user_id, {})
+        state = conversation_states.pop(user_id, {})
         route_id = state.get("route_id")
-
         if not route_id:
-            await client.send_message(user_id, "❌ مسیر انتخاب نشده. /addplan را دوباره بفرستید.")
+            await client.send_message(user_id, "❌ جلسه منقضی شد.")
             return
-
-        schedule_service = ScheduleService(pool)
-
-        # Create schedule
-        schedule = await schedule_service.create_schedule(
-            user_id=user_id,
-            route_id=route_id,
-            schedule_type="daily_count",
-            daily_count=daily_count,
-            times=times,
+        sched = await ScheduleService(pool).create_schedule(
+            user_id=user_id, route_id=route_id,
+            schedule_type="daily_count", daily_count=daily_count, times=times
         )
-
-        # Clean up conversation state
-        del conversation_states[user_id]
-
-        # Format times for display
-        times_str = ", ".join([f"{h:02d}:{m:02d}" for h, m in sorted(times)])
-
-        confirmation = (
-            f"✅ برنامه‌ریزی ایجاد شد!\n\n"
-            f"شناسه برنامه: {schedule.id}\n"
-            f"نوع: روزانه ({daily_count} پیام/روز)\n"
-            f"اوقات: {times_str}\n"
-            f"اجرای بعدی: {schedule.next_run}\n\n"
-            f"/listplans برای مشاهده برنامه‌ها"
+        times_str = ", ".join(f"{h:02d}:{m:02d}" for h, m in sorted(times))
+        await client.send_message(
+            user_id,
+            f"✅ برنامه ساخته شد!\nنوع: {daily_count} پیام/روز\nاوقات: {times_str}",
+            with_keypad=True,
         )
-        await client.send_message(user_id, confirmation)
-        logger.info(f"Daily_count schedule {schedule.id} created for user {user_id}")
-
     except Exception as e:
-        logger.error(f"Error creating daily_count schedule: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-        if user_id in conversation_states:
-            del conversation_states[user_id]
+        logger.error(f"addplan_daily_count error: {e}")
+        conversation_states.pop(user_id, None)
+        await client.send_message(user_id, "خطایی رخ داد.")
 
 
 async def handle_listplans(client, user_id: int) -> None:
-    """Handle /listplans command (T33).
-
-    Display all schedules for user with status.
-    """
-    logger.info(f"Handling /listplans command for user {user_id}")
-
+    logger.info(f"/listplans for user {user_id}")
     try:
         from src.database import pool
         from src.core.schedule_service import ScheduleService
-
-        schedule_service = ScheduleService(pool)
-
-        # Get all schedules
-        schedules = await schedule_service.get_user_schedules(user_id)
-
+        schedules = await ScheduleService(pool).get_user_schedules(user_id)
         if not schedules:
-            await client.send_message(user_id, "شما هیچ برنامه‌ریزی ندارید.\n/addplan برای اضافه کردن.")
+            await client.send_message(user_id, "هیچ برنامه‌ای ندارید.\n/addplan برای ایجاد.")
             return
 
-        # Build message
-        message = "📅 برنامه‌ریزی‌های شما:\n\n"
+        msg = "📅 برنامه‌های شما:\n\n"
+        for s in schedules:
+            active = "✅" if s.is_active else "⛔"
+            type_info = f"هر {s.interval_minutes} دقیقه" if s.schedule_type == "interval" else f"{s.daily_count} پیام/روز"
+            next_run = s.next_run.strftime("%d/%m %H:%M") if s.next_run else "—"
+            msg += f"{active} #{s.id} — مسیر #{s.route_id}\n   {type_info} | بعدی: {next_run}\n\n"
 
-        for i, sched in enumerate(schedules, 1):
-            sched_id = sched.id
-            route_id = sched.route_id
-            sched_type = sched.schedule_type
-            is_active = "✅" if sched.is_active else "⛔"
-            next_run = sched.next_run.strftime("%H:%M") if sched.next_run else "---"
-
-            if sched_type == "interval":
-                type_info = f"بازه‌ای ({sched.interval_minutes} دقیقه)"
-            else:
-                type_info = f"روزانه ({sched.daily_count} پیام)"
-
-            schedule_info = (
-                f"{i}. {is_active} برنامه #{sched_id}\n"
-                f"   مسیر: #{route_id}\n"
-                f"   نوع: {type_info}\n"
-                f"   اجرای بعدی: {next_run}\n\n"
-            )
-            message += schedule_info
-
-        message += (
-            "دستورات:\n"
-            "/editplan [شناسه] - تغییر برنامه\n"
-            "/removeplan [شناسه] - حذف برنامه\n"
-            "/toggleplan [شناسه] - فعال/غیرفعال کردن\n"
-        )
-
-        await client.send_message(user_id, message)
-        logger.info(f"Listed {len(schedules)} schedules for user {user_id}")
-
+        msg += "/toggleplan [شناسه] — فعال/غیرفعال\n/removeplan [شناسه] — حذف"
+        await client.send_message(user_id, msg, with_keypad=True)
     except Exception as e:
-        logger.error(f"Error in /listplans command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+        logger.error(f"/listplans error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد.")
 
 
 async def handle_toggleplan(client, user_id: int, schedule_id: int) -> None:
-    """Handle /toggleplan command (T36).
-
-    Toggle schedule active/inactive status.
-    """
-    logger.info(f"Handling /toggleplan command for user {user_id}, schedule {schedule_id}")
-
     try:
         from src.database import pool
         from src.core.schedule_service import ScheduleService
-
-        schedule_service = ScheduleService(pool)
-
-        # Get schedule
-        schedule = await schedule_service.get_schedule(schedule_id)
-
-        if not schedule:
+        ss = ScheduleService(pool)
+        sched = await ss.get_schedule(schedule_id)
+        if not sched or sched.user_id != user_id:
             await client.send_message(user_id, "❌ برنامه یافت نشد.")
             return
-
-        # Check ownership
-        if schedule.user_id != user_id:
-            await client.send_message(user_id, "❌ این برنامه متعلق به شما نیست.")
-            return
-
-        # Toggle
-        if schedule.is_active:
-            await schedule_service.deactivate_schedule(schedule_id)
-            status_msg = "⛔ غیرفعال شد"
+        if sched.is_active:
+            await ss.deactivate_schedule(schedule_id)
+            await client.send_message(user_id, f"⛔ برنامه #{schedule_id} غیرفعال شد.")
         else:
-            await schedule_service.activate_schedule(schedule_id)
-            status_msg = "✅ فعال شد"
-
-        confirmation = f"{status_msg}\n\nبرنامه #{schedule_id}"
-        await client.send_message(user_id, confirmation)
-        logger.info(f"Schedule {schedule_id} toggled by user {user_id}")
-
+            await ss.activate_schedule(schedule_id)
+            await client.send_message(user_id, f"✅ برنامه #{schedule_id} فعال شد.")
     except Exception as e:
-        logger.error(f"Error in /toggleplan command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+        logger.error(f"/toggleplan error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد.")
 
 
 async def handle_removeplan(client, user_id: int, schedule_id: int) -> None:
-    """Handle /removeplan command (T35).
-
-    Delete a schedule.
-    """
-    logger.info(f"Handling /removeplan command for user {user_id}, schedule {schedule_id}")
-
     try:
         from src.database import pool
         from src.core.schedule_service import ScheduleService
-
-        schedule_service = ScheduleService(pool)
-
-        # Get schedule
-        schedule = await schedule_service.get_schedule(schedule_id)
-
-        if not schedule:
+        sched = await ScheduleService(pool).get_schedule(schedule_id)
+        if not sched or sched.user_id != user_id:
             await client.send_message(user_id, "❌ برنامه یافت نشد.")
             return
-
-        # Check ownership
-        if schedule.user_id != user_id:
-            await client.send_message(user_id, "❌ این برنامه متعلق به شما نیست.")
-            return
-
-        # Ask for confirmation
-        confirmation_prompt = (
-            f"🗑️ حذف برنامه #{schedule_id}؟\n\n"
-            f"برای تأیید \"بله\" را بفرستید."
-        )
-
-        conversation_states[user_id] = {
-            "command": "removeplan",
-            "schedule_id": schedule_id,
-        }
-
-        await client.send_message(user_id, confirmation_prompt)
-        logger.info(f"Removal confirmation requested for schedule {schedule_id}")
-
+        conversation_states[user_id] = {"command": "removeplan", "schedule_id": schedule_id}
+        await client.send_message(user_id, f"🗑️ حذف برنامه #{schedule_id}؟\n«بله» برای تأیید.")
     except Exception as e:
-        logger.error(f"Error in /removeplan command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+        logger.error(f"/removeplan error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد.")
+
+
+async def handle_removeplan_confirmation(client, user_id: int, text: str) -> None:
+    state = conversation_states.pop(user_id, {})
+    schedule_id = state.get("schedule_id")
+    if text.strip().lower() not in ("بله", "yes", "y"):
+        await client.send_message(user_id, "❌ حذف لغو شد.")
+        return
+    try:
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+        await ScheduleService(pool).delete_schedule(schedule_id)
+        await client.send_message(user_id, f"✅ برنامه #{schedule_id} حذف شد.", with_keypad=True)
+    except Exception as e:
+        logger.error(f"removeplan_confirmation error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد.")
 
 
 async def handle_editplan(client, user_id: int, schedule_id: int) -> None:
-    """Handle /editplan command (T34).
-
-    Stub - editing would follow similar pattern to /addplan.
-    """
-    logger.info(f"Handling /editplan command for user {user_id}, schedule {schedule_id}")
-
-    try:
-        from src.database import pool
-        from src.core.schedule_service import ScheduleService
-
-        schedule_service = ScheduleService(pool)
-
-        # Get schedule
-        schedule = await schedule_service.get_schedule(schedule_id)
-
-        if not schedule:
-            await client.send_message(user_id, "❌ برنامه یافت نشد.")
-            return
-
-        # Check ownership
-        if schedule.user_id != user_id:
-            await client.send_message(user_id, "❌ این برنامه متعلق به شما نیست.")
-            return
-
-        # For MVP, editing not fully implemented
-        # Would need to modify _calculate_next_run and update logic
-        edit_message = (
-            f"برنامه #{schedule_id}\n"
-            f"نوع: {schedule.schedule_type}\n\n"
-            f"ویرایش کامل برنامه‌ها در دسترس نیست.\n"
-            f"لطفا برنامه را حذف کرده و یک برنامه جدید اضافه کنید."
-        )
-        await client.send_message(user_id, edit_message)
-
-    except Exception as e:
-        logger.error(f"Error in /editplan command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+    await client.send_message(
+        user_id,
+        "ویرایش برنامه در دسترس نیست.\nلطفا برنامه را حذف و دوباره بسازید.\n/removeplan"
+    )
 
 
-async def handle_renew(client, user_id: int) -> None:
-    """Handle /renew command for subscription renewal.
-
-    Shows current subscription and initiates renewal payment.
-    """
-    logger.info(f"Handling /renew command for user {user_id}")
-
-    try:
-        from src.database import pool
-        from src.core.subscription_service import SubscriptionService
-        from src.core.transaction_service import TransactionService
-
-        subscription_service = SubscriptionService(pool)
-        transaction_service = TransactionService(pool)
-
-        # Check current active subscription
-        active_sub = await subscription_service.get_active_subscription(user_id)
-
-        if not active_sub:
-            await client.send_message(
-                user_id,
-                "شما اشتراک فعالی ندارید.\n"
-                "/buy را برای خرید اشتراک بفرستید."
-            )
-            return
-
-        # Show current subscription info
-        tier = active_sub.tier
-        tier_info = SUBSCRIPTION_TIERS.get(tier, {})
-        amount = tier_info.get("price_monthly", 0)
-
-        info_message = (
-            f"اشتراک فعلی: {tier}\n"
-            f"تاریخ پایان: {active_sub.end_date}\n"
-            f"قیمت تمدید: {amount:,} تومان\n\n"
-            "درحال ایجاد درخواست پرداخت..."
-        )
-
-        await client.send_message(user_id, info_message)
-
-        # Create payment request for same tier
-        gateway = create_zarinpal_gateway(sandbox=True)
-        success, result = await gateway.request_payment(
-            amount=amount,
-            description=f"تمدید اشتراک {tier} - Rubifo",
-            callback_url=None,
-        )
-
-        if not success:
-            logger.error(f"Renewal payment request failed for user {user_id}: {result}")
-            await client.send_message(user_id, f"خطا در درخواست پرداخت: {result}")
-            return
-
-        # Extract authority from payment URL
-        authority = result.split("/StartPay/")[-1]
-
-        # Store pending payment (mark as renewal)
-        pending_payments[authority] = {
-            "user_id": user_id,
-            "tier": tier,
-            "amount": amount,
-            "is_renewal": True,
-        }
-
-        # Send payment link
-        payment_message = (
-            f"لینک پرداخت تمدید اشتراک:\n{result}\n\n"
-            f"لطفا منتظر تأیید بمانید..."
-        )
-        await client.send_message(user_id, payment_message)
-
-        # Start payment verification polling
-        asyncio.create_task(
-            verify_renewal_payment_polling(
-                client, subscription_service, authority, amount
-            )
-        )
-
-        logger.info(f"Renewal payment link sent to user {user_id}, authority: {authority}")
-
-    except Exception as e:
-        logger.error(f"Error in /renew command: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
-
-
-async def verify_renewal_payment_polling(
-    client, subscription_service: "SubscriptionService", authority: str, amount: int
-) -> None:
-    """Poll Zarinpal for renewal payment verification.
-
-    Args:
-        client: Rubpy bot client
-        subscription_service: SubscriptionService instance
-        authority: Payment authority from Zarinpal
-        amount: Payment amount in Rials
-    """
-    MAX_ATTEMPTS = 30  # 5 minutes with 10-second intervals
-    attempt = 0
-
-    while attempt < MAX_ATTEMPTS:
-        try:
-            # Check if payment data exists
-            if authority not in pending_payments:
-                logger.warning(f"Renewal payment {authority} no longer pending")
-                break
-
-            payment_data = pending_payments[authority]
-            user_id = payment_data["user_id"]
-            tier = payment_data["tier"]
-
-            # Verify payment with Zarinpal
-            gateway = create_zarinpal_gateway(sandbox=True)
-            success, ref_id = await gateway.verify_payment(authority, amount)
-
-            if success:
-                # Payment verified - extend subscription
-                from src.database import pool
-                from src.core.transaction_service import TransactionService
-
-                transaction_service = TransactionService(pool)
-
-                # Extend subscription by 30 days
-                subscription = await subscription_service.extend_subscription(user_id, days=30)
-
-                # Insert transaction
-                await transaction_service.insert_transaction(
-                    user_id=user_id,
-                    amount=amount,
-                    tier=tier,
-                    status="completed",
-                    reference_id=ref_id,
-                )
-
-                # Remove from pending
-                del pending_payments[authority]
-
-                # Send confirmation
-                confirmation_message = (
-                    f"✅ تمدید پرداخت شد!\n\n"
-                    f"اشتراک {tier} شما تمدید شد.\n"
-                    f"تاریخ پایان جدید: {subscription.end_date}\n\n"
-                    f"سپاسگزاریم!"
-                )
-                await client.send_message(user_id, confirmation_message)
-
-                logger.info(
-                    f"Renewal payment verified for user {user_id}, subscription {subscription.id} extended"
-                )
-                return
-
-            attempt += 1
-            if attempt < MAX_ATTEMPTS:
-                await asyncio.sleep(10)
-
-        except Exception as e:
-            logger.error(f"Error in renewal payment verification for {authority}: {e}")
-            attempt += 1
-            if attempt < MAX_ATTEMPTS:
-                await asyncio.sleep(10)
-
-    # Timeout - send error message
-    if authority in pending_payments:
-        payment_data = pending_payments.pop(authority)
-        user_id = payment_data["user_id"]
-
-        timeout_message = (
-            "⏱ مهلت تأیید پرداخت تمام شد.\n"
-            "لطفا دوباره /renew را بفرستید."
-        )
-        await client.send_message(user_id, timeout_message)
-        logger.warning(f"Renewal payment verification timeout for {authority}")
+async def handle_calendar(client, user_id: int) -> None:
+    await handle_listplans(client, user_id)
