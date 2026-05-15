@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rubifo Admin - Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h2>🤖 Rubifo</h2>
+                <p>Admin Panel</p>
+            </div>
+
+            <ul class="nav-menu">
+                <li><a href="/admin/dashboard.html" class="active">📊 Dashboard</a></li>
+                <li><a href="/admin/users.html">👥 Users</a></li>
+                <li><a href="/admin/logs.html">📋 Logs</a></li>
+                <li><a href="/admin/performance.html">⚡ Performance</a></li>
+                <li><a href="/admin/settings.html">⚙️ Settings</a></li>
+            </ul>
+
+            <div class="user-info">
+                <p id="currentUser">User</p>
+                <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="content">
+            <div class="header">
+                <h1>Dashboard</h1>
+                <p id="lastUpdate">Loading...</p>
+            </div>
+
+            <!-- Metrics Grid -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h3>👥 Total Users</h3>
+                    <p class="metric-value" id="totalUsers">0</p>
+                </div>
+
+                <div class="metric-card">
+                    <h3>💳 Active Subscriptions</h3>
+                    <p class="metric-value" id="activeSubscriptions">0</p>
+                </div>
+
+                <div class="metric-card">
+                    <h3>🔗 Active Routes</h3>
+                    <p class="metric-value" id="activeRoutes">0</p>
+                </div>
+
+                <div class="metric-card">
+                    <h3>📤 Messages in Queue</h3>
+                    <p class="metric-value" id="pendingPosts">0</p>
+                </div>
+
+                <div class="metric-card">
+                    <h3>💰 Total Revenue</h3>
+                    <p class="metric-value" id="totalRevenue">0 تومان</p>
+                </div>
+
+                <div class="metric-card">
+                    <h3>⏳ Trial Users</h3>
+                    <p class="metric-value" id="trialUsers">0</p>
+                </div>
+            </div>
+
+            <!-- Statistics Section -->
+            <div class="stats-section">
+                <div class="stat-box">
+                    <h3>📊 Transaction Statistics</h3>
+                    <ul id="transactionStats">
+                        <li>Loading...</li>
+                    </ul>
+                </div>
+
+                <div class="stat-box">
+                    <h3>💳 Subscription Distribution</h3>
+                    <ul id="subscriptionTiers">
+                        <li>Loading...</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="activity-section">
+                <h3>📋 Recent Transactions</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Amount</th>
+                            <th>Tier</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentTransactions">
+                        <tr><td colspan="6">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/admin/login.html';
+        }
+
+        async function fetchAPI(endpoint) {
+            const response = await fetch(endpoint, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                window.location.href = '/admin/login.html';
+            }
+
+            return response.json();
+        }
+
+        async function loadDashboard() {
+            try {
+                const summary = await fetchAPI('/admin/dashboard-summary');
+                document.getElementById('totalUsers').textContent = summary.total_users;
+                document.getElementById('activeSubscriptions').textContent = summary.active_subscriptions;
+                document.getElementById('activeRoutes').textContent = summary.active_routes;
+                document.getElementById('pendingPosts').textContent = summary.pending_posts;
+                document.getElementById('totalRevenue').textContent = (summary.total_revenue.total_amount / 1000).toFixed(0) + 'K تومان';
+                document.getElementById('trialUsers').textContent = summary.active_trial_users;
+
+                const stats = await fetchAPI('/admin/stats');
+                const statusList = document.getElementById('transactionStats');
+                statusList.innerHTML = '';
+                for (const [status, count] of Object.entries(stats.by_status || {})) {
+                    statusList.innerHTML += `<li>${status}: ${count}</li>`;
+                }
+
+                const tierList = document.getElementById('subscriptionTiers');
+                tierList.innerHTML = '';
+                for (const [tier, count] of Object.entries(stats.by_tier || {})) {
+                    tierList.innerHTML += `<li>${tier}: ${count}</li>`;
+                }
+
+                const transactions = await fetchAPI('/admin/transactions?limit=10');
+                const tbody = document.getElementById('recentTransactions');
+                tbody.innerHTML = '';
+                (transactions.transactions || []).forEach(t => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${t.id}</td>
+                            <td>${t.user_id}</td>
+                            <td>${t.amount}</td>
+                            <td>${t.tier}</td>
+                            <td><span class="badge badge-${t.status}">${t.status}</span></td>
+                            <td>${new Date(t.created_at).toLocaleDateString()}</td>
+                        </tr>
+                    `;
+                });
+
+                document.getElementById('lastUpdate').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/admin/login.html';
+        });
+
+        // Get username from token (jwt payload)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        document.getElementById('currentUser').textContent = payload.sub || 'Admin';
+
+        loadDashboard();
+        setInterval(loadDashboard, 30000); // Refresh every 30s
+    </script>
+</body>
+</html>

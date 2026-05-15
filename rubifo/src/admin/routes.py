@@ -521,3 +521,164 @@ async def get_dashboard_summary(username: str = Depends(verify_token)) -> dict:
         },
         "active_trial_users": trial_users["count"] if trial_users else 0,
     }
+
+
+@router.get("/logs")
+async def get_logs(
+    username: str = Depends(verify_token),
+    user_id: Optional[int] = Query(None),
+    action: Optional[str] = Query(None, description="Filter by action type"),
+    level: Optional[str] = Query(None, description="Filter by log level (info, warning, error)"),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """Get system logs with optional filtering.
+
+    Args:
+        username: Authenticated username
+        user_id: Filter by user ID
+        action: Filter by action type
+        level: Filter by log level
+        start_date: Start date
+        end_date: End date
+        limit: Result limit
+        offset: Pagination offset
+
+    Returns:
+        Logs with pagination
+    """
+    logger.info(f"Admin {username} accessing logs")
+
+    query = "SELECT * FROM logs WHERE 1=1"
+    params = []
+
+    if user_id:
+        query += f" AND user_id = ${len(params) + 1}"
+        params.append(user_id)
+
+    if action:
+        query += f" AND action = ${len(params) + 1}"
+        params.append(action)
+
+    if level:
+        query += f" AND level = ${len(params) + 1}"
+        params.append(level)
+
+    if start_date:
+        query += f" AND created_at::date >= ${len(params) + 1}"
+        params.append(start_date)
+
+    if end_date:
+        query += f" AND created_at::date <= ${len(params) + 1}"
+        params.append(end_date)
+
+    # Count total
+    count_query = f"SELECT COUNT(*) as count FROM logs WHERE 1=1"
+    count_params = []
+
+    if user_id:
+        count_query += f" AND user_id = ${len(count_params) + 1}"
+        count_params.append(user_id)
+    if action:
+        count_query += f" AND action = ${len(count_params) + 1}"
+        count_params.append(action)
+    if level:
+        count_query += f" AND level = ${len(count_params) + 1}"
+        count_params.append(level)
+    if start_date:
+        count_query += f" AND created_at::date >= ${len(count_params) + 1}"
+        count_params.append(start_date)
+    if end_date:
+        count_query += f" AND created_at::date <= ${len(count_params) + 1}"
+        count_params.append(end_date)
+
+    total_row = await pool.fetchrow(count_query, *count_params)
+    total = total_row["count"] if total_row else 0
+
+    # Add ordering and pagination
+    query += f" ORDER BY created_at DESC LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}"
+    params.extend([limit, offset])
+
+    results = await pool.fetch(query, *params)
+    logs = [dict(row) for row in results]
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "logs": logs,
+    }
+
+
+@router.get("/performance")
+async def get_performance_metrics(username: str = Depends(verify_token)) -> dict:
+    """Get performance metrics and system health.
+
+    Args:
+        username: Authenticated username
+
+    Returns:
+        Performance metrics
+    """
+    logger.info(f"Admin {username} accessing performance metrics")
+
+    # Messages processed in last hour
+    from datetime import timedelta
+    one_hour_ago = datetime.now() - timedelta(hours=1)
+    one_day_ago = datetime.now() - timedelta(days=1)
+
+    messages_1h = await pool.fetchrow(
+        "SELECT COUNT(*) as count FROM post_queue WHERE status = 'sent' AND created_at > $1",
+        one_hour_ago,
+    )
+
+    messages_24h = await pool.fetchrow(
+        "SELECT COUNT(*) as count FROM post_queue WHERE status = 'sent' AND created_at > $1",
+        one_day_ago,
+    )
+
+    # Failed messages
+    failed_messages = await pool.fetchrow(
+        "SELECT COUNT(*) as count FROM post_queue WHERE status = 'failed'"
+    )
+
+    # Average retry count
+    avg_retry = await pool.fetchrow(
+        "SELECT AVG(retry_count) as avg FROM post_queue"
+    )
+
+    # Queue performance
+    queue_stats = await pool.fetch(
+        """
+        SELECT route_id, COUNT(*) as count,
+               ROUND(AVG(EXTRACT(EPOCH FROM (created_at - NOW())))) as avg_age_seconds
+        FROM post_queue
+        WHERE status = 'pending'
+        GROUP BY route_id
+        ORDER BY count DESC
+        LIMIT 10
+        """
+    )
+
+    # Subscription tier distribution
+    tier_distribution = await pool.fetch(
+        """
+        SELECT tier, COUNT(*) as count
+        FROM subscriptions
+        WHERE is_active = true
+        GROUP BY tier
+        """
+    )
+
+    return {
+        "messages_processed": {
+            "last_hour": messages_1h["count"] if messages_1h else 0,
+            "last_24h": messages_24h["count"] if messages_24h else 0,
+        },
+        "failed_messages": failed_messages["count"] if failed_messages else 0,
+        "average_retry_count": float(avg_retry["avg"] or 0),
+        "largest_queues": [dict(row) for row in queue_stats],
+        "subscription_distribution": [dict(row) for row in tier_distribution],
+    }

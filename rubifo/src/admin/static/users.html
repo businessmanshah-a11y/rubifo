@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rubifo Admin - Users</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h2>🤖 Rubifo</h2>
+                <p>Admin Panel</p>
+            </div>
+
+            <ul class="nav-menu">
+                <li><a href="/admin/dashboard.html">📊 Dashboard</a></li>
+                <li><a href="/admin/users.html" class="active">👥 Users</a></li>
+                <li><a href="/admin/logs.html">📋 Logs</a></li>
+                <li><a href="/admin/performance.html">⚡ Performance</a></li>
+                <li><a href="/admin/settings.html">⚙️ Settings</a></li>
+            </ul>
+
+            <div class="user-info">
+                <p id="currentUser">User</p>
+                <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="content">
+            <div class="header">
+                <h1>Users Management</h1>
+                <div class="search-bar">
+                    <input type="number" id="userIdFilter" placeholder="Filter by user ID">
+                    <button class="btn btn-primary" onclick="loadUsers()">Search</button>
+                </div>
+            </div>
+
+            <!-- Users Table -->
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>User ID</th>
+                        <th>Username</th>
+                        <th>Trial Status</th>
+                        <th>Current Tier</th>
+                        <th>Sub End Date</th>
+                        <th>Joined</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTable">
+                    <tr><td colspan="8">Loading...</td></tr>
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination">
+                <button class="btn btn-small" onclick="previousPage()">← Previous</button>
+                <span id="pageInfo">Page 1</span>
+                <button class="btn btn-small" onclick="nextPage()">Next →</button>
+            </div>
+
+            <!-- User Detail Modal -->
+            <div id="userModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <span class="close" onclick="closeUserModal()">&times;</span>
+                    <h2>User Details</h2>
+
+                    <div class="user-detail-section">
+                        <h3>User Information</h3>
+                        <p><strong>ID:</strong> <span id="detailId"></span></p>
+                        <p><strong>User ID:</strong> <span id="detailUserId"></span></p>
+                        <p><strong>Username:</strong> <span id="detailUsername"></span></p>
+                        <p><strong>Joined:</strong> <span id="detailCreatedAt"></span></p>
+                        <p><strong>Trial Status:</strong> <span id="detailTrialStatus"></span></p>
+                    </div>
+
+                    <div class="user-detail-section">
+                        <h3>Active Subscriptions</h3>
+                        <ul id="detailSubscriptions">
+                            <li>None</li>
+                        </ul>
+                    </div>
+
+                    <div class="user-detail-section">
+                        <h3>Routes</h3>
+                        <ul id="detailRoutes">
+                            <li>None</li>
+                        </ul>
+                    </div>
+
+                    <div class="user-detail-section">
+                        <h3>Recent Transactions</h3>
+                        <ul id="detailTransactions">
+                            <li>None</li>
+                        </ul>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="closeUserModal()">Close</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/admin/login.html';
+        }
+
+        let currentPage = 1;
+        const pageSize = 20;
+
+        async function fetchAPI(endpoint) {
+            const response = await fetch(endpoint, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                window.location.href = '/admin/login.html';
+            }
+
+            return response.json();
+        }
+
+        async function loadUsers() {
+            try {
+                const userIdFilter = document.getElementById('userIdFilter').value;
+                let endpoint = `/admin/users?limit=${pageSize}&offset=${(currentPage - 1) * pageSize}`;
+
+                if (userIdFilter) {
+                    endpoint += `&user_id=${userIdFilter}`;
+                    currentPage = 1;
+                }
+
+                const data = await fetchAPI(endpoint);
+                const tbody = document.getElementById('usersTable');
+                tbody.innerHTML = '';
+
+                (data.users || []).forEach(user => {
+                    const trialStatus = user.is_trial_active ? '✅ Active' : '❌ Expired';
+                    const tier = user.current_tier || 'None';
+                    const subEndDate = user.subscription_end ? new Date(user.subscription_end).toLocaleDateString() : '-';
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${user.id}</td>
+                            <td>${user.user_id}</td>
+                            <td>${user.username || 'N/A'}</td>
+                            <td>${trialStatus}</td>
+                            <td>${tier}</td>
+                            <td>${subEndDate}</td>
+                            <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                            <td><button class="btn btn-small" onclick="viewUserDetail(${user.id})">View</button></td>
+                        </tr>
+                    `;
+                });
+
+                document.getElementById('pageInfo').textContent = `Page ${currentPage} (${data.total} users)`;
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        async function viewUserDetail(userId) {
+            try {
+                const data = await fetchAPI(`/admin/users/${userId}`);
+                const user = data.user;
+
+                document.getElementById('detailId').textContent = user.id;
+                document.getElementById('detailUserId').textContent = user.user_id;
+                document.getElementById('detailUsername').textContent = user.username || 'N/A';
+                document.getElementById('detailCreatedAt').textContent = new Date(user.created_at).toLocaleDateString();
+                document.getElementById('detailTrialStatus').textContent = user.is_trial_active ? 'Active' : 'Expired';
+
+                const subList = document.getElementById('detailSubscriptions');
+                subList.innerHTML = '';
+                (data.subscriptions || []).forEach(sub => {
+                    subList.innerHTML += `<li>${sub.tier} - Until ${new Date(sub.end_date).toLocaleDateString()}</li>`;
+                });
+                if (data.subscriptions.length === 0) {
+                    subList.innerHTML = '<li>None</li>';
+                }
+
+                const routeList = document.getElementById('detailRoutes');
+                routeList.innerHTML = '';
+                (data.routes || []).forEach(route => {
+                    routeList.innerHTML += `<li>Route #${route.id}: ${route.source_channel_id} → ${route.target_channel_id}</li>`;
+                });
+                if (data.routes.length === 0) {
+                    routeList.innerHTML = '<li>None</li>';
+                }
+
+                const txnList = document.getElementById('detailTransactions');
+                txnList.innerHTML = '';
+                (data.recent_transactions || []).forEach(txn => {
+                    txnList.innerHTML += `<li>${txn.amount} - ${txn.status} - ${new Date(txn.created_at).toLocaleDateString()}</li>`;
+                });
+                if (data.recent_transactions.length === 0) {
+                    txnList.innerHTML = '<li>None</li>';
+                }
+
+                document.getElementById('userModal').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading user detail:', error);
+            }
+        }
+
+        function closeUserModal() {
+            document.getElementById('userModal').style.display = 'none';
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                loadUsers();
+            }
+        }
+
+        function nextPage() {
+            currentPage++;
+            loadUsers();
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/admin/login.html';
+        });
+
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        document.getElementById('currentUser').textContent = payload.sub || 'Admin';
+
+        loadUsers();
+    </script>
+</body>
+</html>

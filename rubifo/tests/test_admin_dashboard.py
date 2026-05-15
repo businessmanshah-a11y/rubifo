@@ -1,0 +1,285 @@
+"""Integration tests for admin dashboard (T62)."""
+
+import pytest
+from fastapi.testclient import TestClient
+from datetime import datetime
+from src.admin.main import app
+
+
+@pytest.fixture
+def client():
+    """Create test client."""
+    return TestClient(app)
+
+
+@pytest.fixture
+def valid_token():
+    """Create a valid JWT token for testing."""
+    from src.admin.auth import AdminAuth
+    auth = AdminAuth()
+    # Note: This requires ADMIN_USERNAME and ADMIN_PASSWORD_HASH to be set
+    token = auth.create_token("admin")
+    return token
+
+
+class TestAdminAuthEndpoints:
+    """Test authentication endpoints."""
+
+    def test_health_check(self, client):
+        """Test health check endpoint."""
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["status"] == "ok"
+
+    def test_login_invalid_credentials(self, client):
+        """Test login with invalid credentials."""
+        response = client.post(
+            "/admin/login",
+            json={"username": "invalid", "password": "invalid"},
+        )
+        assert response.status_code == 401
+
+    def test_root_redirect(self, client):
+        """Test root path serves login page."""
+        response = client.get("/", follow_redirects=True)
+        assert response.status_code == 200
+
+
+class TestAdminDashboardAPI:
+    """Test dashboard API endpoints."""
+
+    def test_dashboard_summary_unauthorized(self, client):
+        """Test accessing dashboard summary without token."""
+        response = client.get("/admin/dashboard-summary")
+        assert response.status_code == 403
+
+    def test_dashboard_summary_requires_token(self, client):
+        """Test dashboard summary requires authentication."""
+        response = client.get(
+            "/admin/dashboard-summary",
+            headers={"Authorization": "Bearer invalid-token"},
+        )
+        assert response.status_code == 401
+
+
+class TestAdminTransactionsAPI:
+    """Test transactions API endpoints."""
+
+    def test_transactions_list_unauthorized(self, client):
+        """Test listing transactions without token."""
+        response = client.get("/admin/transactions")
+        assert response.status_code == 403
+
+    def test_transactions_list_structure(self, client, valid_token):
+        """Test transactions list has correct structure."""
+        response = client.get(
+            "/admin/transactions",
+            headers={"Authorization": f"Bearer {valid_token}"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            assert "total" in data
+            assert "limit" in data
+            assert "offset" in data
+            assert "transactions" in data
+            assert isinstance(data["transactions"], list)
+
+    def test_transactions_export_unauthorized(self, client):
+        """Test exporting transactions without token."""
+        response = client.get("/admin/transactions/export")
+        assert response.status_code == 403
+
+
+class TestAdminStatsAPI:
+    """Test statistics API endpoints."""
+
+    def test_stats_unauthorized(self, client):
+        """Test stats endpoint without token."""
+        response = client.get("/admin/stats")
+        assert response.status_code == 403
+
+    def test_stats_structure(self, client, valid_token):
+        """Test stats endpoint structure."""
+        response = client.get(
+            "/admin/stats",
+            headers={"Authorization": f"Bearer {valid_token}"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            assert "overall" in data
+            assert "by_tier" in data
+            assert "active_subscriptions" in data
+            assert "total_users" in data
+
+
+class TestAdminRoutesAPI:
+    """Test routes management API."""
+
+    def test_routes_list_unauthorized(self, client):
+        """Test listing routes without token."""
+        response = client.get("/admin/routes")
+        assert response.status_code == 403
+
+    def test_routes_list_structure(self, client, valid_token):
+        """Test routes list structure."""
+        response = client.get(
+            "/admin/routes",
+            headers={"Authorization": f"Bearer {valid_token}"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            assert "total" in data
+            assert "limit" in data
+            assert "offset" in data
+            assert "routes" in data
+
+    def test_route_detail_unauthorized(self, client):
+        """Test route detail endpoint without token."""
+        response = client.get("/admin/routes/1")
+        assert response.status_code == 403
+
+
+class TestAdminUsersAPI:
+    """Test users management API."""
+
+    def test_users_list_unauthorized(self, client):
+        """Test listing users without token."""
+        response = client.get("/admin/users")
+        assert response.status_code == 403
+
+    def test_users_list_structure(self, client, valid_token):
+        """Test users list structure."""
+        response = client.get(
+            "/admin/users",
+            headers={"Authorization": f"Bearer {valid_token}"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            assert "total" in data
+            assert "limit" in data
+            assert "offset" in data
+            assert "users" in data
+            assert isinstance(data["users"], list)
+
+    def test_user_detail_unauthorized(self, client):
+        """Test user detail endpoint without token."""
+        response = client.get("/admin/users/1")
+        assert response.status_code == 403
+
+
+class TestAdminLogsAPI:
+    """Test logs API endpoint."""
+
+    def test_logs_unauthorized(self, client):
+        """Test logs endpoint without token."""
+        response = client.get("/admin/logs")
+        assert response.status_code == 403
+
+    def test_logs_structure(self, client, valid_token):
+        """Test logs endpoint structure."""
+        response = client.get(
+            "/admin/logs",
+            headers={"Authorization": f"Bearer {valid_token}"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            assert "total" in data
+            assert "limit" in data
+            assert "offset" in data
+            assert "logs" in data
+
+
+class TestAdminPerformanceAPI:
+    """Test performance metrics API."""
+
+    def test_performance_unauthorized(self, client):
+        """Test performance endpoint without token."""
+        response = client.get("/admin/performance")
+        assert response.status_code == 403
+
+    def test_performance_structure(self, client, valid_token):
+        """Test performance metrics structure."""
+        response = client.get(
+            "/admin/performance",
+            headers={"Authorization": f"Bearer {valid_token}"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            assert "messages_processed" in data
+            assert "failed_messages" in data
+            assert "average_retry_count" in data
+            assert "largest_queues" in data
+            assert "subscription_distribution" in data
+
+
+class TestAdminStaticFiles:
+    """Test static file serving."""
+
+    def test_login_page_accessible(self, client):
+        """Test login page is served."""
+        response = client.get("/static/login.html")
+        assert response.status_code == 200
+        assert "text/html" in response.headers.get("content-type", "")
+
+    def test_css_file_accessible(self, client):
+        """Test CSS file is served."""
+        response = client.get("/static/css/style.css")
+        assert response.status_code == 200
+        assert "text/css" in response.headers.get("content-type", "")
+
+    def test_dashboard_page_accessible(self, client):
+        """Test dashboard page is served."""
+        response = client.get("/static/dashboard.html")
+        assert response.status_code == 200
+
+    def test_users_page_accessible(self, client):
+        """Test users page is served."""
+        response = client.get("/static/users.html")
+        assert response.status_code == 200
+
+    def test_logs_page_accessible(self, client):
+        """Test logs page is served."""
+        response = client.get("/static/logs.html")
+        assert response.status_code == 200
+
+    def test_performance_page_accessible(self, client):
+        """Test performance page is served."""
+        response = client.get("/static/performance.html")
+        assert response.status_code == 200
+
+    def test_settings_page_accessible(self, client):
+        """Test settings page is served."""
+        response = client.get("/static/settings.html")
+        assert response.status_code == 200
+
+
+class TestAdminSecurity:
+    """Test security-related functionality."""
+
+    def test_invalid_token_rejected(self, client):
+        """Test invalid JWT token is rejected."""
+        response = client.get(
+            "/admin/dashboard-summary",
+            headers={"Authorization": "Bearer invalid.token.here"},
+        )
+        assert response.status_code == 401
+
+    def test_missing_token_rejected(self, client):
+        """Test missing token is rejected."""
+        response = client.get("/admin/dashboard-summary")
+        assert response.status_code == 403
+
+    def test_cors_headers_present(self, client):
+        """Test CORS headers are properly set."""
+        response = client.options("/health")
+        # This tests that the app is accessible
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

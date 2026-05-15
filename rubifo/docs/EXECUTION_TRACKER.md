@@ -100,18 +100,18 @@
 
 | Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
 |------|-------|-------|--------|------|--------|--------|--------|
-| T51 | Setup FastAPI admin app | - | ⏳ Pending | - | - | - | - |
-| T52 | Create dashboard stats API | - | ⏳ Pending | - | - | - | - |
-| T53 | Create users management API | - | ⏳ Pending | - | - | - | - |
-| T54 | Create logs API | - | ⏳ Pending | - | - | - | - |
-| T55 | Create performance metrics API | - | ⏳ Pending | - | - | - | - |
-| T56 | Create login page HTML | - | ⏳ Pending | - | - | - | - |
-| T57 | Create dashboard HTML | - | ⏳ Pending | - | - | - | - |
-| T58 | Create users table page | - | ⏳ Pending | - | - | - | - |
-| T59 | Create logs page | - | ⏳ Pending | - | - | - | - |
-| T60 | Create performance page | - | ⏳ Pending | - | - | - | - |
-| T61 | Create settings page | - | ⏳ Pending | - | - | - | - |
-| T62 | Admin dashboard integration test | - | ⏳ Pending | - | - | - | - |
+| T51 | Setup FastAPI admin app | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T52 | Create dashboard stats API | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T53 | Create users management API | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T54 | Create logs API | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T55 | Create performance metrics API | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T56 | Create login page HTML | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T57 | Create dashboard HTML | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T58 | Create users table page | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T59 | Create logs page | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T60 | Create performance page | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T61 | Create settings page | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T62 | Admin dashboard integration test | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 
 ---
 

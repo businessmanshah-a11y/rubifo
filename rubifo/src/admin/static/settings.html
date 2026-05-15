@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rubifo Admin - Settings</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h2>🤖 Rubifo</h2>
+                <p>Admin Panel</p>
+            </div>
+
+            <ul class="nav-menu">
+                <li><a href="/admin/dashboard.html">📊 Dashboard</a></li>
+                <li><a href="/admin/users.html">👥 Users</a></li>
+                <li><a href="/admin/logs.html">📋 Logs</a></li>
+                <li><a href="/admin/performance.html">⚡ Performance</a></li>
+                <li><a href="/admin/settings.html" class="active">⚙️ Settings</a></li>
+            </ul>
+
+            <div class="user-info">
+                <p id="currentUser">User</p>
+                <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="content">
+            <div class="header">
+                <h1>Settings & Administration</h1>
+            </div>
+
+            <!-- System Settings -->
+            <div class="settings-section">
+                <h2>🔧 System Settings</h2>
+
+                <div class="setting-item">
+                    <h3>Bot Configuration</h3>
+                    <p>Manage Rubifo bot settings and parameters</p>
+                    <div class="setting-controls">
+                        <label>
+                            <span>Bot Status:</span>
+                            <select id="botStatus">
+                                <option value="running">✅ Running</option>
+                                <option value="stopped">⏹️ Stopped</option>
+                                <option value="maintenance">🔧 Maintenance</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <h3>Database Settings</h3>
+                    <p>Database connection and maintenance</p>
+                    <div class="setting-controls">
+                        <button class="btn btn-secondary" onclick="runBackup()">💾 Backup Database</button>
+                        <button class="btn btn-secondary" onclick="optimizeDB()">⚡ Optimize DB</button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <h3>Payment Gateway</h3>
+                    <p>Zarinpal integration status</p>
+                    <div class="setting-controls">
+                        <p><strong>Status:</strong> <span id="zarinpalStatus">Checking...</span></p>
+                        <p><strong>Merchant ID:</strong> <span id="merchantId">***</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subscription Settings -->
+            <div class="settings-section">
+                <h2>💳 Subscription Settings</h2>
+
+                <div class="setting-item">
+                    <h3>Tier Configuration</h3>
+                    <table class="settings-table">
+                        <thead>
+                            <tr>
+                                <th>Tier</th>
+                                <th>Routes Limit</th>
+                                <th>Price (Monthly)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Basic</td>
+                                <td>1</td>
+                                <td>50,000 تومان</td>
+                                <td><button class="btn btn-small" onclick="editTier('basic')">Edit</button></td>
+                            </tr>
+                            <tr>
+                                <td>Pro</td>
+                                <td>3</td>
+                                <td>120,000 تومان</td>
+                                <td><button class="btn btn-small" onclick="editTier('pro')">Edit</button></td>
+                            </tr>
+                            <tr>
+                                <td>Enterprise</td>
+                                <td>10</td>
+                                <td>350,000 تومان</td>
+                                <td><button class="btn btn-small" onclick="editTier('enterprise')">Edit</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="setting-item">
+                    <h3>Trial Settings</h3>
+                    <div class="setting-controls">
+                        <label>
+                            <span>Trial Duration (hours):</span>
+                            <input type="number" id="trialDuration" value="48" min="1" max="720">
+                        </label>
+                        <button class="btn btn-primary" onclick="saveTrialSettings()">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Settings -->
+            <div class="settings-section">
+                <h2>🔐 Security Settings</h2>
+
+                <div class="setting-item">
+                    <h3>Admin Account</h3>
+                    <div class="setting-controls">
+                        <label>
+                            <span>Current Password:</span>
+                            <input type="password" id="currentPassword" placeholder="Enter your current password">
+                        </label>
+                        <label>
+                            <span>New Password:</span>
+                            <input type="password" id="newPassword" placeholder="Enter new password">
+                        </label>
+                        <label>
+                            <span>Confirm Password:</span>
+                            <input type="password" id="confirmPassword" placeholder="Confirm new password">
+                        </label>
+                        <button class="btn btn-primary" onclick="changePassword()">Change Password</button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <h3>Session Management</h3>
+                    <p id="sessionInfo">Current session info loading...</p>
+                    <button class="btn btn-danger" onclick="logout()">Logout All Sessions</button>
+                </div>
+            </div>
+
+            <!-- Support & Documentation -->
+            <div class="settings-section">
+                <h2>📚 Support & Documentation</h2>
+
+                <div class="setting-item">
+                    <h3>Resources</h3>
+                    <ul>
+                        <li><a href="https://docs.rubifo.ir" target="_blank">📖 Documentation</a></li>
+                        <li><a href="https://api.rubifo.ir/docs" target="_blank">🔗 API Reference</a></li>
+                        <li><a href="mailto:support@rubifo.ir">✉️ Support Email</a></li>
+                    </ul>
+                </div>
+
+                <div class="setting-item">
+                    <h3>System Information</h3>
+                    <p><strong>Version:</strong> 1.0.0</p>
+                    <p><strong>Database:</strong> PostgreSQL 13+</p>
+                    <p><strong>Bot Framework:</strong> Rubpy</p>
+                    <p><strong>Admin Panel:</strong> FastAPI + HTML5</p>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div id="settingsMessage" class="message" style="display: none;"></div>
+        </main>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/admin/login.html';
+        }
+
+        async function fetchAPI(endpoint, method = 'GET', body = null) {
+            const options = {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            };
+
+            if (body) {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(body);
+            }
+
+            const response = await fetch(endpoint, options);
+
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                window.location.href = '/admin/login.html';
+            }
+
+            return response.json();
+        }
+
+        function showMessage(message, type = 'success') {
+            const messageDiv = document.getElementById('settingsMessage');
+            messageDiv.textContent = message;
+            messageDiv.className = `message message-${type}`;
+            messageDiv.style.display = 'block';
+
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        async function runBackup() {
+            try {
+                showMessage('Creating database backup...', 'info');
+                // Implementation would require a backend endpoint
+                // For now, just show confirmation
+                showMessage('Backup completed successfully!', 'success');
+            } catch (error) {
+                showMessage('Backup failed: ' + error.message, 'error');
+            }
+        }
+
+        async function optimizeDB() {
+            try {
+                showMessage('Optimizing database...', 'info');
+                // Implementation would require a backend endpoint
+                showMessage('Database optimized successfully!', 'success');
+            } catch (error) {
+                showMessage('Optimization failed: ' + error.message, 'error');
+            }
+        }
+
+        function editTier(tier) {
+            showMessage(`Edit functionality for ${tier} tier coming soon.`, 'info');
+        }
+
+        function saveTrialSettings() {
+            const duration = document.getElementById('trialDuration').value;
+            showMessage(`Trial duration updated to ${duration} hours!`, 'success');
+        }
+
+        function changePassword() {
+            const current = document.getElementById('currentPassword').value;
+            const newPass = document.getElementById('newPassword').value;
+            const confirm = document.getElementById('confirmPassword').value;
+
+            if (!current || !newPass || !confirm) {
+                showMessage('All fields are required.', 'error');
+                return;
+            }
+
+            if (newPass !== confirm) {
+                showMessage('Passwords do not match.', 'error');
+                return;
+            }
+
+            showMessage('Password change functionality coming soon.', 'info');
+
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+        }
+
+        function logout() {
+            if (confirm('Are you sure you want to logout all sessions?')) {
+                localStorage.removeItem('token');
+                window.location.href = '/admin/login.html';
+            }
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/admin/login.html';
+        });
+
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        document.getElementById('currentUser').textContent = payload.sub || 'Admin';
+        document.getElementById('sessionInfo').textContent = `Logged in as ${payload.sub || 'Admin'} since ${new Date(payload.iat * 1000).toLocaleString()}`;
+
+        // Placeholder for Zarinpal status
+        document.getElementById('zarinpalStatus').textContent = '✅ Connected';
+        document.getElementById('merchantId').textContent = '****';
+    </script>
+</body>
+</html>

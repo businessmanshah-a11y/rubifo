@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rubifo Admin - Performance</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h2>🤖 Rubifo</h2>
+                <p>Admin Panel</p>
+            </div>
+
+            <ul class="nav-menu">
+                <li><a href="/admin/dashboard.html">📊 Dashboard</a></li>
+                <li><a href="/admin/users.html">👥 Users</a></li>
+                <li><a href="/admin/logs.html">📋 Logs</a></li>
+                <li><a href="/admin/performance.html" class="active">⚡ Performance</a></li>
+                <li><a href="/admin/settings.html">⚙️ Settings</a></li>
+            </ul>
+
+            <div class="user-info">
+                <p id="currentUser">User</p>
+                <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="content">
+            <div class="header">
+                <h1>Performance Metrics</h1>
+                <p id="lastUpdate">Loading...</p>
+            </div>
+
+            <!-- Metrics Grid -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h3>📨 Messages/Hour</h3>
+                    <p class="metric-value" id="messagesPerHour">0</p>
+                </div>
+
+                <div class="metric-card">
+                    <h3>📨 Messages/24h</h3>
+                    <p class="metric-value" id="messagesPerDay">0</p>
+                </div>
+
+                <div class="metric-card">
+                    <h3>❌ Failed Messages</h3>
+                    <p class="metric-value" id="failedMessages">0</p>
+                </div>
+
+                <div class="metric-card">
+                    <h3>🔄 Avg Retries</h3>
+                    <p class="metric-value" id="avgRetries">0</p>
+                </div>
+            </div>
+
+            <!-- Queue Status -->
+            <div class="section">
+                <h2>📤 Queue Status (Top 10 Routes)</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Route ID</th>
+                            <th>Pending Count</th>
+                            <th>Avg Age (seconds)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="queueTable">
+                        <tr><td colspan="3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Subscription Distribution -->
+            <div class="section">
+                <h2>💳 Subscription Distribution</h2>
+                <div id="subscriptionChart" class="chart">
+                    <ul id="subscriptionList">
+                        <li>Loading...</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Auto-refresh -->
+            <div class="action-bar">
+                <label>
+                    <input type="checkbox" id="autoRefresh" checked> Auto-refresh every 10s
+                </label>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/admin/login.html';
+        }
+
+        async function fetchAPI(endpoint) {
+            const response = await fetch(endpoint, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                window.location.href = '/admin/login.html';
+            }
+
+            return response.json();
+        }
+
+        async function loadPerformanceMetrics() {
+            try {
+                const data = await fetchAPI('/admin/performance');
+
+                document.getElementById('messagesPerHour').textContent = data.messages_processed.last_hour || 0;
+                document.getElementById('messagesPerDay').textContent = data.messages_processed.last_24h || 0;
+                document.getElementById('failedMessages').textContent = data.failed_messages || 0;
+                document.getElementById('avgRetries').textContent = (data.average_retry_count || 0).toFixed(2);
+
+                // Queue table
+                const queueTable = document.getElementById('queueTable');
+                queueTable.innerHTML = '';
+                (data.largest_queues || []).forEach(queue => {
+                    queueTable.innerHTML += `
+                        <tr>
+                            <td>${queue.route_id}</td>
+                            <td>${queue.count}</td>
+                            <td>${queue.avg_age_seconds || '-'}</td>
+                        </tr>
+                    `;
+                });
+                if (data.largest_queues.length === 0) {
+                    queueTable.innerHTML = '<tr><td colspan="3">No queues</td></tr>';
+                }
+
+                // Subscription distribution
+                const subList = document.getElementById('subscriptionList');
+                subList.innerHTML = '';
+                (data.subscription_distribution || []).forEach(sub => {
+                    const percentage = Math.round((sub.count / (data.subscription_distribution.reduce((a, b) => a + b.count, 0) || 1)) * 100);
+                    const barWidth = percentage + '%';
+                    subList.innerHTML += `
+                        <li>
+                            <div class="bar-container">
+                                <span class="bar-label">${sub.tier}</span>
+                                <div class="bar" style="width: ${barWidth};">
+                                    <span>${sub.count} (${percentage}%)</span>
+                                </div>
+                            </div>
+                        </li>
+                    `;
+                });
+                if (data.subscription_distribution.length === 0) {
+                    subList.innerHTML = '<li>No data</li>';
+                }
+
+                document.getElementById('lastUpdate').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+            } catch (error) {
+                console.error('Error loading performance metrics:', error);
+            }
+        }
+
+        document.getElementById('autoRefresh').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                setInterval(loadPerformanceMetrics, 10000);
+            }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/admin/login.html';
+        });
+
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        document.getElementById('currentUser').textContent = payload.sub || 'Admin';
+
+        loadPerformanceMetrics();
+    </script>
+</body>
+</html>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rubifo Admin - Logs</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h2>🤖 Rubifo</h2>
+                <p>Admin Panel</p>
+            </div>
+
+            <ul class="nav-menu">
+                <li><a href="/admin/dashboard.html">📊 Dashboard</a></li>
+                <li><a href="/admin/users.html">👥 Users</a></li>
+                <li><a href="/admin/logs.html" class="active">📋 Logs</a></li>
+                <li><a href="/admin/performance.html">⚡ Performance</a></li>
+                <li><a href="/admin/settings.html">⚙️ Settings</a></li>
+            </ul>
+
+            <div class="user-info">
+                <p id="currentUser">User</p>
+                <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="content">
+            <div class="header">
+                <h1>System Logs</h1>
+                <div class="filter-bar">
+                    <select id="levelFilter" onchange="loadLogs()">
+                        <option value="">All Levels</option>
+                        <option value="info">Info</option>
+                        <option value="warning">Warning</option>
+                        <option value="error">Error</option>
+                    </select>
+                    <input type="number" id="userIdFilter" placeholder="Filter by user ID">
+                    <button class="btn btn-primary" onclick="loadLogs()">Filter</button>
+                </div>
+            </div>
+
+            <!-- Logs Table -->
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Level</th>
+                        <th>User ID</th>
+                        <th>Action</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody id="logsTable">
+                    <tr><td colspan="5">Loading...</td></tr>
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination">
+                <button class="btn btn-small" onclick="previousPage()">← Previous</button>
+                <span id="pageInfo">Page 1</span>
+                <button class="btn btn-small" onclick="nextPage()">Next →</button>
+            </div>
+
+            <!-- Auto-refresh Toggle -->
+            <div class="action-bar">
+                <label>
+                    <input type="checkbox" id="autoRefresh"> Auto-refresh every 5s
+                </label>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/admin/login.html';
+        }
+
+        let currentPage = 1;
+        const pageSize = 50;
+        let autoRefreshInterval = null;
+
+        async function fetchAPI(endpoint) {
+            const response = await fetch(endpoint, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                window.location.href = '/admin/login.html';
+            }
+
+            return response.json();
+        }
+
+        async function loadLogs() {
+            try {
+                const level = document.getElementById('levelFilter').value;
+                const userId = document.getElementById('userIdFilter').value;
+
+                let endpoint = `/admin/logs?limit=${pageSize}&offset=${(currentPage - 1) * pageSize}`;
+
+                if (level) endpoint += `&level=${level}`;
+                if (userId) endpoint += `&user_id=${userId}`;
+
+                const data = await fetchAPI(endpoint);
+                const tbody = document.getElementById('logsTable');
+                tbody.innerHTML = '';
+
+                (data.logs || []).forEach(log => {
+                    const badgeClass = {
+                        'info': 'badge-info',
+                        'warning': 'badge-warning',
+                        'error': 'badge-danger'
+                    }[log.level] || 'badge-info';
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${new Date(log.created_at).toLocaleString()}</td>
+                            <td><span class="badge ${badgeClass}">${log.level}</span></td>
+                            <td>${log.user_id || '-'}</td>
+                            <td>${log.action || '-'}</td>
+                            <td>${log.message || '-'}</td>
+                        </tr>
+                    `;
+                });
+
+                document.getElementById('pageInfo').textContent = `Page ${currentPage} (${data.total} logs)`;
+            } catch (error) {
+                console.error('Error loading logs:', error);
+            }
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                loadLogs();
+            }
+        }
+
+        function nextPage() {
+            currentPage++;
+            loadLogs();
+        }
+
+        document.getElementById('autoRefresh').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                autoRefreshInterval = setInterval(loadLogs, 5000);
+            } else {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/admin/login.html';
+        });
+
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        document.getElementById('currentUser').textContent = payload.sub || 'Admin';
+
+        loadLogs();
+    </script>
+</body>
+</html>

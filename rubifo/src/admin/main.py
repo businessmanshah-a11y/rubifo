@@ -1,9 +1,15 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from src.admin.auth import AdminAuth
 from src.logger import logger
 
 app = FastAPI(title="Rubifo Admin")
+
+# Serve static files
+static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Import and include routers
 from src.admin import routes
@@ -34,6 +40,13 @@ async def verify_token(credentials: HTTPAuthCredentials = Depends(security)) -> 
         )
 
     return username
+
+
+@app.get("/")
+async def root():
+    """Redirect to login page."""
+    from fastapi.responses import FileResponse
+    return FileResponse(static_dir / "login.html", media_type="text/html")
 
 
 @app.get("/health")
