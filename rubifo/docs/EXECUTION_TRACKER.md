@@ -119,14 +119,14 @@
 
 | Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
 |------|-------|-------|--------|------|--------|--------|--------|
-| T63 | Setup pytest & fixtures | - | ⏳ Pending | - | - | - | - |
-| T64 | Unit tests - user service | - | ⏳ Pending | - | - | - | - |
-| T65 | Unit tests - route/queue | - | ⏳ Pending | - | - | - | - |
-| T66 | Unit tests - schedule service | - | ⏳ Pending | - | - | - | - |
-| T67 | Integration tests - execution | - | ⏳ Pending | - | - | - | - |
-| T68 | Integration tests - payment | - | ⏳ Pending | - | - | - | - |
-| T69 | E2E tests - bot commands | - | ⏳ Pending | - | - | - | - |
-| T70 | Performance & load testing | - | ⏳ Pending | - | - | - | - |
+| T63 | Setup pytest & fixtures | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T64 | Unit tests - user service | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T65 | Unit tests - route/queue | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T66 | Unit tests - schedule service | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T67 | Integration tests - execution | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T68 | Integration tests - payment | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T69 | E2E tests - bot commands | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T70 | Performance & load testing | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 
 ---
 

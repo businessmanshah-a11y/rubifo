@@ -1,0 +1,69 @@
+# Prometheus configuration for Rubifo monitoring (T74)
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'production'
+    service: 'rubifo'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load rules
+rule_files: []
+
+scrape_configs:
+  # Rubifo Application
+  - job_name: 'rubifo'
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # PostgreSQL
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['localhost:9187']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['localhost:6379']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # Nginx
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['localhost:9113']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # Node Exporter (System metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # Docker
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['localhost:9323']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
