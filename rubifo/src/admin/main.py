@@ -4,6 +4,10 @@ from src.admin.auth import AdminAuth
 from src.logger import logger
 
 app = FastAPI(title="Rubifo Admin")
+
+# Import and include routers
+from src.admin import routes
+app.include_router(routes.router)
 security = HTTPBearer()
 auth = AdminAuth()
 

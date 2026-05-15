@@ -39,8 +39,8 @@
 | T15 | Transaction history storage | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 | T16 | Subscription tier enforcement | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 | T17 | Create /buy command flow | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
-| T18 | Implement /renew command | Claude | ⏳ Pending | - | - | - | - |
-| T19 | Admin payment dashboard | Claude | ⏳ Pending | - | - | - | - |
+| T18 | Implement /renew command | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T19 | Admin payment dashboard | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 
 ---
 
@@ -262,18 +262,16 @@
 
 ```
 Total Tasks: 75
-Pending:     57 ⏳
+Pending:     56 ⏳
 In Progress: 0  🔄
-Done:        17 ✅
+Done:        19 ✅
 Blocked:     0  🚫
 Deferred:    0  📅
 
 Completed Milestones:
 - M0: 5/5 (100%) ✅
 - M1: 7/7 (100%) ✅
-
-In Progress:
-- M2: 6/7 (86%) 🔄 (T13-T17 done, T18-T19 pending)
+- M2: 7/7 (100%) ✅
 
 Pending:
 - M3: 0/9 (0%) ⏳
@@ -286,9 +284,9 @@ Pending:
 Total Issues:  0
 Total Risks:   0
 
-Progress: 22.7% ▰▰▰▭▭▭▭▭▭▭
+Progress: 25.3% ▰▰▰▭▭▭▭▭▭▭
 ```
 
 **آخرین به‌روزرسانی**: ۱۴۰۵/۰۲/۲۵ (2026-05-15)
-**بعدی**: T18 (Implement /renew command)
+**بعدی**: T20 (Create Route & PostQueue models)
 
