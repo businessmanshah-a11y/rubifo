@@ -17,11 +17,14 @@ MAIN_KEYPAD = Keypad(rows=[
         Button(id="listroutes", type=ButtonTypeEnum.SIMPLE, button_text="📋 مسیرهای من"),
     ]),
     KeypadRow(buttons=[
+        Button(id="updatesource", type=ButtonTypeEnum.SIMPLE, button_text="🔄 بروزرسانی مبدأ"),
         Button(id="buy", type=ButtonTypeEnum.SIMPLE, button_text="💳 خرید اشتراک"),
-        Button(id="listplans", type=ButtonTypeEnum.SIMPLE, button_text="📅 برنامه‌ریزی"),
     ]),
     KeypadRow(buttons=[
+        Button(id="listplans", type=ButtonTypeEnum.SIMPLE, button_text="📅 برنامه‌ریزی"),
         Button(id="logs", type=ButtonTypeEnum.SIMPLE, button_text="📊 گزارش‌ها"),
+    ]),
+    KeypadRow(buttons=[
         Button(id="help", type=ButtonTypeEnum.SIMPLE, button_text="❓ راهنما"),
     ]),
 ])
@@ -106,19 +109,30 @@ class RubikaClient:
             chat_id = update.get("chat_id")
             if not chat_id:
                 continue
+
             if update_type == "StartedBot":
                 messages.append({"user_id": str(chat_id), "text": "/start"})
+
             elif update_type == "NewMessage":
                 msg = update.get("new_message") or {}
                 text = (msg.get("text") or "").strip()
-                # Also handle keypad button press
+                # forwarded message from a channel
+                forwarded = msg.get("forwarded_from") or {}
                 if not text:
                     aux = msg.get("aux_data") or {}
                     btn_id = aux.get("button_id", "")
                     if btn_id:
                         text = f"/{btn_id}"
                 if text:
-                    messages.append({"user_id": str(chat_id), "text": text})
+                    entry: Dict[str, str] = {"user_id": str(chat_id), "text": text}
+                    if forwarded:
+                        entry["forwarded_from_chat"] = str(forwarded.get("chat_id") or forwarded.get("object_guid", ""))
+                        entry["forwarded_message_id"] = str(msg.get("message_id", ""))
+                    messages.append(entry)
+
+            else:
+                logger.info(f"Unknown update type: {update_type} | raw: {update}")
+
         return messages
 
 
@@ -171,10 +185,11 @@ class RufifoBot:
                 for update in updates:
                     user_id = update.get("user_id")
                     text = update.get("text", "")
-                    if user_id and text:
+                    has_forward = bool(update.get("forwarded_from_chat"))
+                    if user_id and (text or has_forward):
                         logger.info(f"New message from {user_id}: {text[:80]}")
                         try:
-                            await route_message(self.client, user_id, {"text": text})
+                            await route_message(self.client, user_id, update)
                         except Exception as e:
                             logger.error(f"Error handling message: {e}")
 

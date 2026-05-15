@@ -4,12 +4,13 @@ from src.bot import commands
 
 
 BUTTON_COMMAND_MAP = {
-    "1": "/addroute",
-    "2": "/listroutes",
-    "3": "/buy",
-    "4": "/listplans",
-    "5": "/logs",
-    "6": "/help",
+    "➕ مسیر جدید": "/addroute",
+    "📋 مسیرهای من": "/listroutes",
+    "🔄 بروزرسانی مبدأ": "/updatesource",
+    "💳 خرید اشتراک": "/buy",
+    "📅 برنامه‌ریزی": "/listplans",
+    "📊 گزارش‌ها": "/logs",
+    "❓ راهنما": "/help",
 }
 
 
@@ -17,6 +18,13 @@ async def route_message(client, user_id: int, message: dict) -> None:
     """Route incoming messages to appropriate command handlers."""
     try:
         text = message.get("text", "").strip()
+        forwarded_from_chat = message.get("forwarded_from_chat", "")
+        forwarded_message_id = message.get("forwarded_message_id", "")
+
+        # Handle forwarded channel posts before anything else
+        if forwarded_from_chat and not text.startswith("/"):
+            await commands.handle_forwarded_post(client, user_id, forwarded_from_chat, forwarded_message_id)
+            return
 
         # Map keyboard button text to commands
         if text in BUTTON_COMMAND_MAP:
@@ -61,12 +69,15 @@ async def route_message(client, user_id: int, message: dict) -> None:
                     await commands.handle_removeroute(client, user_id, route_id)
                 except (ValueError, IndexError):
                     await client.send_message(user_id, "فرمت دستور اشتباه است.")
-            elif command == "/updatesource" and len(parts) > 1:
-                try:
-                    route_id = int(parts[1])
-                    await commands.handle_updatesource(client, user_id, route_id)
-                except (ValueError, IndexError):
-                    await client.send_message(user_id, "فرمت دستور اشتباه است.")
+            elif command == "/updatesource":
+                if len(parts) > 1:
+                    try:
+                        route_id = int(parts[1])
+                        await commands.handle_updatesource(client, user_id, route_id)
+                    except (ValueError, IndexError):
+                        await client.send_message(user_id, "فرمت دستور اشتباه است.")
+                else:
+                    await commands.handle_updatesource_menu(client, user_id)
             elif command == "/sync" and len(parts) > 1:
                 try:
                     route_id = int(parts[1])

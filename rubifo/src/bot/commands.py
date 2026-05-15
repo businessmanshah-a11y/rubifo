@@ -6,6 +6,29 @@ from src.core.user_service import UserService
 from src.config import SUBSCRIPTION_TIERS
 from src.integrations.zarinpal import create_zarinpal_gateway
 
+def _parse_channel_input(text: str) -> Optional[str]:
+    """Parse channel input — accepts @username, rubika.ir URL, or numeric ID."""
+    t = text.strip()
+    # rubika.ir URL: https://rubika.ir/username or rubika.ir/username
+    if "rubika.ir/" in t:
+        username = t.rstrip("/").split("rubika.ir/")[-1].strip()
+        return f"@{username}" if username else None
+    # @username
+    if t.startswith("@"):
+        username = t[1:].strip()
+        return f"@{username}" if username else None
+    # numeric ID
+    try:
+        int(t)
+        return t
+    except ValueError:
+        pass
+    # plain username without @
+    if t.isalnum() or (t.replace("_", "").isalnum() and len(t) > 3):
+        return f"@{t}"
+    return None
+
+
 MAIN_MENU_TEXT = (
     "➕ /addroute — مسیر جدید\n"
     "📋 /listroutes — مسیرهای من\n"
@@ -411,11 +434,14 @@ async def handle_addroute(client, user_id: int) -> None:
             "target_channel_id": None,
         }
 
-        # Ask for source channel ID
         prompt = (
-            "یک مسیر جدید ایجاد کنید:\n\n"
-            "1️⃣ شناسه کانال منبع را وارد کنید:\n"
-            "(کانالی که می‌خواهید پست‌ها را از آن فوروارد کنید)"
+            "➕ ایجاد مسیر جدید\n\n"
+            "1️⃣ آیدی کانال مبدأ را وارد کنید:\n"
+            "(کانالی که پست‌ها از آن فوروارد می‌شوند)\n\n"
+            "فرمت قابل قبول:\n"
+            "• @channel_username\n"
+            "• https://rubika.ir/channel_username\n"
+            "• شناسه عددی کانال"
         )
         await client.send_message(user_id, prompt)
         logger.info(f"Started /addroute conversation for user {user_id}")
@@ -441,6 +467,14 @@ async def handle_conversation_response(client, user_id: int, text: str) -> None:
 
     if command == "addroute":
         await handle_addroute_conversation(client, user_id, text)
+    elif command == "updatesource_select":
+        route_map = state.get("route_map", {})
+        route_id = route_map.get(text.strip())
+        if not route_id:
+            await client.send_message(user_id, "❌ شماره نامعتبر. دوباره وارد کنید.")
+            return
+        del conversation_states[user_id]
+        await handle_updatesource(client, user_id, route_id)
     elif command == "removeroute":
         await handle_removeroute_confirmation(client, user_id, text)
     elif command == "removeplan":
@@ -479,32 +513,42 @@ async def handle_addroute_conversation(client, user_id: int, text: str) -> None:
         step = state.get("step", 1)
 
         if step == 1:
-            # Parse source channel ID
-            try:
-                source_channel_id = int(text.strip())
-            except ValueError:
-                await client.send_message(user_id, "❌ شناسه کانال باید عدد باشد.")
+            source_channel_id = _parse_channel_input(text)
+            if not source_channel_id:
+                await client.send_message(
+                    user_id,
+                    "❌ فرمت اشتباه است. لطفاً یکی از این فرمت‌ها را وارد کنید:\n"
+                    "• @channel_username\n"
+                    "• https://rubika.ir/channel_username\n"
+                    "• شناسه عددی"
+                )
                 return
 
-            # Verify bot has access to source channel
-            # For now, we accept it (Rubika API verification would go here)
             state["source_channel_id"] = source_channel_id
             state["step"] = 2
 
             prompt = (
-                "✅ کانال منبع ثبت شد.\n\n"
-                "2️⃣ شناسه کانال مقصد را وارد کنید:\n"
-                "(کانالی که می‌خواهید پست‌ها را به آن فوروارد کنید)"
+                f"✅ کانال مبدأ ثبت شد: {source_channel_id}\n\n"
+                "2️⃣ آیدی کانال مقصد را وارد کنید:\n"
+                "(کانالی که پست‌ها به آن فوروارد می‌شوند)\n\n"
+                "فرمت قابل قبول:\n"
+                "• @channel_username\n"
+                "• https://rubika.ir/channel_username\n"
+                "• شناسه عددی کانال"
             )
             await client.send_message(user_id, prompt)
             logger.info(f"User {user_id} provided source channel: {source_channel_id}")
 
         elif step == 2:
-            # Parse target channel ID
-            try:
-                target_channel_id = int(text.strip())
-            except ValueError:
-                await client.send_message(user_id, "❌ شناسه کانال باید عدد باشد.")
+            target_channel_id = _parse_channel_input(text)
+            if not target_channel_id:
+                await client.send_message(
+                    user_id,
+                    "❌ فرمت اشتباه است. لطفاً یکی از این فرمت‌ها را وارد کنید:\n"
+                    "• @channel_username\n"
+                    "• https://rubika.ir/channel_username\n"
+                    "• شناسه عددی"
+                )
                 return
 
             source_channel_id = state["source_channel_id"]
@@ -526,13 +570,22 @@ async def handle_addroute_conversation(client, user_id: int, text: str) -> None:
             )
 
             confirmation = (
-                f"✅ مسیر ایجاد شد!\n\n"
-                f"شناسه مسیر: {route_id}\n"
-                f"منبع: {source_channel_id}\n"
-                f"مقصد: {target_channel_id}\n\n"
-                "در حال جمع‌آوری پست‌های قدیمی..."
+                f"✅ مسیر #{route_id} ثبت شد!\n\n"
+                f"📤 مبدأ: {source_channel_id}\n"
+                f"📥 مقصد: {target_channel_id}\n\n"
+                f"─────────────────\n"
+                f"⚠️ مرحله بعد — ربات را ادمین کنید:\n\n"
+                f"1️⃣ وارد کانال مبدأ شوید\n"
+                f"   ({source_channel_id})\n"
+                f"   ربات @Rubifo را با دسترسی کامل ادمین کنید\n\n"
+                f"2️⃣ وارد کانال مقصد شوید\n"
+                f"   ({target_channel_id})\n"
+                f"   ربات @Rubifo را با دسترسی کامل ادمین کنید\n\n"
+                f"✅ بعد از ادمین کردن، دکمه\n"
+                f"🔄 بروزرسانی مبدأ را بزنید\n"
+                f"تا پست‌های کانال شناسایی شوند."
             )
-            await client.send_message(user_id, confirmation)
+            await client.send_message(user_id, confirmation, with_keypad=True)
 
             # Remove from conversation states
             del conversation_states[user_id]
@@ -874,6 +927,68 @@ async def handle_removeroute_confirmation(client, user_id: int, text: str) -> No
         await client.send_message(user_id, "❌ حذف لغو شد.")
 
 
+async def handle_forwarded_post(client, user_id: int, from_chat: str, message_id: str) -> None:
+    """Handle a post forwarded from a channel — match to a route and add to queue."""
+    logger.info(f"Forwarded post from {user_id}: chat={from_chat}, msg={message_id}")
+    try:
+        from src.database import pool
+        from datetime import datetime
+
+        # Find active routes where source_channel_id matches the forwarded channel
+        routes = await pool.fetch(
+            "SELECT id FROM routes WHERE user_id = $1 AND source_channel_id = $2 AND is_active = true",
+            user_id,
+            from_chat,
+        )
+
+        if not routes:
+            await client.send_message(
+                user_id,
+                f"❌ هیچ مسیر فعالی برای کانال {from_chat} یافت نشد.\n"
+                f"➕ /addroute برای ایجاد مسیر جدید."
+            )
+            return
+
+        added = 0
+        for route in routes:
+            route_id = route["id"]
+            # Skip duplicate
+            existing = await pool.fetchrow(
+                "SELECT id FROM post_queue WHERE route_id = $1 AND message_id_in_source = $2",
+                route_id,
+                message_id,
+            )
+            if existing:
+                continue
+            await pool.execute(
+                "INSERT INTO post_queue (route_id, message_id_in_source, source_date, status) "
+                "VALUES ($1, $2, $3, 'pending')",
+                route_id,
+                message_id,
+                datetime.now(),
+            )
+            added += 1
+
+        if added > 0:
+            total = await pool.fetchrow(
+                "SELECT COUNT(*) as c FROM post_queue WHERE route_id = ANY($1::int[]) AND status = 'pending'",
+                [r["id"] for r in routes],
+            )
+            total_count = total["c"] if total else added
+            await client.send_message(
+                user_id,
+                f"✅ پست به صف اضافه شد!\n\n"
+                f"📊 جمع پست‌های در صف: {total_count}",
+                with_keypad=True,
+            )
+        else:
+            await client.send_message(user_id, "⚠️ این پست قبلاً در صف بود.")
+
+    except Exception as e:
+        logger.error(f"Error handling forwarded post from {user_id}: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
 async def fetch_channel_posts(client, channel_id: int) -> list:
     """Fetch recent posts from a channel via Rubika API.
 
@@ -1056,6 +1171,40 @@ async def handle_removeroute(client, user_id: int, route_id: int) -> None:
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
+async def handle_updatesource_menu(client, user_id: int) -> None:
+    """Show list of routes for user to pick which source to update."""
+    logger.info(f"Handling updatesource menu for user {user_id}")
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+
+        route_service = RouteService(pool)
+        routes = await route_service.get_user_routes(user_id)
+
+        active_routes = [r for r in routes if r["is_active"]]
+        if not active_routes:
+            await client.send_message(user_id, "📋 شما هیچ مسیر فعالی ندارید.\n➕ /addroute برای ایجاد مسیر")
+            return
+
+        message = "🔄 بروزرسانی مبدأ\n\nکدام مسیر را بروزرسانی کنیم؟\n\n"
+        route_map = {}
+        for i, route in enumerate(active_routes, 1):
+            message += f"{i}️⃣ مسیر #{route['id']}\n   📤 {route['source_channel_id']} → 📥 {route['target_channel_id']}\n\n"
+            route_map[str(i)] = route["id"]
+
+        message += "شماره مسیر را وارد کنید:"
+        await client.send_message(user_id, message)
+
+        conversation_states[user_id] = {
+            "command": "updatesource_select",
+            "route_map": route_map,
+        }
+
+    except Exception as e:
+        logger.error(f"Error in updatesource menu: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
 async def handle_updatesource(client, user_id: int, route_id: int) -> None:
     """Handle /updatesource command to add new posts to queue.
 
@@ -1097,35 +1246,26 @@ async def handle_updatesource(client, user_id: int, route_id: int) -> None:
         source_channel_id = route["source_channel_id"]
         new_posts = await fetch_channel_posts_since(client, source_channel_id, latest_date)
 
-        if not new_posts:
-            await client.send_message(user_id, "✅ پست جدیدی برای اضافه کردن نیست.")
-            return
-
-        # Insert new posts into queue
-        inserted_count = 0
-        for post in sorted(new_posts, key=lambda p: p.get("date", 0)):
-            try:
-                await pool.execute(
-                    """
-                    INSERT INTO post_queue
-                    (route_id, message_id_in_source, source_date, status)
-                    VALUES ($1, $2, $3, 'pending')
-                    """,
-                    route_id,
-                    post.get("message_id"),
-                    datetime.fromtimestamp(post.get("date", 0)),
-                )
-                inserted_count += 1
-            except Exception as e:
-                logger.error(f"Error inserting post {post.get('message_id')}: {e}")
-                continue
-
-        confirmation_message = (
-            f"✅ بروزرسانی تکمیل شد!\n\n"
-            f"{inserted_count} پست جدید اضافه شد."
+        # Get current queue stats
+        pending = await pool.fetchrow(
+            "SELECT COUNT(*) as c FROM post_queue WHERE route_id=$1 AND status='pending'", route_id
         )
-        await client.send_message(user_id, confirmation_message)
-        logger.info(f"Route {route_id}: {inserted_count} new posts added")
+        pending_count = pending["c"] if pending else 0
+
+        await client.send_message(
+            user_id,
+            f"📊 وضعیت مسیر #{route_id}\n\n"
+            f"📤 مبدأ: {route['source_channel_id']}\n"
+            f"📥 مقصد: {route['target_channel_id']}\n"
+            f"🗂 پست‌های در صف: {pending_count}\n\n"
+            f"─────────────────\n"
+            f"💡 نحوه اضافه کردن پست به صف:\n\n"
+            f"پست‌هایی که می‌خواهید فوروارد شوند را از کانال مبدأ\n"
+            f"به این ربات فوروارد کنید.\n\n"
+            f"ربات آن‌ها را شناسایی و به صف اضافه می‌کند.",
+            with_keypad=True,
+        )
+        logger.info(f"Route {route_id}: updatesource info sent to user {user_id}")
 
     except Exception as e:
         logger.error(f"Error in /updatesource command: {e}")

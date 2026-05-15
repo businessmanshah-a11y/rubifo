@@ -23,10 +23,17 @@ class RouteService:
         subscription = await self.subscription_service.get_active_subscription(user_id)
 
         if not subscription:
-            return False, "شما اشتراک فعالی ندارید. /buy را برای خریدبفرستید."
-
-        # Get route limit for tier
-        limit = self.subscription_service.TIER_LIMITS.get(subscription.tier, 0)
+            # Check if user has active trial — trial allows 1 route
+            from src.database import fetchrow
+            user = await fetchrow(
+                "SELECT is_trial_active FROM users WHERE user_id = $1", user_id
+            )
+            if not user or not user["is_trial_active"]:
+                return False, "⚠️ تریال یا اشتراک فعالی ندارید.\n💳 /buy برای خرید اشتراک"
+            limit = 1  # trial: 1 route
+        else:
+            # Get route limit for tier
+            limit = self.subscription_service.TIER_LIMITS.get(subscription.tier, 0)
 
         # Count existing active routes
         result = await self.db.fetchrow(
