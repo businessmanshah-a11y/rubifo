@@ -1,0 +1,581 @@
+# Cursor Rules - Rubifo Project
+
+## مقدمه
+
+این rules برای Cursor IDE است. هنگام کار با این پروژه، این قوانین را رعایت کن.
+
+---
+
+## 1. Project Context
+
+**معماری**: Python 3.10+ + Rubpy + PostgreSQL + FastAPI
+**Stack**: asyncio, asyncpg, Pydantic, FastAPI
+**فریمورک**: Rubpy (async bot framework)
+
+---
+
+## 2. Before Starting Task
+
+When you see a request to work on a task:
+
+1. **Identify Task ID**
+   ```
+   Extract from request: "T##" (e.g., T01, T25)
+   ```
+
+2. **Verify Dependencies**
+   ```
+   Check: docs/P7-WBS-and-milestones.md
+   Line: Find T## and check "Dependencies" column
+   ```
+
+3. **Update Status**
+   ```
+   Edit: docs/EXECUTION_TRACKER.md
+   Change status to: 🔄 In Progress
+   Add start date
+   ```
+
+4. **Create Branch**
+   ```bash
+   git checkout -b T##-short-task-name
+   # Example: git checkout -b T01-init-project
+   ```
+
+---
+
+## 3. Code Writing Rules
+
+### ✅ MUST DO's
+
+1. **Use Async/Await for Everything**
+   ```python
+   # ✅ Correct
+   async def get_user(user_id: int):
+       result = await db.fetchrow(...)
+       return result
+
+   # ❌ Wrong
+   def get_user(user_id):
+       result = db.fetchrow(...)  # No await!
+   ```
+
+2. **Type Hints Everywhere**
+   ```python
+   # ✅ Correct
+   async def create_user(user_id: int, username: str) -> Optional[User]:
+       ...
+
+   # ❌ Wrong
+   def create_user(user_id, username):
+       ...
+   ```
+
+3. **Docstrings for Functions**
+   ```python
+   async def forward_message(post_id: int, target_channel: int) -> bool:
+       """
+       Forward a message to target channel.
+
+       Args:
+           post_id: Source message ID
+           target_channel: Target channel ID
+
+       Returns:
+           True if successful, False otherwise
+
+       Raises:
+           RubikaAPIError: If channel access denied
+       """
+       ...
+   ```
+
+4. **Configuration from .env**
+   ```python
+   # ✅ Correct
+   BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+   # ❌ Wrong
+   BOT_TOKEN = "abc123xyz"  # Hardcoded!
+   ```
+
+5. **Parameterized SQL Queries**
+   ```python
+   # ✅ Correct
+   await db.execute("SELECT * FROM users WHERE id = $1", user_id)
+
+   # ❌ Wrong
+   await db.execute(f"SELECT * FROM users WHERE id = {user_id}")  # SQL injection!
+   ```
+
+6. **Service Layer for Business Logic**
+   ```python
+   # ✅ Correct
+   class UserService:
+       async def create_user(self, user_id: int):
+           ...
+
+   # ❌ Wrong
+   @bot.on_command("/start")
+   def handle():
+       db.execute("INSERT...")  # Logic in handler!
+   ```
+
+7. **Proper Error Handling**
+   ```python
+   # ✅ Correct
+   try:
+       await forward_message(msg)
+   except RubikaAPIError as e:
+       logger.error(f"Forward failed: {e}")
+       await handle_retry()
+
+   # ❌ Wrong
+   await forward_message(msg)  # No error handling!
+   ```
+
+8. **Use Logger, Not Print**
+   ```python
+   # ✅ Correct
+   logger.info(f"User {user_id} created")
+   logger.error(f"Database error: {e}")
+
+   # ❌ Wrong
+   print("User created")  # Use logger!
+   ```
+
+### ❌ MUST NOT Do's
+
+1. ❌ **Use ORM** - Use asyncpg only
+   ```python
+   from sqlalchemy import ...  # NO!
+   from django.orm ...        # NO!
+   ```
+
+2. ❌ **Global State**
+   ```python
+   GLOBAL_USER = None  # NO!
+   GLOBAL_DB = None    # NO!
+   ```
+
+3. ❌ **Direct DB in Handlers**
+   ```python
+   @bot.on_message()
+   def handle(msg):
+       db.execute("...")  # NO! Use service layer
+   ```
+
+4. ❌ **Hardcoded Values**
+   ```python
+   if user_id == 12345:  # NO! Extract to config
+   ```
+
+5. ❌ **Ignore Architecture**
+   ```python
+   # Don't put things in wrong folders
+   # Don't mix layers
+   # Don't skip service layer
+   ```
+
+6. ❌ **Skip Type Hints**
+   ```python
+   def process(data):  # NO types!
+   ```
+
+7. ❌ **Leave Code Without Tests**
+   ```python
+   # Complex logic without test
+   ```
+
+---
+
+## 4. Folder Structure (DO NOT BREAK!)
+
+When creating files, use correct locations:
+
+```
+src/
+├── config.py              ← Configuration
+├── database.py            ← DB utilities
+├── logger.py              ← Logging setup
+│
+├── bot/
+│   ├── main.py            ← Bot entry point
+│   ├── commands.py        ← Command handlers
+│   └── handlers.py        ← Message handlers
+│
+├── core/
+│   ├── user_service.py    ← User business logic
+│   ├── subscription_service.py
+│   ├── route_service.py
+│   ├── queue_service.py
+│   ├── schedule_service.py
+│   ├── calendar_service.py
+│   └── execution_engine.py
+│
+├── integrations/
+│   ├── zarinpal.py        ← Payment gateway
+│   └── rubika.py          ← Rubika API wrapper
+│
+├── admin/
+│   ├── main.py            ← FastAPI app
+│   ├── routes.py          ← API endpoints
+│   ├── auth.py            ← Auth logic
+│   └── static/            ← HTML/CSS/JS
+│
+└── models/
+    ├── user.py
+    ├── subscription.py
+    ├── route.py
+    ├── schedule.py
+    └── post_queue.py
+```
+
+**Rules**:
+- ✅ Create files in correct folder
+- ❌ Don't put command logic in models
+- ❌ Don't put DB queries in handlers
+- ❌ Don't put business logic in admin routes
+
+---
+
+## 5. Git Workflow
+
+### When Starting Task
+
+```bash
+# 1. Create branch
+git checkout -b T##-short-name
+
+# 2. Make changes
+# ... write code ...
+
+# 3. Commit frequently (not just at end)
+git commit -m "T##: Add X feature
+
+- Detail 1
+- Detail 2"
+
+# 4. Final commit
+git commit -m "Complete T## - task name
+
+- Main accomplishment 1
+- Main accomplishment 2
+
+Part of M# Milestone
+Tests: ✅ passed
+Issues: None
+Risks: None"
+
+# 5. Push
+git push origin T##-short-name
+```
+
+### Commit Message Format
+
+```
+T##: Brief one-liner
+
+- Detailed point 1
+- Detailed point 2
+
+Optional: Part of M# milestone
+Optional: Tests: ✅/❌
+Optional: Issues: #X
+Optional: Risks: #X
+```
+
+---
+
+## 6. When to Ask for Help
+
+Use Cursor's "@" mentions for these:
+
+### Ask for Code Review
+```
+@assistant review this async pattern:
+[paste code]
+
+Is this following the architecture?
+```
+
+### Ask for Architecture Clarification
+```
+@assistant I'm working on T##
+
+Should I:
+A) Put this in service layer
+B) Put this in handler
+
+Which is correct for this codebase?
+```
+
+### Ask for Database Help
+```
+@assistant How do I query X from PostgreSQL
+using asyncpg in this pattern?
+
+Current code: [paste]
+```
+
+---
+
+## 7. Testing Expectations
+
+When implementing features:
+
+1. **Unit Tests** (with each component)
+   ```python
+   async def test_create_user():
+       service = UserService(mock_db)
+       user = await service.create_user(123)
+       assert user.id == 123
+   ```
+
+2. **Integration Tests** (when integrating components)
+   ```python
+   async def test_complete_subscription_flow():
+       # Create user
+       # Create subscription
+       # Verify in DB
+   ```
+
+3. **E2E Tests** (for complete flows)
+   ```python
+   async def test_user_registers_and_buys():
+       # User /start
+       # User /buy
+       # Verify subscription active
+   ```
+
+---
+
+## 8. Code Quality Checklist
+
+Before committing:
+
+- [ ] Code follows PEP 8 (use `black` if available)
+- [ ] Type hints on all functions
+- [ ] Docstrings on all public functions
+- [ ] Error handling complete
+- [ ] No hardcoded values
+- [ ] No global state
+- [ ] Tests written (if applicable)
+- [ ] No SQL injection risks
+- [ ] Async/await used correctly
+- [ ] Logging added for debugging
+- [ ] No unused imports
+- [ ] No print() statements
+- [ ] No commented-out code
+
+---
+
+## 9. When Running Code
+
+### Local Development
+```bash
+# Start database
+docker-compose up -d postgres
+
+# Run migrations
+python -m src.database
+
+# Run bot
+python -m src.bot.main
+
+# Run admin (different terminal)
+python -m src.admin.main
+```
+
+### Testing
+```bash
+# Run tests
+pytest tests/
+
+# Run specific test
+pytest tests/test_user_service.py::test_create_user
+```
+
+### Check Code Quality
+```bash
+# Format code
+black src/
+
+# Type checking
+mypy src/
+
+# Linting
+flake8 src/
+```
+
+---
+
+## 10. Common Patterns
+
+### Async Database Query
+```python
+async def get_user_by_id(user_id: int) -> Optional[User]:
+    """Fetch user from database."""
+    async with db.transaction():
+        result = await db.fetchrow(
+            "SELECT * FROM users WHERE id = $1",
+            user_id
+        )
+        return User(**result) if result else None
+```
+
+### Service Layer Pattern
+```python
+class UserService:
+    def __init__(self, db):
+        self.db = db
+
+    async def create_user(self, user_id: int, username: str) -> User:
+        """Create new user."""
+        await self.db.execute(
+            "INSERT INTO users (user_id, username) VALUES ($1, $2)",
+            user_id, username
+        )
+        return await self.get_user(user_id)
+```
+
+### Bot Command Pattern
+```python
+@bot.on_command("/start")
+async def handle_start(user_id: int, message: str):
+    """Handle /start command."""
+    user_service = UserService(db)
+    user = await user_service.get_or_create(user_id)
+
+    if user.trial_active:
+        msg = "Welcome! You have 48h trial."
+    else:
+        msg = "Welcome! Trial expired."
+
+    await bot.send_message(user_id, msg)
+```
+
+### Error Handling Pattern
+```python
+async def forward_message(post_id: int, target: int) -> bool:
+    """Forward message with error handling."""
+    try:
+        message = await get_message(post_id)
+        await send_message(target, message)
+        return True
+    except RubikaAPIError as e:
+        logger.error(f"API error: {e}")
+        await handle_retry()
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return False
+```
+
+---
+
+## 11. FastAPI Routes Pattern
+
+```python
+from fastapi import FastAPI, Depends, HTTPException
+from src.admin.auth import verify_token
+
+app = FastAPI()
+
+@app.get("/admin/users")
+async def list_users(token: str = Depends(verify_token)):
+    """List all users."""
+    users = await db.fetch("SELECT * FROM users")
+    return {"users": users}
+
+@app.post("/admin/users/{user_id}/message")
+async def send_message(user_id: int, text: str, token: str = Depends(verify_token)):
+    """Send message to user."""
+    await bot.send_message(user_id, text)
+    return {"status": "sent"}
+```
+
+---
+
+## 12. Database Migrations
+
+When adding tables:
+
+```sql
+-- migrations/001_init_schema.sql
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT UNIQUE NOT NULL,
+    username VARCHAR(255),
+    trial_start_at TIMESTAMP DEFAULT NOW(),
+    trial_end_at TIMESTAMP,
+    is_trial_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_users_user_id ON users(user_id);
+```
+
+---
+
+## 13. Configuration (.env)
+
+Required values:
+```
+BOT_TOKEN=your_rubika_token
+DATABASE_URL=postgresql://user:pass@localhost/rubifo
+ZARINPAL_MERCHANT_ID=your_merchant_id
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD_HASH=bcrypted_hash
+```
+
+Use in code:
+```python
+from src.config import BOT_TOKEN, DATABASE_URL, ...
+```
+
+---
+
+## 14. Quick Reference
+
+| Task | Command |
+|------|---------|
+| New branch | `git checkout -b T##-name` |
+| Commit | `git commit -m "T##: message"` |
+| Push | `git push origin T##-name` |
+| Run bot | `python -m src.bot.main` |
+| Run tests | `pytest tests/` |
+| Format code | `black src/` |
+| Check types | `mypy src/` |
+
+---
+
+## 15. When You're Stuck
+
+1. **Check** `docs/P3-technical-architecture.md` for architecture
+2. **Check** `CLAUDE.md` for detailed guidelines
+3. **Check** `docs/P7-WBS-and-milestones.md` for task details
+4. **Check** existing code patterns in `src/`
+5. **Ask Cursor** with context
+6. **Log an issue** in EXECUTION_TRACKER.md
+
+---
+
+## Summary
+
+```
+✅ DO: Async, type hints, docstrings, services, error handling
+❌ DON'T: Sync, no hints, no docs, handlers with logic, global state
+📁 LOCATION: Use correct folder structure
+🧪 TEST: Write tests with code
+📝 COMMIT: Clear messages with T##
+🚀 DEPLOY: Follow deployment process
+```
+
+---
+
+**Last Updated**: ۱۴۰۵/۰۲/۲۵
+**For Questions**: Check CLAUDE.md and docs/
+

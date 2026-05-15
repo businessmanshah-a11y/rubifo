@@ -1,0 +1,279 @@
+# ردیاب اجرا و وضعیت تسک‌ها
+**بروزرسانی‌شده:** ۱۴۰۵/۰۲/۲۵ | ۲۰۲۶/۰۵/۱۵  
+**ساختار**: هر task باید این وضعیت‌ها را داشته باشد: Pending → In Progress → Done/Blocked/Deferred
+
+---
+
+## Milestone M0 - Setup & Database (۲ روز)
+
+| Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
+|------|-------|-------|--------|------|--------|--------|--------|
+| T01 | Initialize project structure | - | ⏳ Pending | - | - | - | - |
+| T02 | Setup PostgreSQL & asyncpg | - | ⏳ Pending | - | - | - | - |
+| T03 | Create users/subscriptions schema | - | ⏳ Pending | - | - | - | - |
+| T04 | Create routes/queues schema | - | ⏳ Pending | - | - | - | - |
+| T05 | Setup Rubpy client skeleton | - | ⏳ Pending | - | - | - | - |
+
+---
+
+## Milestone M1 - User & Auth System (۳ روز)
+
+| Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
+|------|-------|-------|--------|------|--------|--------|--------|
+| T06 | Create User model & service | - | ⏳ Pending | - | - | - | - |
+| T07 | Implement /start command | - | ⏳ Pending | - | - | - | - |
+| T08 | Implement trial reminder loop | - | ⏳ Pending | - | - | - | - |
+| T09 | Implement trial expiration | - | ⏳ Pending | - | - | - | - |
+| T10 | Create Subscription model | - | ⏳ Pending | - | - | - | - |
+| T11 | Implement /buy command | - | ⏳ Pending | - | - | - | - |
+| T12 | Add admin authentication | - | ⏳ Pending | - | - | - | - |
+
+---
+
+## Milestone M2 - Subscription & Payment (۳ روز)
+
+| Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
+|------|-------|-------|--------|------|--------|--------|--------|
+| T13 | Integrate Zarinpal gateway | - | ⏳ Pending | - | - | - | - |
+| T14 | Payment verification (polling) | - | ⏳ Pending | - | - | - | - |
+| T15 | Transaction history storage | - | ⏳ Pending | - | - | - | - |
+| T16 | Subscription tier enforcement | - | ⏳ Pending | - | - | - | - |
+| T17 | Create /buy command flow | - | ⏳ Pending | - | - | - | - |
+| T18 | Implement /renew command | - | ⏳ Pending | - | - | - | - |
+| T19 | Admin payment dashboard | - | ⏳ Pending | - | - | - | - |
+
+---
+
+## Milestone M3 - Routes & Queue System (۳ روز)
+
+| Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
+|------|-------|-------|--------|------|--------|--------|--------|
+| T20 | Create Route & PostQueue models | - | ⏳ Pending | - | - | - | - |
+| T21 | /addroute command (validation) | - | ⏳ Pending | - | - | - | - |
+| T22 | /addroute (queue population) | - | ⏳ Pending | - | - | - | - |
+| T23 | Implement /listroutes | - | ⏳ Pending | - | - | - | - |
+| T24 | Implement /removeroute | - | ⏳ Pending | - | - | - | - |
+| T25 | Implement /updatesource | - | ⏳ Pending | - | - | - | - |
+| T26 | Implement /sync | - | ⏳ Pending | - | - | - | - |
+| T27 | Post queue management logic | - | ⏳ Pending | - | - | - | - |
+| T28 | Admin route management view | - | ⏳ Pending | - | - | - | - |
+
+---
+
+## Milestone M4 - Schedule & Execution (۴ روز)
+
+| Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
+|------|-------|-------|--------|------|--------|--------|--------|
+| T29 | Create Schedule model & service | - | ⏳ Pending | - | - | - | - |
+| T30 | /addplan (interval method) | - | ⏳ Pending | - | - | - | - |
+| T31 | /addplan (daily count method) | - | ⏳ Pending | - | - | - | - |
+| T32 | next_run calculation logic | - | ⏳ Pending | - | - | - | - |
+| T33 | Implement /listplans | - | ⏳ Pending | - | - | - | - |
+| T34 | Implement /editplan | - | ⏳ Pending | - | - | - | - |
+| T35 | Implement /removeplan | - | ⏳ Pending | - | - | - | - |
+| T36 | Implement /toggleplan | - | ⏳ Pending | - | - | - | - |
+| T37 | Create execution_engine.py | - | ⏳ Pending | - | - | - | - |
+| T38 | Implement message forwarding | - | ⏳ Pending | - | - | - | - |
+| T39 | Error handling & retry logic | - | ⏳ Pending | - | - | - | - |
+| T40 | Queue reset for loop_mode | - | ⏳ Pending | - | - | - | - |
+
+---
+
+## Milestone M5 - Bot Commands & UX (۳ روز)
+
+| Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
+|------|-------|-------|--------|------|--------|--------|--------|
+| T41 | Implement /help command | - | ⏳ Pending | - | - | - | - |
+| T42 | Keyboard patterns & UX | - | ⏳ Pending | - | - | - | - |
+| T43 | Implement /calendar command | - | ⏳ Pending | - | - | - | - |
+| T44 | Implement /logs command | - | ⏳ Pending | - | - | - | - |
+| T45 | Farsi error messages | - | ⏳ Pending | - | - | - | - |
+| T46 | Message state machine | - | ⏳ Pending | - | - | - | - |
+| T47 | Rate limiting per user | - | ⏳ Pending | - | - | - | - |
+| T48 | Message formatting & pagination | - | ⏳ Pending | - | - | - | - |
+| T49 | Welcome message | - | ⏳ Pending | - | - | - | - |
+| T50 | Bot commands integration test | - | ⏳ Pending | - | - | - | - |
+
+---
+
+## Milestone M6 - Admin Dashboard (۴ روز)
+
+| Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
+|------|-------|-------|--------|------|--------|--------|--------|
+| T51 | Setup FastAPI admin app | - | ⏳ Pending | - | - | - | - |
+| T52 | Create dashboard stats API | - | ⏳ Pending | - | - | - | - |
+| T53 | Create users management API | - | ⏳ Pending | - | - | - | - |
+| T54 | Create logs API | - | ⏳ Pending | - | - | - | - |
+| T55 | Create performance metrics API | - | ⏳ Pending | - | - | - | - |
+| T56 | Create login page HTML | - | ⏳ Pending | - | - | - | - |
+| T57 | Create dashboard HTML | - | ⏳ Pending | - | - | - | - |
+| T58 | Create users table page | - | ⏳ Pending | - | - | - | - |
+| T59 | Create logs page | - | ⏳ Pending | - | - | - | - |
+| T60 | Create performance page | - | ⏳ Pending | - | - | - | - |
+| T61 | Create settings page | - | ⏳ Pending | - | - | - | - |
+| T62 | Admin dashboard integration test | - | ⏳ Pending | - | - | - | - |
+
+---
+
+## Milestone M7 - Testing & QA (۳ روز)
+
+| Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
+|------|-------|-------|--------|------|--------|--------|--------|
+| T63 | Setup pytest & fixtures | - | ⏳ Pending | - | - | - | - |
+| T64 | Unit tests - user service | - | ⏳ Pending | - | - | - | - |
+| T65 | Unit tests - route/queue | - | ⏳ Pending | - | - | - | - |
+| T66 | Unit tests - schedule service | - | ⏳ Pending | - | - | - | - |
+| T67 | Integration tests - execution | - | ⏳ Pending | - | - | - | - |
+| T68 | Integration tests - payment | - | ⏳ Pending | - | - | - | - |
+| T69 | E2E tests - bot commands | - | ⏳ Pending | - | - | - | - |
+| T70 | Performance & load testing | - | ⏳ Pending | - | - | - | - |
+
+---
+
+## Milestone M8 - Deployment & Launch (۲ روز)
+
+| Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
+|------|-------|-------|--------|------|--------|--------|--------|
+| T71 | Create Docker production build | - | ⏳ Pending | - | - | - | - |
+| T72 | Setup systemd service | - | ⏳ Pending | - | - | - | - |
+| T73 | Deployment documentation | - | ⏳ Pending | - | - | - | - |
+| T74 | Setup monitoring & logs | - | ⏳ Pending | - | - | - | - |
+| T75 | Launch staging & production | - | ⏳ Pending | - | - | - | - |
+
+---
+
+## Legend
+
+### وضعیت‌ها
+- ⏳ **Pending**: منتظر شروع
+- 🔄 **In Progress**: در حال اجرا
+- ✅ **Done**: تکمیل‌شده
+- 🚫 **Blocked**: مسدود شده (منتظر dependency)
+- 📅 **Deferred**: معطل‌شده (برای بعدی)
+
+### Issues Tracking
+
+اگر مشکلی پیدا شد:
+```
+- Issue #1 (T12): FastAPI auth returning 401
+- Issue #2 (T25): Rubika API pagination bug
+```
+
+### Risks Tracking
+
+اگر risk پیدا شد:
+```
+- Risk #1 (T37): Single bot instance - MITIGATION: Auto-restart via systemd
+- Risk #2 (T14): Polling timeout - MITIGATION: Good error messages
+```
+
+---
+
+## توضیح ستون‌ها
+
+| ستون | معنی |
+|------|--------|
+| **Task** | شناسه task (T01-T75) |
+| **عنوان** | نام کار |
+| **Owner** | کسی که کار را انجام می‌دهد |
+| **وضعیت** | ⏳ Pending / 🔄 In Progress / ✅ Done / 🚫 Blocked / 📅 Deferred |
+| **شروع** | تاریخ شروع (YYYY-MM-DD) |
+| **اتمام** | تاریخ اتمام (YYYY-MM-DD) |
+| **Issues** | مشکلات پیدا‌شده (#1, #2, ...) |
+| **Risks** | خطرات شناسایی‌شده (#1, #2, ...) |
+
+---
+
+## نحوه استفاده
+
+### قبل از شروع Task
+```
+1. انتخاب Task از لیست
+2. نوشتن: "Starting T##"
+3. تغییر وضعیت به: 🔄 In Progress
+4. نوشتن تاریخ شروع
+```
+
+### حین انجام Task
+```
+1. اگر issue پیدا شد: نوشتن Issue #X
+2. اگر risk پیدا شد: نوشتن Risk #X
+3. هر commit: شامل T## شود
+```
+
+### بعد از اتمام Task
+```
+1. تغییر وضعیت به: ✅ Done
+2. نوشتن تاریخ اتمام
+3. Commit + Push:
+   git commit -m "Complete T## - task name"
+4. اپدیت این فایل
+5. Git commit برای tracker:
+   git commit -m "Update EXECUTION_TRACKER: T## Done"
+```
+
+---
+
+## Issues Log
+
+فرمت:
+```
+### Issue #1
+- **Task**: T##
+- **Description**: توضیح مشکل
+- **Status**: Open / Resolved
+- **Resolution**: حل
+- **Date**: YYYY-MM-DD
+```
+
+### Issue #1
+- **Task**: -
+- **Description**: -
+- **Status**: -
+- **Resolution**: -
+- **Date**: -
+
+---
+
+## Risks Log
+
+فرمت:
+```
+### Risk #1
+- **Task**: T##
+- **Description**: توضیح خطر
+- **Impact**: High / Medium / Low
+- **Mitigation**: راه‌حل
+- **Status**: Open / Mitigated
+- **Date**: YYYY-MM-DD
+```
+
+### Risk #1
+- **Task**: -
+- **Description**: -
+- **Impact**: -
+- **Mitigation**: -
+- **Status**: -
+- **Date**: -
+
+---
+
+## خلاصه پیشرفت
+
+```
+Total Tasks: 75
+Pending:     75 ⏳
+In Progress: 0  🔄
+Done:        0  ✅
+Blocked:     0  🚫
+Deferred:    0  📅
+
+Total Issues:  0
+Total Risks:   0
+
+Progress: 0% ▭▭▭▭▭▭▭▭▭▭
+```
+
+**آخرین به‌روزرسانی**: ۱۴۰۵/۰۲/۲۵  
+**بعدی**: شروع T01
+
