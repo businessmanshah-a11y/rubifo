@@ -8,11 +8,11 @@
 
 | Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
 |------|-------|-------|--------|------|--------|--------|--------|
-| T01 | Initialize project structure | - | ⏳ Pending | - | - | - | - |
-| T02 | Setup PostgreSQL & asyncpg | - | ⏳ Pending | - | - | - | - |
-| T03 | Create users/subscriptions schema | - | ⏳ Pending | - | - | - | - |
-| T04 | Create routes/queues schema | - | ⏳ Pending | - | - | - | - |
-| T05 | Setup Rubpy client skeleton | - | ⏳ Pending | - | - | - | - |
+| T01 | Initialize project structure | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T02 | Setup PostgreSQL & asyncpg | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T03 | Create users/subscriptions schema | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T04 | Create routes/queues schema | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T05 | Setup Rubpy client skeleton | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 
 ---
 
@@ -20,13 +20,13 @@
 
 | Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
 |------|-------|-------|--------|------|--------|--------|--------|
-| T06 | Create User model & service | - | ⏳ Pending | - | - | - | - |
-| T07 | Implement /start command | - | ⏳ Pending | - | - | - | - |
-| T08 | Implement trial reminder loop | - | ⏳ Pending | - | - | - | - |
-| T09 | Implement trial expiration | - | ⏳ Pending | - | - | - | - |
-| T10 | Create Subscription model | - | ⏳ Pending | - | - | - | - |
-| T11 | Implement /buy command | - | ⏳ Pending | - | - | - | - |
-| T12 | Add admin authentication | - | ⏳ Pending | - | - | - | - |
+| T06 | Create User model & service | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T07 | Implement /start command | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T08 | Implement trial reminder loop | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T09 | Implement trial expiration | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T10 | Create Subscription model | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T11 | Implement /buy command | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T12 | Add admin authentication | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 
 ---
 
@@ -34,13 +34,13 @@
 
 | Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
 |------|-------|-------|--------|------|--------|--------|--------|
-| T13 | Integrate Zarinpal gateway | - | ⏳ Pending | - | - | - | - |
-| T14 | Payment verification (polling) | - | ⏳ Pending | - | - | - | - |
-| T15 | Transaction history storage | - | ⏳ Pending | - | - | - | - |
-| T16 | Subscription tier enforcement | - | ⏳ Pending | - | - | - | - |
-| T17 | Create /buy command flow | - | ⏳ Pending | - | - | - | - |
-| T18 | Implement /renew command | - | ⏳ Pending | - | - | - | - |
-| T19 | Admin payment dashboard | - | ⏳ Pending | - | - | - | - |
+| T13 | Integrate Zarinpal gateway | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T14 | Payment verification (polling) | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T15 | Transaction history storage | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T16 | Subscription tier enforcement | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T17 | Create /buy command flow | Claude | 🔄 In Progress | 2026-05-15 | - | - | - |
+| T18 | Implement /renew command | Claude | ⏳ Pending | - | - | - | - |
+| T19 | Admin payment dashboard | Claude | ⏳ Pending | - | - | - | - |
 
 ---
 
@@ -262,18 +262,33 @@
 
 ```
 Total Tasks: 75
-Pending:     75 ⏳
-In Progress: 0  🔄
-Done:        0  ✅
+Pending:     58 ⏳
+In Progress: 1  🔄
+Done:        16 ✅
 Blocked:     0  🚫
 Deferred:    0  📅
+
+Completed Milestones:
+- M0: 5/5 (100%) ✅
+- M1: 7/7 (100%) ✅
+
+In Progress:
+- M2: 5/7 (71%) 🔄 (T13-T16 done، T17 in progress)
+
+Pending:
+- M3: 0/9 (0%) ⏳
+- M4: 0/12 (0%) ⏳
+- M5: 0/10 (0%) ⏳
+- M6: 0/12 (0%) ⏳
+- M7: 0/8 (0%) ⏳
+- M8: 0/5 (0%) ⏳
 
 Total Issues:  0
 Total Risks:   0
 
-Progress: 0% ▭▭▭▭▭▭▭▭▭▭
+Progress: 21.3% ▰▰▭▭▭▭▭▭▭▭
 ```
 
-**آخرین به‌روزرسانی**: ۱۴۰۵/۰۲/۲۵  
-**بعدی**: شروع T01
+**آخرین به‌روزرسانی**: ۱۴۰۵/۰۲/۲۵ (2026-05-15)
+**بعدی**: T17 (Complete /buy command payment flow)
 
