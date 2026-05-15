@@ -21,13 +21,83 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
     try:
         from src.database import pool
         from src.core.user_service import UserService
-        user = await UserService(pool).get_or_create_user(user_id, username)
+        from src.core.source_service import SourceService
+        from src.core.route_service import RouteService
+        from src.core.subscription_service import SubscriptionService
 
-        if user.is_trial_active:
-            hours_left = (user.trial_end_at - datetime.now()).total_seconds() / 3600
-            msg = f"👋 خوش آمدید به Rubifo\n\n⏳ تریال: {hours_left:.0f} ساعت باقیمانده"
+        user = await UserService(pool).get_or_create_user(user_id, username)
+        sources = await SourceService(pool).get_user_sources(user_id)
+        routes = await RouteService(pool).get_user_routes(user_id)
+        active_routes = [r for r in routes if r["is_active"]]
+
+        def _sub_line(u) -> str:
+            if u.is_trial_active:
+                hours_left = max(0, (u.trial_end_at - datetime.now()).total_seconds() / 3600)
+                return f"⏳ تریال: {hours_left:.0f} ساعت باقیمانده"
+            return "⚠️ تریال تمام شده — /buy برای اشتراک"
+
+        if not sources:
+            # Onboarding — new user with no sources
+            sub_line = _sub_line(user)
+            msg = (
+                "👋 خوش آمدید به Rubifo!\n\n"
+                "ربات محتوای شما را ذخیره می‌کند و طبق برنامه به کانال‌هایتان می‌فرستد.\n\n"
+                "✨ ۳ قدم تا ارسال اول:\n"
+                "1️⃣ سورس بساز — محتواهایت را آپلود کن\n"
+                "2️⃣ مسیر وصل کن — سورس ← کانال مقصد\n"
+                "3️⃣ زمان‌بندی تنظیم کن — هر N دقیقه یا N بار در روز\n\n"
+                f"{sub_line}\n\n"
+                "▶️ شروع کنید: دکمه «✏️ سورس جدید»"
+            )
+        elif not active_routes:
+            # Has sources but no active route
+            sub_line = _sub_line(user)
+            src_count = len(sources)
+            msg = (
+                "👋 سلام!\n\n"
+                f"📦 {src_count} سورس دارید اما هیچ مسیری تنظیم نشده.\n"
+                "محتوا ارسال نخواهد شد تا مسیر بسازید.\n\n"
+                f"{sub_line}\n\n"
+                "⚡ قدم بعدی: دکمه «➕ مسیر جدید»"
+            )
         else:
-            msg = "👋 خوش آمدید به Rubifo\n\n⚠️ تریال شما تمام شده"
+            # Active user — show dashboard
+            total_posts = 0
+            for s in sources:
+                from src.core.source_service import SourceService as SS
+                total_posts += await SS(pool).count_posts(s.id)
+
+            sent_row = await pool.fetchrow(
+                "SELECT COUNT(*) as c FROM post_queue pq "
+                "JOIN routes r ON pq.route_id = r.id "
+                "WHERE r.user_id = $1 AND pq.status = 'sent'",
+                user_id,
+            )
+            total_sent = sent_row["c"] if sent_row else 0
+
+            pending_row = await pool.fetchrow(
+                "SELECT COUNT(*) as c FROM post_queue pq "
+                "JOIN routes r ON pq.route_id = r.id "
+                "WHERE r.user_id = $1 AND pq.status = 'pending'",
+                user_id,
+            )
+            total_pending = pending_row["c"] if pending_row else 0
+
+            sub = await SubscriptionService(pool).get_active_subscription(user_id)
+            if sub:
+                days_left = (sub.end_date - datetime.now().date()).days
+                tier_fa = {"basic": "پایه", "pro": "حرفه‌ای", "enterprise": "ویژه"}.get(sub.tier, sub.tier)
+                sub_line = f"💳 اشتراک {tier_fa}: {days_left} روز باقیمانده"
+            else:
+                sub_line = _sub_line(user)
+
+            msg = (
+                "📊 وضعیت شما\n\n"
+                f"📦 سورس‌ها: {len(sources)} | {total_posts} پست ذخیره شده\n"
+                f"📋 مسیرها: {len(active_routes)} فعال\n"
+                f"📤 در صف: {total_pending} | کل ارسال شده: {total_sent}\n"
+                f"{sub_line}"
+            )
 
         await client.send_message(user_id, msg, with_keypad=True)
     except Exception as e:
@@ -109,7 +179,7 @@ async def handle_source_collecting_message(client, user_id: int, message: Dict[s
 
 
 async def handle_savesource(client, user_id: int) -> None:
-    """Finish collecting and show source summary."""
+    """Finish collecting and show source summary with connected flow."""
     state = conversation_states.pop(user_id, {})
     source_id = state.get("source_id")
     source_name = state.get("source_name", "")
@@ -119,14 +189,47 @@ async def handle_savesource(client, user_id: int) -> None:
         await client.send_message(user_id, "❌ هیچ سورس فعالی برای ذخیره وجود ندارد.")
         return
 
-    await client.send_message(
-        user_id,
-        f"✅ سورس «{source_name}» ذخیره شد!\n\n"
-        f"📊 تعداد پست‌ها: {post_count}\n\n"
-        f"📦 /mysources — مشاهده همه سورس‌ها\n"
-        f"➕ /addroute — اتصال این سورس به کانال",
-        with_keypad=True,
-    )
+    if post_count == 0:
+        await client.send_message(
+            user_id,
+            f"✅ سورس «{source_name}» ساخته شد اما هنوز خالی است.\n\n"
+            f"پست اضافه کنید:\n/addpost {source_id}",
+            with_keypad=True,
+        )
+        return
+
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+        routes = await RouteService(pool).get_user_routes(user_id)
+
+        if not routes:
+            conversation_states[user_id] = {
+                "command": "after_savesource",
+                "source_id": source_id,
+            }
+            await client.send_message(
+                user_id,
+                f"✅ سورس «{source_name}» با {post_count} پست ذخیره شد!\n\n"
+                f"➕ الان مسیر می‌سازیم تا ارسال شروع شود؟\n"
+                f"«بله» یا /addroute",
+                with_keypad=True,
+            )
+        else:
+            await client.send_message(
+                user_id,
+                f"✅ سورس «{source_name}» با {post_count} پست ذخیره شد!\n\n"
+                f"📦 /mysources — مشاهده همه سورس‌ها\n"
+                f"➕ /addroute — اتصال به کانال جدید",
+                with_keypad=True,
+            )
+    except Exception as e:
+        logger.error(f"handle_savesource error: {e}")
+        await client.send_message(
+            user_id,
+            f"✅ سورس «{source_name}» با {post_count} پست ذخیره شد!",
+            with_keypad=True,
+        )
 
 
 async def handle_mysources(client, user_id: int) -> None:
@@ -401,15 +504,18 @@ async def handle_addroute_conversation(client, user_id: int, text: str) -> None:
             source_name = state["source_name"]
 
             route_id = await RouteService(pool).create_route(user_id, source_id, target)
-            del conversation_states[user_id]
+            conversation_states[user_id] = {
+                "command": "after_addroute",
+                "route_id": route_id,
+            }
 
             await client.send_message(
                 user_id,
                 f"✅ مسیر #{route_id} ساخته شد!\n\n"
-                f"📦 سورس: {source_name}\n"
-                f"📥 مقصد: {target}\n\n"
-                f"⚠️ مطمئن شوید ربات @Rubifo ادمین کانال مقصد است.\n\n"
-                f"📅 /addplan برای تنظیم زمان‌بندی ارسال",
+                f"📦 {source_name} → {target}\n\n"
+                f"⚠️ مطمئن شوید ربات @Rubifo ادمین {target} است.\n\n"
+                f"📅 الان زمان‌بندی ارسال تنظیم کنیم؟\n"
+                f"«بله» یا /addplan",
                 with_keypad=True,
             )
 
@@ -435,26 +541,41 @@ async def handle_listroutes(client, user_id: int) -> None:
             )
             return
 
-        msg = "📋 مسیرهای شما:\n\n"
+        msg = "📋 مسیرهای شما\n\n"
+        rs = RouteService(pool)
+        ss = SourceService(pool)
+
         for route in routes:
             route_id = route["id"]
             source_id = route.get("source_id")
-            target = route.get("target_channel_id", "?")
-            active = "✅" if route["is_active"] else "⛔"
+            target = route.get("target_channel_id", "؟")
+            active_icon = "✅" if route["is_active"] else "⛔"
 
-            source_name = "?"
+            source_name = "؟"
             if source_id:
-                source = await SourceService(pool).get_source(source_id)
-                source_name = source.name if source else str(source_id)
+                src = await ss.get_source(source_id)
+                source_name = src.name if src else str(source_id)
 
-            pending = await RouteService(pool).get_route_queue_count(route_id, "pending")
-            sent = await RouteService(pool).get_route_queue_count(route_id, "sent")
+            pending = await rs.get_route_queue_count(route_id, "pending")
+            sent = await rs.get_route_queue_count(route_id, "sent")
 
-            msg += (
-                f"{active} مسیر #{route_id}\n"
-                f"   📦 {source_name} → {target}\n"
-                f"   صف: {pending} در انتظار | {sent} ارسال شده\n\n"
+            sched = await pool.fetchrow(
+                "SELECT * FROM schedules WHERE route_id = $1 AND is_active = true LIMIT 1",
+                route_id,
             )
+
+            msg += f"{active_icon} #{route_id} — {source_name} → {target}\n"
+            msg += f"   📤 {sent} ارسال | {pending} در صف\n"
+
+            if sched:
+                if sched["schedule_type"] == "interval":
+                    msg += f"   ⏰ هر {sched['interval_minutes']} دقیقه\n"
+                else:
+                    msg += f"   ⏰ {sched['daily_count']} پیام/روز\n"
+            else:
+                msg += f"   ⚠️ بدون برنامه — /addplan\n"
+
+            msg += "\n"
 
         msg += "/removeroute [شناسه] — حذف مسیر"
         await client.send_message(user_id, msg, with_keypad=True)
@@ -516,9 +637,28 @@ async def handle_conversation_response(client, user_id: int, text: str) -> None:
     state = conversation_states.get(user_id, {})
     command = state.get("command")
 
+    _yes = {"بله", "yes", "y", "آره", "اره", "ok", "اوکی"}
+
     if command == "source_naming":
         del conversation_states[user_id]
         await handle_source_name_input(client, user_id, text)
+    elif command == "after_savesource":
+        del conversation_states[user_id]
+        if text.strip().lower() in _yes:
+            await handle_addroute(client, user_id)
+        else:
+            await client.send_message(
+                user_id, "باشه! هر وقت آماده شدید /addroute بفرستید.", with_keypad=True
+            )
+    elif command == "after_addroute":
+        route_id = state.get("route_id")
+        del conversation_states[user_id]
+        if text.strip().lower() in _yes:
+            await _start_addplan_for_route(client, user_id, route_id)
+        else:
+            await client.send_message(
+                user_id, "باشه! هر وقت آماده شدید /addplan بفرستید.", with_keypad=True
+            )
     elif command == "addroute":
         await handle_addroute_conversation(client, user_id, text)
     elif command == "deletesource":
@@ -735,6 +875,26 @@ async def handle_logs(client, user_id: int) -> None:
     logger.info(f"/logs for user {user_id}")
     try:
         from src.database import pool
+
+        stats = await pool.fetchrow(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE pq.status = 'sent') AS total_sent,
+                COUNT(*) FILTER (WHERE pq.status = 'failed') AS total_failed,
+                COUNT(*) FILTER (WHERE pq.status = 'pending') AS total_pending,
+                COUNT(*) FILTER (
+                    WHERE pq.status = 'sent' AND pq.created_at >= CURRENT_DATE
+                ) AS today_sent,
+                COUNT(*) FILTER (
+                    WHERE pq.status = 'failed' AND pq.created_at >= CURRENT_DATE
+                ) AS today_failed
+            FROM post_queue pq
+            JOIN routes r ON pq.route_id = r.id
+            WHERE r.user_id = $1
+            """,
+            user_id,
+        )
+
         logs = await pool.fetch(
             """
             SELECT pq.id, pq.status, pq.created_at, pq.last_error,
@@ -744,23 +904,40 @@ async def handle_logs(client, user_id: int) -> None:
             LEFT JOIN sources s ON r.source_id = s.id
             WHERE r.user_id = $1
             ORDER BY pq.created_at DESC
-            LIMIT 20
+            LIMIT 15
             """,
             user_id,
         )
-        if not logs:
-            await client.send_message(user_id, "هیچ فعالیتی برای نمایش وجود ندارد.")
+
+        if not stats or stats["total_sent"] == 0 and stats["total_failed"] == 0 and stats["total_pending"] == 0:
+            await client.send_message(
+                user_id,
+                "📊 هنوز فعالیتی ثبت نشده.\n\n"
+                "برای شروع ارسال:\n"
+                "1. سورس داشته باشید (/mysources)\n"
+                "2. مسیر تنظیم کنید (/listroutes)\n"
+                "3. برنامه فعال باشد (/listplans)",
+                with_keypad=True,
+            )
             return
 
-        msg = "📊 فعالیت‌های اخیر:\n\n"
-        for log in logs:
-            emoji = "✅" if log["status"] == "sent" else "❌"
-            t = log["created_at"].strftime("%H:%M")
-            src = log["source_name"] or "?"
-            tgt = log["target_channel_id"] or "?"
-            msg += f"{emoji} {t} | {src} → {tgt}\n"
-            if log["status"] == "failed" and log["last_error"]:
-                msg += f"   ❗ {log['last_error'][:50]}\n"
+        msg = (
+            "📊 گزارش فعالیت\n\n"
+            f"امروز: ✅ {stats['today_sent']} ارسال | ❌ {stats['today_failed']} خطا\n"
+            f"کل: ✅ {stats['total_sent']} ارسال | ❌ {stats['total_failed']} خطا | ⏳ {stats['total_pending']} در صف\n"
+        )
+
+        if logs:
+            msg += "\nآخرین رویدادها:\n"
+            for log in logs:
+                emoji = "✅" if log["status"] == "sent" else ("⏳" if log["status"] == "pending" else "❌")
+                t = log["created_at"].strftime("%m/%d %H:%M")
+                src = log["source_name"] or "؟"
+                tgt = (log["target_channel_id"] or "؟")[:20]
+                msg += f"{emoji} {t} | {src} → {tgt}\n"
+                if log["status"] == "failed" and log["last_error"]:
+                    err = log["last_error"][:60]
+                    msg += f"   ❗ {err}\n"
 
         await client.send_message(user_id, msg, with_keypad=True)
     except Exception as e:
@@ -772,25 +949,49 @@ async def handle_logs(client, user_id: int) -> None:
 # SCHEDULE / PLAN
 # ─────────────────────────────────────────────
 
+async def _start_addplan_for_route(client, user_id: int, route_id: int) -> None:
+    """Skip route selection and go directly to plan type selection."""
+    conversation_states[user_id] = {
+        "command": "addplan_type_select",
+        "route_id": route_id,
+    }
+    await client.send_message(
+        user_id,
+        "📅 نوع برنامه را انتخاب کنید:\n\n"
+        "1️⃣ بازه‌ای — هر N دقیقه یک پیام\n"
+        "2️⃣ روزانه — N پیام در اوقات مشخص\n\n"
+        "1 یا 2 وارد کنید:",
+    )
+
+
 async def handle_addplan(client, user_id: int) -> None:
     logger.info(f"/addplan for user {user_id}")
     try:
         from src.database import pool
         from src.core.route_service import RouteService
+        from src.core.source_service import SourceService
         routes = await RouteService(pool).get_user_routes(user_id)
-        if not routes:
-            await client.send_message(user_id, "ابتدا یک مسیر بسازید.\n/addroute")
+        active = [r for r in routes if r["is_active"]]
+        if not active:
+            await client.send_message(user_id, "ابتدا یک مسیر بسازید.\n➕ /addroute")
             return
 
-        msg = "📅 برای کدام مسیر برنامه‌ریزی؟\n\n"
-        for r in routes:
-            msg += f"#{r['id']}: → {r.get('target_channel_id', '?')}\n"
-        msg += "\nشناسه مسیر را وارد کنید:"
+        route_map: Dict[str, int] = {}
+        msg = "📅 برای کدام مسیر برنامه‌ریزی می‌کنید؟\n\n"
+        for i, r in enumerate(active, 1):
+            source_name = "؟"
+            if r.get("source_id"):
+                src = await SourceService(pool).get_source(r["source_id"])
+                source_name = src.name if src else "؟"
+            target = r.get("target_channel_id", "؟")
+            msg += f"{i}️⃣  {source_name} → {target}\n"
+            route_map[str(i)] = r["id"]
+
+        msg += "\nشماره را وارد کنید:"
         await client.send_message(user_id, msg)
         conversation_states[user_id] = {
             "command": "addplan_route_select",
-            "routes": {r["id"]: r for r in routes},
-            "step": 1,
+            "route_map": route_map,
         }
     except Exception as e:
         logger.error(f"/addplan error: {e}")
@@ -799,21 +1000,20 @@ async def handle_addplan(client, user_id: int) -> None:
 
 async def handle_addplan_route_selection(client, user_id: int, text: str) -> None:
     state = conversation_states.get(user_id, {})
-    try:
-        route_id = int(text.strip())
-    except ValueError:
-        await client.send_message(user_id, "❌ شناسه باید عدد باشد.")
-        return
-
-    if route_id not in state.get("routes", {}):
-        await client.send_message(user_id, "❌ مسیر یافت نشد.")
+    route_map = state.get("route_map", {})
+    route_id = route_map.get(text.strip())
+    if not route_id:
+        await client.send_message(user_id, "❌ شماره نامعتبر. دوباره وارد کنید.")
         return
 
     state["route_id"] = route_id
     state["command"] = "addplan_type_select"
     await client.send_message(
         user_id,
-        "نوع برنامه:\n\n1️⃣ بازه‌ای — هر N دقیقه\n2️⃣ روزانه — N پیام در اوقات مشخص\n\n1 یا 2 وارد کنید:"
+        "📅 نوع برنامه را انتخاب کنید:\n\n"
+        "1️⃣ بازه‌ای — هر N دقیقه یک پیام\n"
+        "2️⃣ روزانه — N پیام در اوقات مشخص\n\n"
+        "1 یا 2 وارد کنید:",
     )
 
 
