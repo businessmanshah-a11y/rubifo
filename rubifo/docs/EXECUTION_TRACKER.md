@@ -48,15 +48,15 @@
 
 | Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
 |------|-------|-------|--------|------|--------|--------|--------|
-| T20 | Create Route & PostQueue models | - | ⏳ Pending | - | - | - | - |
-| T21 | /addroute command (validation) | - | ⏳ Pending | - | - | - | - |
-| T22 | /addroute (queue population) | - | ⏳ Pending | - | - | - | - |
-| T23 | Implement /listroutes | - | ⏳ Pending | - | - | - | - |
-| T24 | Implement /removeroute | - | ⏳ Pending | - | - | - | - |
-| T25 | Implement /updatesource | - | ⏳ Pending | - | - | - | - |
-| T26 | Implement /sync | - | ⏳ Pending | - | - | - | - |
-| T27 | Post queue management logic | - | ⏳ Pending | - | - | - | - |
-| T28 | Admin route management view | - | ⏳ Pending | - | - | - | - |
+| T20 | Create Route & PostQueue models | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T21 | /addroute command (validation) | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T22 | /addroute (queue population) | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T23 | Implement /listroutes | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T24 | Implement /removeroute | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T25 | Implement /updatesource | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T26 | Implement /sync | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T27 | Post queue management logic | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T28 | Admin route management view | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 
 ---
 
@@ -262,9 +262,9 @@
 
 ```
 Total Tasks: 75
-Pending:     56 ⏳
+Pending:     47 ⏳
 In Progress: 0  🔄
-Done:        19 ✅
+Done:        28 ✅
 Blocked:     0  🚫
 Deferred:    0  📅
 
@@ -272,9 +272,9 @@ Completed Milestones:
 - M0: 5/5 (100%) ✅
 - M1: 7/7 (100%) ✅
 - M2: 7/7 (100%) ✅
+- M3: 9/9 (100%) ✅
 
 Pending:
-- M3: 0/9 (0%) ⏳
 - M4: 0/12 (0%) ⏳
 - M5: 0/10 (0%) ⏳
 - M6: 0/12 (0%) ⏳
@@ -284,9 +284,9 @@ Pending:
 Total Issues:  0
 Total Risks:   0
 
-Progress: 25.3% ▰▰▰▭▭▭▭▭▭▭
+Progress: 37.3% ▰▰▰▰▰▰▭▭▭▭
 ```
 
 **آخرین به‌روزرسانی**: ۱۴۰۵/۰۲/۲۵ (2026-05-15)
-**بعدی**: T20 (Create Route & PostQueue models)
+**بعدی**: T29 (Create Schedule model & service) - M4 START
 
