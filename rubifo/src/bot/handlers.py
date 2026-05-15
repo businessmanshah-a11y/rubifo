@@ -3,10 +3,24 @@ from src.logger import logger
 from src.bot import commands
 
 
+BUTTON_COMMAND_MAP = {
+    "1": "/addroute",
+    "2": "/listroutes",
+    "3": "/buy",
+    "4": "/listplans",
+    "5": "/logs",
+    "6": "/help",
+}
+
+
 async def route_message(client, user_id: int, message: dict) -> None:
     """Route incoming messages to appropriate command handlers."""
     try:
         text = message.get("text", "").strip()
+
+        # Map keyboard button text to commands
+        if text in BUTTON_COMMAND_MAP:
+            text = BUTTON_COMMAND_MAP[text]
 
         # Check if user is in an active conversation
         if user_id in commands.conversation_states:

@@ -144,17 +144,3 @@ def sample_zarinpal_verify():
         "result": 100,
         "ref_id": "123456789",
     }
-
-
-@pytest.fixture(scope="session")
-def pytest_configure(config):
-    """Configure pytest."""
-    # Set asyncio mode
-    config.addinivalue_line(
-        "asyncio_mode",
-        "auto"
-    )
-
-
-# Configure asyncio for pytest-asyncio
-pytestmark = pytest.mark.asyncio

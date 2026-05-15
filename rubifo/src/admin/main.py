@@ -1,11 +1,28 @@
 from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from pathlib import Path
-from src.admin.auth import AdminAuth
+from src.admin.auth import verify_token, auth_service
 from src.logger import logger
 
 app = FastAPI(title="Rubifo Admin")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database connection pool on startup."""
+    from src.database import init_db
+    await init_db()
+    logger.info("Admin panel database pool initialized")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connection pool on shutdown."""
+    from src.database import close_db
+    await close_db()
+
 
 # Serve static files
 static_dir = Path(__file__).parent / "static"
@@ -14,65 +31,44 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # Import and include routers
 from src.admin import routes
 app.include_router(routes.router)
-security = HTTPBearer()
-auth = AdminAuth()
 
 
-async def verify_token(credentials: HTTPAuthCredentials = Depends(security)) -> str:
-    """Dependency to verify JWT token and return username.
-
-    Args:
-        credentials: HTTP Bearer credentials
-
-    Returns:
-        Username if token is valid
-
-    Raises:
-        HTTPException if token is invalid
-    """
-    token = credentials.credentials
-    username = auth.verify_token(token)
-
-    if not username:
-        logger.warning("Invalid token attempted")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-        )
-
-    return username
+@app.get("/admin/{page}.html")
+async def serve_html_page(page: str):
+    """Serve admin HTML pages."""
+    file_path = static_dir / f"{page}.html"
+    if file_path.exists():
+        return FileResponse(str(file_path), media_type="text/html")
+    return FileResponse(str(static_dir / "login.html"), media_type="text/html")
 
 
 @app.get("/")
 async def root():
-    """Redirect to login page."""
-    from fastapi.responses import FileResponse
+    return FileResponse(static_dir / "login.html", media_type="text/html")
+
+
+@app.get("/admin/")
+async def admin_root():
     return FileResponse(static_dir / "login.html", media_type="text/html")
 
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
     return {"status": "ok"}
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
 @app.post("/admin/login")
-async def login(username: str, password: str):
-    """Authenticate admin and return JWT token.
-
-    Args:
-        username: Admin username
-        password: Admin password
-
-    Returns:
-        JWT token if valid
-
-    Raises:
-        HTTPException if credentials invalid
-    """
-    token = auth.authenticate(username, password)
+async def login(body: LoginRequest):
+    """Authenticate admin and return JWT token."""
+    token = auth_service.authenticate(body.username, body.password)
 
     if not token:
-        logger.warning(f"Failed login attempt for {username}")
+        logger.warning(f"Failed login attempt for {body.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
@@ -82,13 +78,5 @@ async def login(username: str, password: str):
 
 @app.get("/admin/dashboard")
 async def get_dashboard(username: str = Depends(verify_token)):
-    """Protected dashboard endpoint.
-
-    Args:
-        username: Authenticated username
-
-    Returns:
-        Dashboard data
-    """
     logger.info(f"Dashboard accessed by {username}")
     return {"message": "Dashboard data coming soon"}

@@ -1,11 +1,19 @@
-from typing import Optional, Dict, Any, Set
+from typing import Optional, Dict, Any, Set, List, Tuple
 from datetime import datetime
 import asyncio
 from src.logger import logger
-from src.database import get_db
 from src.core.user_service import UserService
 from src.config import SUBSCRIPTION_TIERS
 from src.integrations.zarinpal import create_zarinpal_gateway
+
+MAIN_MENU_TEXT = (
+    "➕ /addroute — مسیر جدید\n"
+    "📋 /listroutes — مسیرهای من\n"
+    "💳 /buy — خرید اشتراک\n"
+    "📅 /listplans — برنامه‌ریزی\n"
+    "📊 /logs — گزارش‌ها\n"
+    "❓ /help — راهنما"
+)
 
 # In-memory storage for pending payments (authority -> {tier, amount, user_id})
 pending_payments: Dict[str, Dict[str, Any]] = {}
@@ -26,19 +34,16 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
         if user.is_trial_active:
             hours_left = (user.trial_end_at - datetime.now()).total_seconds() / 3600
             message = (
-                f"سلام! خوش آمدید به Rubifo 🎉\n\n"
-                f"تریال شما {hours_left:.0f} ساعت فعال است.\n\n"
-                f"دستورات:\n"
-                f"/buy - خرید اشتراک\n"
-                f"/help - راهنما"
+                f"👋 سلام! خوش آمدید به Rubifo\n\n"
+                f"⏳ تریال: {hours_left:.0f} ساعت باقیمانده"
             )
         else:
             message = (
-                "سلام! تریال شما تمام شد.\n"
-                "/buy را برای خرید اشتراک بفرستید."
+                f"👋 سلام! خوش آمدید به Rubifo\n\n"
+                f"⚠️ تریال شما تمام شده"
             )
 
-        await client.send_message(user_id, message)
+        await client.send_message(user_id, message, with_keypad=True)
         logger.info(f"Welcome message sent to user {user_id}")
 
     except Exception as e:

@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 from datetime import datetime, timedelta
 from src.bot import commands, handlers
+from src.bot.main import RubikaBotApiClient
 
 
 @pytest.mark.asyncio
@@ -25,8 +26,12 @@ class TestBotStartCommand:
         user_data = {
             "id": 1,
             "user_id": 123456789,
+            "username": "testuser",
+            "trial_start_at": datetime.now(),
             "trial_end_at": datetime.now() + timedelta(hours=24),
             "is_trial_active": True,
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
         }
         mock_db.fetchrow.return_value = user_data
 
@@ -215,6 +220,41 @@ class TestMessageRouter:
         call_args = mock_bot_client.send_message.call_args
         # Should show unknown command error
         assert "دستور" in str(call_args) or "unknown" in str(call_args)
+
+    async def test_route_unknown_command_with_rubika_bot_api_client(self):
+        """Test routing works with the Rubika Bot API client."""
+        client = RubikaBotApiClient("test-token")
+        client.send_message = AsyncMock(return_value=True)
+
+        await handlers.route_message(client, 123456789, {"text": "/unknown"})
+
+        client.send_message.assert_awaited_once()
+        call_args = client.send_message.call_args
+        assert call_args.args[0] == 123456789
+        assert "دستور" in call_args.args[1]
+
+    async def test_normalize_updates_extracts_text_messages(self):
+        """Test Bot API updates are converted to the internal message shape."""
+        updates = [
+            {
+                "update_id": "42",
+                "message": {
+                    "chat_id": "123456789",
+                    "text": "/start",
+                },
+            },
+            {
+                "update_id": "43",
+                "message": {
+                    "chat_id": "123456789",
+                    "file": {"file_id": "abc"},
+                },
+            },
+        ]
+
+        normalized = RubikaBotApiClient.normalize_updates(updates)
+
+        assert normalized == [{"user_id": "123456789", "text": "/start"}]
 
     async def test_route_text_no_command(self, mock_bot_client):
         """Test routing plain text when not in conversation."""

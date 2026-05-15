@@ -2,6 +2,8 @@ import bcrypt
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
+from fastapi import HTTPException, status, Depends
+from fastapi.security import HTTPBearer
 from src.config import ADMIN_USERNAME, ADMIN_PASSWORD_HASH, JWT_SECRET
 from src.logger import logger
 
@@ -101,3 +103,32 @@ class AdminAuth:
 
         logger.info(f"User {username} authenticated successfully")
         return self.create_token(username)
+
+
+# FastAPI dependency for token verification
+security = HTTPBearer()
+auth_service = AdminAuth()
+
+
+async def verify_token(credentials = Depends(security)) -> str:
+    """Dependency to verify JWT token and return username.
+
+    Args:
+        credentials: HTTP Bearer credentials
+
+    Returns:
+        Username if token is valid
+
+    Raises:
+        HTTPException if token is invalid
+    """
+    token = credentials.credentials
+    username = auth_service.verify_token(token)
+
+    if not username:
+        logger.warning("Invalid token attempted")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        )
+
+    return username
