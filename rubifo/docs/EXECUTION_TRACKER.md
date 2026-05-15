@@ -64,14 +64,14 @@
 
 | Task | عنوان | Owner | وضعیت | شروع | اتمام | Issues | Risks |
 |------|-------|-------|--------|------|--------|--------|--------|
-| T29 | Create Schedule model & service | - | ⏳ Pending | - | - | - | - |
-| T30 | /addplan (interval method) | - | ⏳ Pending | - | - | - | - |
-| T31 | /addplan (daily count method) | - | ⏳ Pending | - | - | - | - |
-| T32 | next_run calculation logic | - | ⏳ Pending | - | - | - | - |
-| T33 | Implement /listplans | - | ⏳ Pending | - | - | - | - |
-| T34 | Implement /editplan | - | ⏳ Pending | - | - | - | - |
-| T35 | Implement /removeplan | - | ⏳ Pending | - | - | - | - |
-| T36 | Implement /toggleplan | - | ⏳ Pending | - | - | - | - |
+| T29 | Create Schedule model & service | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T30 | /addplan (interval method) | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T31 | /addplan (daily count method) | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T32 | next_run calculation logic | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T33 | Implement /listplans | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T34 | Implement /editplan | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T35 | Implement /removeplan | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
+| T36 | Implement /toggleplan | Claude | ✅ Done | 2026-05-15 | 2026-05-15 | - | - |
 | T37 | Create execution_engine.py | - | ⏳ Pending | - | - | - | - |
 | T38 | Implement message forwarding | - | ⏳ Pending | - | - | - | - |
 | T39 | Error handling & retry logic | - | ⏳ Pending | - | - | - | - |
@@ -262,9 +262,9 @@
 
 ```
 Total Tasks: 75
-Pending:     47 ⏳
+Pending:     40 ⏳
 In Progress: 0  🔄
-Done:        28 ✅
+Done:        35 ✅
 Blocked:     0  🚫
 Deferred:    0  📅
 
@@ -273,9 +273,9 @@ Completed Milestones:
 - M1: 7/7 (100%) ✅
 - M2: 7/7 (100%) ✅
 - M3: 9/9 (100%) ✅
+- M4: 8/12 (67%) 🔄 (T29-T36 done, T37-T40 pending)
 
 Pending:
-- M4: 0/12 (0%) ⏳
 - M5: 0/10 (0%) ⏳
 - M6: 0/12 (0%) ⏳
 - M7: 0/8 (0%) ⏳
@@ -284,9 +284,9 @@ Pending:
 Total Issues:  0
 Total Risks:   0
 
-Progress: 37.3% ▰▰▰▰▰▰▭▭▭▭
+Progress: 46.7% ▰▰▰▰▰▰▰▱▱▱
 ```
 
 **آخرین به‌روزرسانی**: ۱۴۰۵/۰۲/۲۵ (2026-05-15)
-**بعدی**: T29 (Create Schedule model & service) - M4 START
+**بعدی**: T37 (Create execution_engine.py) - Message forwarding engine
 
