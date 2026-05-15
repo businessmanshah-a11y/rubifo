@@ -328,6 +328,26 @@ async def handle_addroute(client, user_id: int) -> None:
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
+async def handle_conversation_response(client, user_id: int, text: str) -> None:
+    """Handle conversation responses for various commands.
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        text: User input text
+    """
+    if user_id not in conversation_states:
+        return
+
+    state = conversation_states[user_id]
+    command = state.get("command")
+
+    if command == "addroute":
+        await handle_addroute_conversation(client, user_id, text)
+    elif command == "removeroute":
+        await handle_removeroute_confirmation(client, user_id, text)
+
+
 async def handle_addroute_conversation(client, user_id: int, text: str) -> None:
     """Handle conversation steps for /addroute command.
 
@@ -481,6 +501,59 @@ async def populate_route_queue(
         )
 
 
+async def handle_removeroute_confirmation(client, user_id: int, text: str) -> None:
+    """Handle confirmation for route removal.
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        text: User response (بله/خیر)
+    """
+    state = conversation_states.get(user_id, {})
+    if state.get("command") != "removeroute":
+        return
+
+    route_id = state.get("route_id")
+    response = text.strip().lower()
+
+    if response in ["بله", "yes", "y"]:
+        try:
+            from src.database import pool
+            from src.core.route_service import RouteService
+
+            route_service = RouteService(pool)
+
+            # Mark all queue items as removed
+            await pool.execute(
+                "UPDATE post_queue SET status = 'removed' WHERE route_id = $1",
+                route_id,
+            )
+
+            # Deactivate the route
+            await route_service.deactivate_route(route_id)
+
+            # Remove from conversation
+            del conversation_states[user_id]
+
+            confirmation = (
+                f"✅ مسیر #{route_id} حذف شد.\n\n"
+                f"تمام پست‌های صف نیز حذف شدند."
+            )
+            await client.send_message(user_id, confirmation)
+            logger.info(f"Route {route_id} removed by user {user_id}")
+
+        except Exception as e:
+            logger.error(f"Error removing route {route_id}: {e}")
+            await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+            if user_id in conversation_states:
+                del conversation_states[user_id]
+
+    else:
+        # Cancel removal
+        del conversation_states[user_id]
+        await client.send_message(user_id, "❌ حذف لغو شد.")
+
+
 async def fetch_channel_posts(client, channel_id: int) -> list:
     """Fetch recent posts from a channel via Rubika API.
 
@@ -563,9 +636,55 @@ async def handle_listroutes(client, user_id: int) -> None:
 
 
 async def handle_removeroute(client, user_id: int, route_id: int) -> None:
-    """Handle /removeroute command."""
-    logger.info(f"Handling /removeroute command for user {user_id}")
-    await client.send_message(user_id, "درحال توسعه...")
+    """Handle /removeroute command to deactivate a route.
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        route_id: Route ID to remove
+    """
+    logger.info(f"Handling /removeroute command for user {user_id}, route {route_id}")
+
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+
+        route_service = RouteService(pool)
+
+        # Get route details
+        route = await route_service.get_route(route_id)
+
+        if not route:
+            await client.send_message(user_id, "❌ مسیر یافت نشد.")
+            return
+
+        # Verify ownership
+        if route["user_id"] != user_id:
+            await client.send_message(user_id, "❌ این مسیر متعلق به شما نیست.")
+            logger.warning(f"Unauthorized removeroute attempt by user {user_id} for route {route_id}")
+            return
+
+        # Ask for confirmation
+        confirmation_prompt = (
+            f"🗑️ حذف مسیر #{route_id}؟\n\n"
+            f"منبع: {route['source_channel_id']}\n"
+            f"مقصد: {route['target_channel_id']}\n\n"
+            f"برای تأیید \"بله\" یا \"خیر\" را بفرستید."
+        )
+
+        # Store removal confirmation state
+        conversation_states[user_id] = {
+            "command": "removeroute",
+            "route_id": route_id,
+            "step": 1,
+        }
+
+        await client.send_message(user_id, confirmation_prompt)
+        logger.info(f"Removal confirmation requested for route {route_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /removeroute command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
 async def handle_updatesource(client, user_id: int, route_id: int) -> None:

@@ -11,7 +11,7 @@ async def route_message(client, user_id: int, message: dict) -> None:
         # Check if user is in an active conversation
         if user_id in commands.conversation_states:
             if not text.startswith("/"):
-                await commands.handle_addroute_conversation(client, user_id, text)
+                await commands.handle_conversation_response(client, user_id, text)
                 return
             else:
                 # Cancel conversation if user sends a command
