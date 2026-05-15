@@ -40,7 +40,50 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
 async def handle_buy(client, user_id: int) -> None:
     """Handle /buy command to display subscription tiers."""
     logger.info(f"Handling /buy command for user {user_id}")
-    await client.send_message(user_id, "درحال توسعه...")
+
+    try:
+        from src.database import pool
+        from src.core.subscription_service import SubscriptionService
+        from src.core.user_service import UserService
+
+        user_service = UserService(pool)
+        subscription_service = SubscriptionService(pool)
+
+        # Check if user already has active subscription
+        active_sub = await subscription_service.get_active_subscription(user_id)
+
+        if active_sub:
+            message = (
+                f"شما در حال حاضر اشتراک {active_sub.tier} دارید.\n"
+                f"تاریخ پایان: {active_sub.end_date}\n\n"
+                f"/renew برای تمدید"
+            )
+            await client.send_message(user_id, message)
+            return
+
+        # Display tier options
+        tiers_message = (
+            "سطح‌های اشتراک Rubifo:\n\n"
+            "📦 پایه (Basic)\n"
+            "   • 1 مسیر فوروارد\n"
+            "   • قیمت: 50,000 تومان/ماهانه\n"
+            "   /buy_basic\n\n"
+            "⭐ حرفه‌ای (Pro)\n"
+            "   • 3 مسیر فوروارد\n"
+            "   • قیمت: 120,000 تومان/ماهانه\n"
+            "   /buy_pro\n\n"
+            "👑 ویژه (Enterprise)\n"
+            "   • 10 مسیر فوروارد\n"
+            "   • قیمت: 350,000 تومان/ماهانه\n"
+            "   /buy_enterprise"
+        )
+
+        await client.send_message(user_id, tiers_message)
+        logger.info(f"Subscription tiers displayed to user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /buy command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
 async def handle_help(client, user_id: int) -> None:
