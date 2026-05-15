@@ -506,9 +506,60 @@ async def fetch_channel_posts(client, channel_id: int) -> list:
 
 
 async def handle_listroutes(client, user_id: int) -> None:
-    """Handle /listroutes command."""
+    """Handle /listroutes command to show all user routes.
+
+    Displays routes with queue counts and status.
+    """
     logger.info(f"Handling /listroutes command for user {user_id}")
-    await client.send_message(user_id, "درحال توسعه...")
+
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+
+        route_service = RouteService(pool)
+
+        # Get all routes for user
+        routes = await route_service.get_user_routes(user_id)
+
+        if not routes:
+            await client.send_message(user_id, "شما هیچ مسیری ندارید.\n/addroute برای اضافه کردن مسیر.")
+            return
+
+        # Build message with route list
+        message = "📍 مسیرهای شما:\n\n"
+
+        for i, route in enumerate(routes, 1):
+            route_id = route["id"]
+            source = route["source_channel_id"]
+            target = route["target_channel_id"]
+            is_active = "✅" if route["is_active"] else "⛔"
+
+            # Get queue count
+            pending_count = await route_service.get_route_queue_count(route_id, "pending")
+            sent_count = await route_service.get_route_queue_count(route_id, "sent")
+            failed_count = await route_service.get_route_queue_count(route_id, "failed")
+
+            route_info = (
+                f"{i}. {is_active} مسیر #{route_id}\n"
+                f"   {source} ← → {target}\n"
+                f"   صف: {pending_count} درانتظار | {sent_count} ارسال شده | {failed_count} ناموفق\n\n"
+            )
+            message += route_info
+
+        # Add action buttons/instructions
+        message += (
+            "دستورات:\n"
+            "/removeroute [شناسه] - حذف مسیر\n"
+            "/updatesource [شناسه] - بروزرسانی پست‌های جدید\n"
+            "/sync [شناسه] - همگام‌سازی مسیر\n"
+        )
+
+        await client.send_message(user_id, message)
+        logger.info(f"Listed {len(routes)} routes for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /listroutes command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
 async def handle_removeroute(client, user_id: int, route_id: int) -> None:
