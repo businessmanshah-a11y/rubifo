@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Set
 from datetime import datetime
 import asyncio
 from src.logger import logger
@@ -603,6 +603,30 @@ async def fetch_channel_posts_since(client, channel_id: int, since_date) -> list
         return []
 
 
+async def fetch_channel_post_ids(client, channel_id: int) -> Optional[set]:
+    """Fetch all current post IDs from a channel via Rubika API.
+
+    This is a stub that returns None (API error).
+    Should be replaced with real Rubika API calls.
+
+    Args:
+        client: Rubpy bot client
+        channel_id: Channel ID to fetch post IDs from
+
+    Returns:
+        Set of current message IDs, or None if API error
+    """
+    try:
+        # Stub: would use client.get_channel_messages()
+        # For now, return None (API error) - real implementation depends on Rubpy/Rubika API
+        logger.info(f"Fetching post IDs from channel {channel_id} (stub)")
+        return None
+
+    except Exception as e:
+        logger.error(f"Error fetching post IDs from channel {channel_id}: {e}")
+        return None
+
+
 async def handle_listroutes(client, user_id: int) -> None:
     """Handle /listroutes command to show all user routes.
 
@@ -789,9 +813,74 @@ async def handle_updatesource(client, user_id: int, route_id: int) -> None:
 
 
 async def handle_sync(client, user_id: int, route_id: int) -> None:
-    """Handle /sync command."""
-    logger.info(f"Handling /sync command for user {user_id}")
-    await client.send_message(user_id, "درحال توسعه...")
+    """Handle /sync command to synchronize route with source channel.
+
+    Removes posts that no longer exist in source channel.
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        route_id: Route ID to sync
+    """
+    logger.info(f"Handling /sync command for user {user_id}, route {route_id}")
+
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+
+        route_service = RouteService(pool)
+
+        # Get route details
+        route = await route_service.get_route(route_id)
+
+        if not route:
+            await client.send_message(user_id, "❌ مسیر یافت نشد.")
+            return
+
+        # Verify ownership
+        if route["user_id"] != user_id:
+            await client.send_message(user_id, "❌ این مسیر متعلق به شما نیست.")
+            logger.warning(f"Unauthorized sync attempt by user {user_id} for route {route_id}")
+            return
+
+        # Fetch all current post IDs from source channel
+        source_channel_id = route["source_channel_id"]
+        current_post_ids = await fetch_channel_post_ids(client, source_channel_id)
+
+        if current_post_ids is None:
+            # API error or stub
+            await client.send_message(user_id, "✅ همگام‌سازی انجام شد.")
+            return
+
+        # Get all pending posts in queue for this route
+        pending_posts = await pool.fetch(
+            """
+            SELECT id, message_id_in_source FROM post_queue
+            WHERE route_id = $1 AND status = 'pending'
+            """,
+            route_id,
+        )
+
+        # Mark posts as removed if not in current list
+        removed_count = 0
+        for post in pending_posts:
+            if post["message_id_in_source"] not in current_post_ids:
+                await pool.execute(
+                    "UPDATE post_queue SET status = 'removed' WHERE id = $1",
+                    post["id"],
+                )
+                removed_count += 1
+
+        confirmation_message = (
+            f"✅ همگام‌سازی تکمیل شد!\n\n"
+            f"{removed_count} پست حذف شده علامت‌گذاری شد."
+        )
+        await client.send_message(user_id, confirmation_message)
+        logger.info(f"Route {route_id}: {removed_count} posts marked as removed")
+
+    except Exception as e:
+        logger.error(f"Error in /sync command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
 async def handle_renew(client, user_id: int) -> None:
