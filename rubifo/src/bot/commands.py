@@ -307,6 +307,173 @@ async def handle_sync(client, user_id: int, route_id: int) -> None:
 
 
 async def handle_renew(client, user_id: int) -> None:
-    """Handle /renew command for subscription renewal."""
+    """Handle /renew command for subscription renewal.
+
+    Shows current subscription and initiates renewal payment.
+    """
     logger.info(f"Handling /renew command for user {user_id}")
-    await client.send_message(user_id, "درحال توسعه...")
+
+    try:
+        from src.database import pool
+        from src.core.subscription_service import SubscriptionService
+        from src.core.transaction_service import TransactionService
+
+        subscription_service = SubscriptionService(pool)
+        transaction_service = TransactionService(pool)
+
+        # Check current active subscription
+        active_sub = await subscription_service.get_active_subscription(user_id)
+
+        if not active_sub:
+            await client.send_message(
+                user_id,
+                "شما اشتراک فعالی ندارید.\n"
+                "/buy را برای خرید اشتراک بفرستید."
+            )
+            return
+
+        # Show current subscription info
+        tier = active_sub.tier
+        tier_info = SUBSCRIPTION_TIERS.get(tier, {})
+        amount = tier_info.get("price_monthly", 0)
+
+        info_message = (
+            f"اشتراک فعلی: {tier}\n"
+            f"تاریخ پایان: {active_sub.end_date}\n"
+            f"قیمت تمدید: {amount:,} تومان\n\n"
+            "درحال ایجاد درخواست پرداخت..."
+        )
+
+        await client.send_message(user_id, info_message)
+
+        # Create payment request for same tier
+        gateway = create_zarinpal_gateway(sandbox=True)
+        success, result = await gateway.request_payment(
+            amount=amount,
+            description=f"تمدید اشتراک {tier} - Rubifo",
+            callback_url=None,
+        )
+
+        if not success:
+            logger.error(f"Renewal payment request failed for user {user_id}: {result}")
+            await client.send_message(user_id, f"خطا در درخواست پرداخت: {result}")
+            return
+
+        # Extract authority from payment URL
+        authority = result.split("/StartPay/")[-1]
+
+        # Store pending payment (mark as renewal)
+        pending_payments[authority] = {
+            "user_id": user_id,
+            "tier": tier,
+            "amount": amount,
+            "is_renewal": True,
+        }
+
+        # Send payment link
+        payment_message = (
+            f"لینک پرداخت تمدید اشتراک:\n{result}\n\n"
+            f"لطفا منتظر تأیید بمانید..."
+        )
+        await client.send_message(user_id, payment_message)
+
+        # Start payment verification polling
+        asyncio.create_task(
+            verify_renewal_payment_polling(
+                client, subscription_service, authority, amount
+            )
+        )
+
+        logger.info(f"Renewal payment link sent to user {user_id}, authority: {authority}")
+
+    except Exception as e:
+        logger.error(f"Error in /renew command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def verify_renewal_payment_polling(
+    client, subscription_service: "SubscriptionService", authority: str, amount: int
+) -> None:
+    """Poll Zarinpal for renewal payment verification.
+
+    Args:
+        client: Rubpy bot client
+        subscription_service: SubscriptionService instance
+        authority: Payment authority from Zarinpal
+        amount: Payment amount in Rials
+    """
+    MAX_ATTEMPTS = 30  # 5 minutes with 10-second intervals
+    attempt = 0
+
+    while attempt < MAX_ATTEMPTS:
+        try:
+            # Check if payment data exists
+            if authority not in pending_payments:
+                logger.warning(f"Renewal payment {authority} no longer pending")
+                break
+
+            payment_data = pending_payments[authority]
+            user_id = payment_data["user_id"]
+            tier = payment_data["tier"]
+
+            # Verify payment with Zarinpal
+            gateway = create_zarinpal_gateway(sandbox=True)
+            success, ref_id = await gateway.verify_payment(authority, amount)
+
+            if success:
+                # Payment verified - extend subscription
+                from src.database import pool
+                from src.core.transaction_service import TransactionService
+
+                transaction_service = TransactionService(pool)
+
+                # Extend subscription by 30 days
+                subscription = await subscription_service.extend_subscription(user_id, days=30)
+
+                # Insert transaction
+                await transaction_service.insert_transaction(
+                    user_id=user_id,
+                    amount=amount,
+                    tier=tier,
+                    status="completed",
+                    reference_id=ref_id,
+                )
+
+                # Remove from pending
+                del pending_payments[authority]
+
+                # Send confirmation
+                confirmation_message = (
+                    f"✅ تمدید پرداخت شد!\n\n"
+                    f"اشتراک {tier} شما تمدید شد.\n"
+                    f"تاریخ پایان جدید: {subscription.end_date}\n\n"
+                    f"سپاسگزاریم!"
+                )
+                await client.send_message(user_id, confirmation_message)
+
+                logger.info(
+                    f"Renewal payment verified for user {user_id}, subscription {subscription.id} extended"
+                )
+                return
+
+            attempt += 1
+            if attempt < MAX_ATTEMPTS:
+                await asyncio.sleep(10)
+
+        except Exception as e:
+            logger.error(f"Error in renewal payment verification for {authority}: {e}")
+            attempt += 1
+            if attempt < MAX_ATTEMPTS:
+                await asyncio.sleep(10)
+
+    # Timeout - send error message
+    if authority in pending_payments:
+        payment_data = pending_payments.pop(authority)
+        user_id = payment_data["user_id"]
+
+        timeout_message = (
+            "⏱ مهلت تأیید پرداخت تمام شد.\n"
+            "لطفا دوباره /renew را بفرستید."
+        )
+        await client.send_message(user_id, timeout_message)
+        logger.warning(f"Renewal payment verification timeout for {authority}")
