@@ -1,0 +1,1069 @@
+{
+  "project_metadata": {
+    "name": "Rubifo - Rubika Auto-Forward Bot",
+    "version": "1.0",
+    "phase": "EXECUTION_PHASE",
+    "milestones": "M0, M1, M2, M3",
+    "total_tasks": 28,
+    "estimated_duration_days": 11,
+    "target_completion_date": "2026-05-26",
+    "language": "Python 3.10+",
+    "purpose": "Complete setup, user management, payment integration, and route/queue system"
+  },
+
+  "tech_stack": {
+    "language": "Python 3.10+",
+    "bot_framework": "Rubpy (async)",
+    "database": "PostgreSQL 12+",
+    "orm": "asyncpg (raw SQL - NO ORM!)",
+    "async_runtime": "asyncio",
+    "admin_backend": "FastAPI",
+    "admin_frontend": "HTML/CSS/JavaScript",
+    "devops": "Docker + systemd",
+    "deployment": "Parspack (PaaS)",
+    "testing_framework": "pytest with asyncio"
+  },
+
+  "database_schema": {
+    "description": "PostgreSQL schema for M0-M3 phases",
+    "tables": {
+      "users": {
+        "description": "User registration and trial management",
+        "columns": {
+          "id": "SERIAL PRIMARY KEY",
+          "user_id": "BIGINT UNIQUE NOT NULL (Rubika user ID)",
+          "username": "VARCHAR(255)",
+          "trial_start_at": "TIMESTAMP DEFAULT NOW()",
+          "trial_end_at": "TIMESTAMP",
+          "is_trial_active": "BOOLEAN DEFAULT true",
+          "created_at": "TIMESTAMP DEFAULT NOW()",
+          "updated_at": "TIMESTAMP DEFAULT NOW()"
+        },
+        "indexes": ["idx_users_user_id"],
+        "migration": "migrations/001_init_schema.sql"
+      },
+      "subscriptions": {
+        "description": "User subscription tiers and status",
+        "columns": {
+          "id": "SERIAL PRIMARY KEY",
+          "user_id": "BIGINT REFERENCES users(id)",
+          "tier": "VARCHAR(50) - basic|pro|enterprise",
+          "start_date": "DATE",
+          "end_date": "DATE",
+          "is_active": "BOOLEAN DEFAULT true",
+          "created_at": "TIMESTAMP DEFAULT NOW()"
+        },
+        "indexes": ["idx_subscriptions_user_id"],
+        "migration": "migrations/001_init_schema.sql"
+      },
+      "transactions": {
+        "description": "Payment transaction history",
+        "columns": {
+          "id": "SERIAL PRIMARY KEY",
+          "user_id": "BIGINT REFERENCES users(id)",
+          "amount": "INTEGER (in Rials)",
+          "tier": "VARCHAR(50)",
+          "status": "VARCHAR(50) - pending|completed|failed",
+          "reference_id": "VARCHAR(255) (Zarinpal reference)",
+          "created_at": "TIMESTAMP DEFAULT NOW()"
+        },
+        "indexes": ["idx_transactions_user_id", "idx_transactions_reference_id"],
+        "migration": "migrations/001_init_schema.sql"
+      },
+      "routes": {
+        "description": "Channel forwarding routes (source -> target)",
+        "columns": {
+          "id": "SERIAL PRIMARY KEY",
+          "user_id": "BIGINT REFERENCES users(id)",
+          "source_channel_id": "BIGINT (Rubika channel ID)",
+          "target_channel_id": "BIGINT (Rubika channel ID)",
+          "is_active": "BOOLEAN DEFAULT true",
+          "created_at": "TIMESTAMP DEFAULT NOW()"
+        },
+        "indexes": ["idx_routes_user_id", "idx_routes_source_target"],
+        "migration": "migrations/002_post_and_schedule.sql"
+      },
+      "post_queue": {
+        "description": "Queue of messages to be forwarded",
+        "columns": {
+          "id": "SERIAL PRIMARY KEY",
+          "route_id": "BIGINT REFERENCES routes(id)",
+          "message_id_in_source": "BIGINT (Rubika message ID)",
+          "source_date": "TIMESTAMP (when message was sent)",
+          "status": "VARCHAR(50) - pending|sent|failed|removed",
+          "retry_count": "INTEGER DEFAULT 0",
+          "last_error": "TEXT",
+          "created_at": "TIMESTAMP DEFAULT NOW()"
+        },
+        "indexes": ["idx_post_queue_route_id", "idx_post_queue_status", "idx_post_queue_source_date"],
+        "migration": "migrations/002_post_and_schedule.sql",
+        "notes": "FIFO order by source_date ascending"
+      }
+    }
+  },
+
+  "milestones_overview": {
+    "M0": {
+      "name": "Setup & Database Infrastructure",
+      "duration": "2 days",
+      "description": "Project initialization, PostgreSQL setup, database schema",
+      "task_count": 5,
+      "task_range": "T01-T05"
+    },
+    "M1": {
+      "name": "User & Authentication System",
+      "duration": "3 days",
+      "description": "User registration, trial management, admin authentication",
+      "task_count": 7,
+      "task_range": "T06-T12"
+    },
+    "M2": {
+      "name": "Subscription & Payment",
+      "duration": "3 days",
+      "description": "Zarinpal integration, payment flow, subscription tiers",
+      "task_count": 7,
+      "task_range": "T13-T19"
+    },
+    "M3": {
+      "name": "Routes & Queue System",
+      "duration": "3 days",
+      "description": "Route management, message queue, sync operations",
+      "task_count": 9,
+      "task_range": "T20-T28"
+    }
+  },
+
+  "tasks": {
+    "milestone_0": [
+      {
+        "task_id": "T01",
+        "name": "Initialize project structure and dependencies",
+        "milestone": "M0",
+        "sequence": 1,
+        "estimated_hours": 4,
+        "owner_role": "Backend Lead",
+        "dependencies": [],
+        "description": "Create project folder structure, setup requirements.txt, create .env.example, setup Docker files, and configure logging",
+
+        "acceptance_criteria": [
+          "src/ directory with all subdirectories exists",
+          "requirements.txt contains all core dependencies",
+          ".env.example template created with placeholder values",
+          "Dockerfile and docker-compose.yml configured",
+          "src/logger.py created for centralized logging",
+          "pytest.ini configured for testing"
+        ],
+
+        "deliverables": [
+          "src/ directory structure",
+          "requirements.txt with versions",
+          ".env.example",
+          "Dockerfile",
+          "docker-compose.yml",
+          "src/logger.py",
+          "pytest.ini"
+        ],
+
+        "required_dependencies": [
+          "rubpy==4.0.0",
+          "asyncpg==0.29.0",
+          "fastapi==0.104.1",
+          "uvicorn==0.24.0",
+          "python-dotenv==1.0.0",
+          "pydantic==2.5.0",
+          "pytest==7.4.3",
+          "pytest-asyncio==0.21.1"
+        ],
+
+        "testing_requirements": [
+          "Verify os.path.exists('src/')",
+          "Verify os.path.exists('src/config.py')",
+          "Verify 'rubpy' in requirements.txt",
+          "Verify 'asyncpg' in requirements.txt",
+          "Verify Dockerfile builds successfully"
+        ],
+
+        "code_structure": {
+          "src/config.py": "Configuration management",
+          "src/database.py": "Database connection utilities",
+          "src/logger.py": "Logging configuration",
+          "src/bot/main.py": "Bot entry point (empty template)",
+          "src/bot/commands.py": "Command handlers (empty)",
+          "src/core/": "Business logic services (directory)",
+          "src/models/": "Data models (directory)",
+          "src/admin/": "Admin dashboard (directory)",
+          "migrations/": "Database migrations (directory)"
+        },
+
+        "commit_message": "T01: Initialize project structure and dependencies\n\n- Create src/ directory structure with all subdirectories\n- Setup requirements.txt with core dependencies (rubpy, asyncpg, fastapi)\n- Create .env.example template\n- Setup Dockerfile for containerization\n- Setup docker-compose.yml for local development\n- Configure logging system in src/logger.py\n- Setup pytest configuration\n\nPart of M0 milestone\nNo tests required for this setup task"
+      },
+
+      {
+        "task_id": "T02",
+        "name": "Setup PostgreSQL & asyncpg connection pool",
+        "milestone": "M0",
+        "sequence": 2,
+        "estimated_hours": 2,
+        "owner_role": "Backend Lead",
+        "dependencies": ["T01"],
+        "description": "Create src/database.py with asyncpg pool initialization, connection management, and PostgreSQL connection configuration",
+
+        "acceptance_criteria": [
+          "src/database.py contains database pool management",
+          "init_db() function creates connection pool",
+          "close_db() function closes connection pool gracefully",
+          "Connection parameters from .env DATABASE_URL",
+          "Pool size configured (10-20 connections)",
+          "Async/await pattern implemented correctly",
+          "Error handling for connection failures"
+        ],
+
+        "deliverables": [
+          "src/database.py with pool management",
+          ".env configured with DATABASE_URL",
+          "Database initialization functions"
+        ],
+
+        "code_template": "# src/database.py\nimport asyncpg\nfrom src.config import DATABASE_URL\n\npool = None\n\nasync def init_db():\n    global pool\n    pool = await asyncpg.create_pool(\n        DATABASE_URL,\n        min_size=10,\n        max_size=20,\n        timeout=30\n    )\n    print('Database pool initialized')\n\nasync def close_db():\n    global pool\n    if pool:\n        await pool.close()\n\nasync def execute(query, *args):\n    async with pool.acquire() as conn:\n        return await conn.execute(query, *args)\n\nasync def fetch(query, *args):\n    async with pool.acquire() as conn:\n        return await conn.fetch(query, *args)\n\nasync def fetchrow(query, *args):\n    async with pool.acquire() as conn:\n        return await conn.fetchrow(query, *args)",
+
+        "testing_requirements": [
+          "Test asyncpg version is >= 0.29",
+          "Test connection pool initialization",
+          "Test pool.acquire() returns valid connection",
+          "Test close_db() closes gracefully",
+          "Test with local PostgreSQL connection"
+        ],
+
+        "configuration": {
+          "min_pool_size": 10,
+          "max_pool_size": 20,
+          "connection_timeout": 30,
+          "database_url": "postgresql://user:pass@localhost:5432/rubifo"
+        },
+
+        "commit_message": "T02: Setup PostgreSQL & asyncpg connection pool\n\n- Create src/database.py with connection pool management\n- Implement init_db() for pool initialization\n- Implement close_db() for graceful shutdown\n- Configure asyncpg settings (min/max pool size)\n- Add error handling for connection failures\n- Load DATABASE_URL from .env\n- Test with local PostgreSQL instance\n\nPart of M0 milestone"
+      },
+
+      {
+        "task_id": "T03",
+        "name": "Create database schema (users, subscriptions, transactions)",
+        "milestone": "M0",
+        "sequence": 3,
+        "estimated_hours": 3,
+        "owner_role": "Database/Backend",
+        "dependencies": ["T02"],
+        "description": "Write SQL migrations for users, subscriptions, and transactions tables with proper indexes and constraints",
+
+        "acceptance_criteria": [
+          "migrations/001_init_schema.sql created",
+          "users table with all required columns",
+          "subscriptions table with tier management",
+          "transactions table for payment history",
+          "All indexes created for performance",
+          "Foreign key constraints in place",
+          "Migrations executed successfully",
+          "Sample data can be inserted"
+        ],
+
+        "sql_schema": {
+          "users": "CREATE TABLE users (id SERIAL PRIMARY KEY, user_id BIGINT UNIQUE NOT NULL, username VARCHAR(255), trial_start_at TIMESTAMP DEFAULT NOW(), trial_end_at TIMESTAMP, is_trial_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW())",
+          "subscriptions": "CREATE TABLE subscriptions (id SERIAL PRIMARY KEY, user_id BIGINT REFERENCES users(id), tier VARCHAR(50), start_date DATE, end_date DATE, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT NOW())",
+          "transactions": "CREATE TABLE transactions (id SERIAL PRIMARY KEY, user_id BIGINT REFERENCES users(id), amount INTEGER, tier VARCHAR(50), status VARCHAR(50), reference_id VARCHAR(255), created_at TIMESTAMP DEFAULT NOW())"
+        },
+
+        "deliverables": [
+          "migrations/001_init_schema.sql",
+          "All tables created in PostgreSQL",
+          "All indexes created"
+        ],
+
+        "testing_requirements": [
+          "Connect to database and verify tables exist",
+          "Verify all column types are correct",
+          "Verify foreign keys work",
+          "Insert sample data and verify",
+          "Test indexes are being used (EXPLAIN)"
+        ],
+
+        "commit_message": "T03: Create database schema (users, subscriptions, transactions)\n\n- Write migrations/001_init_schema.sql\n- Create users table with trial fields\n- Create subscriptions table with tier support\n- Create transactions table for payment tracking\n- Add indexes for performance (user_id, reference_id)\n- Add foreign key constraints\n- Execute migrations successfully\n- Test with sample data insertion\n\nPart of M0 milestone"
+      },
+
+      {
+        "task_id": "T04",
+        "name": "Create database schema (routes, post_queue)",
+        "milestone": "M0",
+        "sequence": 4,
+        "estimated_hours": 3,
+        "owner_role": "Database/Backend",
+        "dependencies": ["T03"],
+        "description": "Write SQL migrations for routes and post_queue tables with FIFO ordering support and status tracking",
+
+        "acceptance_criteria": [
+          "migrations/002_post_and_schedule.sql created",
+          "routes table with source/target channel IDs",
+          "post_queue table with status management",
+          "Proper indexes for query performance",
+          "Foreign key constraints to routes",
+          "Migrations executed successfully",
+          "FIFO ordering by source_date works correctly"
+        ],
+
+        "sql_schema": {
+          "routes": "CREATE TABLE routes (id SERIAL PRIMARY KEY, user_id BIGINT REFERENCES users(id), source_channel_id BIGINT, target_channel_id BIGINT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT NOW())",
+          "post_queue": "CREATE TABLE post_queue (id SERIAL PRIMARY KEY, route_id BIGINT REFERENCES routes(id), message_id_in_source BIGINT, source_date TIMESTAMP, status VARCHAR(50) DEFAULT 'pending', retry_count INTEGER DEFAULT 0, last_error TEXT, created_at TIMESTAMP DEFAULT NOW())"
+        },
+
+        "testing_requirements": [
+          "Verify routes table columns",
+          "Verify post_queue table columns",
+          "Test foreign key constraints",
+          "Test FIFO ordering: INSERT and SELECT with ORDER BY source_date",
+          "Verify status field accepts all values (pending, sent, failed, removed)"
+        ],
+
+        "commit_message": "T04: Create database schema (routes, post_queue)\n\n- Write migrations/002_post_and_schedule.sql\n- Create routes table (user_id, source/target channels)\n- Create post_queue table (FIFO message queue)\n- Setup status management (pending/sent/failed/removed)\n- Add indexes for performance\n- Add foreign key constraints\n- Test FIFO ordering by source_date\n\nPart of M0 milestone"
+      },
+
+      {
+        "task_id": "T05",
+        "name": "Setup Rubpy client and async bot skeleton",
+        "milestone": "M0",
+        "sequence": 5,
+        "estimated_hours": 3,
+        "owner_role": "Backend Lead",
+        "dependencies": ["T01"],
+        "description": "Create src/bot/main.py with Rubpy client initialization, async event loop setup, and basic message handler structure",
+
+        "acceptance_criteria": [
+          "src/bot/main.py contains bot entry point",
+          "src/bot/client.py contains Rubpy wrapper",
+          "Async event loop properly initialized",
+          "Basic message handler registered",
+          "Logging integrated throughout",
+          "Error handling for connection failures",
+          "Can be tested with sandbox Rubika account"
+        ],
+
+        "code_template": "# src/bot/main.py\nimport asyncio\nimport logging\nfrom rubpy import Client\nfrom src.database import init_db, close_db\nfrom src.logger import logger\n\nclass RufifoBot:\n    def __init__(self, token: str):\n        self.client = Client()\n        self.token = token\n    \n    async def start(self):\n        logger.info('Starting Rufifo bot')\n        await init_db()\n        \n        @self.client.on_message_receive()\n        async def handle_message(user_id: int, message: str):\n            logger.info(f'Message from {user_id}: {message}')\n            # Handle command routing here\n        \n        await self.client.run()\n    \n    async def stop(self):\n        logger.info('Stopping bot')\n        await close_db()\n        await self.client.stop()\n\nasync def main():\n    from src.config import BOT_TOKEN\n    bot = RufifoBot(BOT_TOKEN)\n    try:\n        await bot.start()\n    except KeyboardInterrupt:\n        await bot.stop()\n\nif __name__ == '__main__':\n    logging.basicConfig(level=logging.INFO)\n    asyncio.run(main())",
+
+        "testing_requirements": [
+          "Verify rubpy can be imported",
+          "Verify async/await syntax is correct",
+          "Test with mock Rubika account (if possible)",
+          "Verify logging output",
+          "Test basic message receiving"
+        ],
+
+        "commit_message": "T05: Setup Rubpy client and async bot skeleton\n\n- Create src/bot/main.py with entry point\n- Create src/bot/client.py wrapper for Rubpy\n- Setup async event loop with asyncio\n- Implement basic message handler\n- Integrate logging system\n- Add error handling\n- Document Rubpy API usage\n- Test with sandbox Rubika account\n\nPart of M0 milestone"
+      }
+    ],
+
+    "milestone_1": [
+      {
+        "task_id": "T06",
+        "name": "Create User model and database access layer",
+        "milestone": "M1",
+        "sequence": 6,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T03"],
+        "description": "Create src/models/user.py and src/core/user_service.py with CRUD operations for user management",
+
+        "acceptance_criteria": [
+          "src/models/user.py contains User dataclass with type hints",
+          "src/core/user_service.py contains UserService class",
+          "get_or_create_user(user_id) method implemented",
+          "get_user(user_id) method implemented",
+          "list_users() method for pagination",
+          "All methods use asyncpg correctly",
+          "Type hints on all functions",
+          "Docstrings for all public methods"
+        ],
+
+        "code_template": "# src/models/user.py\nfrom dataclasses import dataclass\nfrom datetime import datetime\nfrom typing import Optional\n\n@dataclass\nclass User:\n    id: int\n    user_id: int\n    username: Optional[str]\n    trial_start_at: datetime\n    trial_end_at: Optional[datetime]\n    is_trial_active: bool\n    created_at: datetime\n    updated_at: datetime\n\n# src/core/user_service.py\nclass UserService:\n    def __init__(self, db):\n        self.db = db\n    \n    async def get_or_create_user(self, user_id: int, username: str = None) -> User:\n        \"\"\"Get existing user or create new one with trial.\"\"\"\n        result = await self.db.fetchrow(\n            'SELECT * FROM users WHERE user_id = $1',\n            user_id\n        )\n        if result:\n            return User(**result)\n        \n        # Create new user with 48h trial\n        await self.db.execute(\n            'INSERT INTO users (user_id, username) VALUES ($1, $2)',\n            user_id, username\n        )\n        return await self.get_user(user_id)\n    \n    async def get_user(self, user_id: int) -> Optional[User]:\n        \"\"\"Fetch user by user_id.\"\"\"\n        result = await self.db.fetchrow(\n            'SELECT * FROM users WHERE user_id = $1',\n            user_id\n        )\n        return User(**result) if result else None",
+
+        "testing_requirements": [
+          "Test get_or_create_user creates new user with trial dates",
+          "Test get_or_create_user returns existing user",
+          "Test get_user returns None for non-existent user",
+          "Verify trial dates are set correctly (48h)",
+          "Test database insertion and retrieval"
+        ],
+
+        "commit_message": "T06: Create User model and database access layer\n\n- Create src/models/user.py with User dataclass\n- Create src/core/user_service.py with UserService\n- Implement get_or_create_user(user_id) method\n- Implement get_user(user_id) method\n- Implement list_users() for pagination\n- Add type hints to all functions\n- Add docstrings to all methods\n- Test with database\n\nPart of M1 milestone"
+      },
+
+      {
+        "task_id": "T07",
+        "name": "Implement /start command (user registration & trial)",
+        "milestone": "M1",
+        "sequence": 7,
+        "estimated_hours": 3,
+        "owner_role": "Backend",
+        "dependencies": ["T06", "T05"],
+        "description": "Implement /start command handler for user registration, trial setup, and welcome message",
+
+        "acceptance_criteria": [
+          "/start command handler in src/bot/commands.py",
+          "User created/retrieved via UserService",
+          "Trial dates set correctly (48 hours from now)",
+          "Welcome message sent in Farsi",
+          "Error handling for database failures",
+          "Logging of user registrations",
+          "Command integration with main bot loop"
+        ],
+
+        "code_template": "# src/bot/commands.py\nfrom src.core.user_service import UserService\nfrom src.logger import logger\nfrom datetime import datetime, timedelta\n\nasync def handle_start_command(bot, user_id: int):\n    \"\"\"Handle /start command for user registration.\"\"\"\n    try:\n        user_service = UserService(db)\n        user = await user_service.get_or_create_user(user_id)\n        \n        if user.is_trial_active:\n            hours_left = (user.trial_end_at - datetime.now()).total_seconds() / 3600\n            message = f'سلام! تریال {hours_left:.0f} ساعته شما فعال است.\\n\\nدستورات:\\n/help - راهنما\\n/buy - خرید اشتراک'\n        else:\n            message = 'تریال شما تمام شد. برای ادامه /buy را بفرستید.'\n        \n        await bot.send_message(user_id, message)\n        logger.info(f'User {user_id} started')\n    \n    except Exception as e:\n        logger.error(f'Error in /start: {e}')\n        await bot.send_message(user_id, 'خطایی رخ داد. لطفا دوباره سعی کنید.')",
+
+        "farsi_messages": {
+          "welcome": "سلام! خوش آمدید. 48 ساعت تریال رایگان فعال شد.",
+          "trial_active": "تریال شما هنوز فعال است.",
+          "trial_expired": "تریال شما تمام شد. برای ادامه /buy را بفرستید.",
+          "help_hint": "برای کمک /help را بفرستید.",
+          "error": "خطایی رخ داد. لطفا دوباره سعی کنید."
+        },
+
+        "testing_requirements": [
+          "Send /start command and verify user created",
+          "Verify trial_start_at and trial_end_at are set",
+          "Verify welcome message is sent",
+          "Test with multiple users",
+          "Test error handling"
+        ],
+
+        "commit_message": "T07: Implement /start command (user registration & trial)\n\n- Create src/bot/commands.py command handlers\n- Implement /start command handler\n- Call UserService.get_or_create_user()\n- Set trial dates (48 hours)\n- Send welcome message in Farsi\n- Add error handling and logging\n- Test command execution\n\nPart of M1 milestone"
+      },
+
+      {
+        "task_id": "T08",
+        "name": "Implement trial reminder loop (24h before end)",
+        "milestone": "M1",
+        "sequence": 8,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T07"],
+        "description": "Create async loop that checks for expiring trials and sends reminder messages 24 hours before expiration",
+
+        "acceptance_criteria": [
+          "trial_reminder_loop() function in src/bot/main.py",
+          "Runs every 60 minutes",
+          "Queries users with trial ending in next 24 hours",
+          "Sends reminder message in Farsi",
+          "Integrated with main event loop",
+          "Logging for each reminder sent",
+          "Error handling for message failures"
+        ],
+
+        "code_template": "# In src/bot/main.py\nasync def trial_reminder_loop(bot):\n    \"\"\"Send trial expiration reminders.\"\"\"\n    while True:\n        try:\n            # Find users with trial ending in 24-48 hours\n            result = await db.fetch(\n                'SELECT * FROM users WHERE '\n                'trial_end_at <= NOW() + interval \\'24 hours\\' AND '\n                'trial_end_at > NOW() AND '\n                'is_trial_active = true'\n            )\n            \n            for row in result:\n                hours_left = (row['trial_end_at'] - datetime.now()).total_seconds() / 3600\n                message = f'⏰ تریال شما {hours_left:.0f} ساعت دیگر تمام می‌شود.\\n/buy برای خرید اشتراک'\n                await bot.send_message(row['user_id'], message)\n                logger.info(f'Trial reminder sent to {row[\"user_id\"]}')\n        \n        except Exception as e:\n            logger.error(f'Error in trial_reminder_loop: {e}')\n        \n        # Check every 60 minutes\n        await asyncio.sleep(3600)",
+
+        "testing_requirements": [
+          "Create user with trial ending in 24h",
+          "Run loop manually and verify message sent",
+          "Test with multiple users",
+          "Verify logging output"
+        ],
+
+        "commit_message": "T08: Implement trial reminder loop (24h before end)\n\n- Create trial_reminder_loop() function\n- Run every 60 minutes\n- Query users with expiring trials\n- Send reminder message 24h before expiry\n- Integrate with main bot loop\n- Add logging for all reminders\n- Error handling for message failures\n\nPart of M1 milestone"
+      },
+
+      {
+        "task_id": "T09",
+        "name": "Implement trial expiration logic",
+        "milestone": "M1",
+        "sequence": 9,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T08"],
+        "description": "Check trial status on every command and disable routes/plans if trial has expired",
+
+        "acceptance_criteria": [
+          "Check trial status before handling commands",
+          "Disable all routes if trial expired and no subscription",
+          "Disable all plans if trial expired",
+          "Send expiration message to user",
+          "Integrated with all command handlers",
+          "Error handling for DB failures",
+          "Logging for expiration events"
+        ],
+
+        "code_template": "# In src/core/user_service.py\nasync def check_trial_expiration(self, user_id: int) -> bool:\n    \"\"\"Check and update trial status if expired.\"\"\"\n    user = await self.get_user(user_id)\n    \n    if user.is_trial_active and datetime.now() > user.trial_end_at:\n        # Check if user has active subscription\n        subscription = await self.get_active_subscription(user_id)\n        \n        if not subscription:\n            # Disable all routes and plans\n            await self.db.execute(\n                'UPDATE routes SET is_active = false WHERE user_id = $1',\n                user_id\n            )\n            logger.info(f'Trial expired for user {user_id}')\n            return True\n    \n    return False\n\n# In command handler:\nasync def handle_command(bot, user_id: int, command: str):\n    if await user_service.check_trial_expiration(user_id):\n        await bot.send_message(user_id, 'تریال شما تمام شد. /buy را بفرستید.')\n        return",
+
+        "testing_requirements": [
+          "Create user with expired trial",
+          "Send any command and verify expiration check",
+          "Verify routes disabled automatically",
+          "Verify message sent to user"
+        ],
+
+        "commit_message": "T09: Implement trial expiration logic\n\n- Check trial status before each command\n- If expired and no subscription: disable routes/plans\n- Send expiration message to user\n- Update user is_trial_active flag\n- Integration with all handlers\n- Logging for expiration events\n\nPart of M1 milestone"
+      },
+
+      {
+        "task_id": "T10",
+        "name": "Create Subscription model and service",
+        "milestone": "M1",
+        "sequence": 10,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T06"],
+        "description": "Create Subscription model and SubscriptionService for tier management and validation",
+
+        "acceptance_criteria": [
+          "src/models/subscription.py with Subscription dataclass",
+          "src/core/subscription_service.py with SubscriptionService",
+          "get_active_subscription(user_id) method",
+          "check_route_limit(user_id, new_routes) method",
+          "get_route_limit(tier) method",
+          "Type hints on all functions",
+          "Docstrings for all methods"
+        ],
+
+        "subscription_tiers": {
+          "basic": {"max_routes": 1, "price_monthly": 50000},
+          "pro": {"max_routes": 3, "price_monthly": 120000},
+          "enterprise": {"max_routes": 10, "price_monthly": 350000}
+        },
+
+        "code_template": "# src/models/subscription.py\nfrom dataclasses import dataclass\nfrom datetime import datetime\nfrom typing import Literal\n\n@dataclass\nclass Subscription:\n    id: int\n    user_id: int\n    tier: Literal['basic', 'pro', 'enterprise']\n    start_date: datetime\n    end_date: datetime\n    is_active: bool\n    created_at: datetime\n\n# src/core/subscription_service.py\nclass SubscriptionService:\n    TIER_LIMITS = {\n        'basic': 1,\n        'pro': 3,\n        'enterprise': 10\n    }\n    \n    async def get_active_subscription(self, user_id: int) -> Optional[Subscription]:\n        \"\"\"Get current active subscription.\"\"\"\n        result = await self.db.fetchrow(\n            'SELECT * FROM subscriptions WHERE user_id = $1 AND is_active = true',\n            user_id\n        )\n        return Subscription(**result) if result else None\n    \n    async def check_route_limit(self, user_id: int) -> int:\n        \"\"\"Get maximum routes allowed for user.\"\"\"\n        sub = await self.get_active_subscription(user_id)\n        if not sub:\n            return 0\n        return self.TIER_LIMITS.get(sub.tier, 0)",
+
+        "testing_requirements": [
+          "Test get_active_subscription returns subscription",
+          "Test with no active subscription",
+          "Test check_route_limit for each tier",
+          "Test with expired subscription"
+        ],
+
+        "commit_message": "T10: Create Subscription model and service\n\n- Create src/models/subscription.py\n- Create src/core/subscription_service.py\n- Implement get_active_subscription() method\n- Implement check_route_limit() method\n- Define tier limits (basic=1, pro=3, enterprise=10)\n- Add type hints and docstrings\n\nPart of M1 milestone"
+      },
+
+      {
+        "task_id": "T11",
+        "name": "Implement /buy command (subscription tiers)",
+        "milestone": "M1",
+        "sequence": 11,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T10"],
+        "description": "Implement /buy command to display subscription tiers and allow user selection",
+
+        "acceptance_criteria": [
+          "/buy command handler in src/bot/commands.py",
+          "Display 3 tiers with prices in Farsi",
+          "User can select tier via button or input",
+          "Invoice generated and displayed",
+          "Tier selection flow completed",
+          "Move to payment flow (T13)"
+        ],
+
+        "tier_display": {
+          "basic": {
+            "name": "پایه",
+            "routes": 1,
+            "price": 50000,
+            "currency": "تومان"
+          },
+          "pro": {
+            "name": "حرفه‌ای",
+            "routes": 3,
+            "price": 120000,
+            "currency": "تومان"
+          },
+          "enterprise": {
+            "name": "ویژه",
+            "routes": 10,
+            "price": 350000,
+            "currency": "تومان"
+          }
+        },
+
+        "testing_requirements": [
+          "Send /buy command",
+          "Verify tiers displayed correctly",
+          "Select tier and verify selection registered",
+          "Verify invoice shown"
+        ],
+
+        "commit_message": "T11: Implement /buy command (subscription tiers)\n\n- Create /buy command handler\n- Display 3 subscription tiers with prices\n- Show in Farsi: پایه (Basic), حرفه‌ای (Pro), ویژه (Enterprise)\n- Allow user to select tier\n- Generate and display invoice\n- Prepare for payment flow\n\nPart of M1 milestone"
+      },
+
+      {
+        "task_id": "T12",
+        "name": "Add admin authentication (JWT + session)",
+        "milestone": "M1",
+        "sequence": 12,
+        "estimated_hours": 2,
+        "owner_role": "Backend/Admin",
+        "dependencies": ["T01"],
+        "description": "Implement JWT and session-based authentication for admin dashboard",
+
+        "acceptance_criteria": [
+          "src/admin/auth.py with authentication logic",
+          "Username/password validation from .env",
+          "bcrypt password hashing implemented",
+          "JWT token generation and validation",
+          "FastAPI middleware for auth checking",
+          "ADMIN_USERNAME and ADMIN_PASSWORD_HASH in .env",
+          "Token expiration configured"
+        ],
+
+        "code_template": "# src/admin/auth.py\nimport jwt\nimport bcrypt\nfrom datetime import datetime, timedelta\nfrom typing import Optional\n\nclass AdminAuth:\n    def __init__(self, secret_key: str, admin_username: str, admin_password_hash: str):\n        self.secret_key = secret_key\n        self.admin_username = admin_username\n        self.admin_password_hash = admin_password_hash\n        self.token_expiry = 24  # hours\n    \n    def verify_password(self, password: str) -> bool:\n        \"\"\"Verify password against bcrypt hash.\"\"\"\n        return bcrypt.checkpw(password.encode(), self.admin_password_hash.encode())\n    \n    def create_token(self, username: str) -> str:\n        \"\"\"Create JWT token.\"\"\"\n        payload = {\n            'username': username,\n            'exp': datetime.utcnow() + timedelta(hours=self.token_expiry)\n        }\n        return jwt.encode(payload, self.secret_key, algorithm='HS256')\n    \n    def verify_token(self, token: str) -> Optional[str]:\n        \"\"\"Verify JWT token and return username.\"\"\"\n        try:\n            payload = jwt.decode(token, self.secret_key, algorithms=['HS256'])\n            return payload.get('username')\n        except jwt.InvalidTokenError:\n            return None",
+
+        "testing_requirements": [
+          "Test password verification",
+          "Test JWT token creation",
+          "Test token verification",
+          "Test with invalid credentials"
+        ],
+
+        "commit_message": "T12: Add admin authentication (JWT + session)\n\n- Create src/admin/auth.py\n- Implement username/password validation\n- Setup bcrypt password hashing\n- Create JWT token generation\n- Add FastAPI auth middleware\n- Load admin credentials from .env\n- Test authentication flow\n\nPart of M1 milestone"
+      }
+    ],
+
+    "milestone_2": [
+      {
+        "task_id": "T13",
+        "name": "Integrate Zarinpal payment gateway",
+        "milestone": "M2",
+        "sequence": 13,
+        "estimated_hours": 3,
+        "owner_role": "Backend",
+        "dependencies": ["T11"],
+        "description": "Create Zarinpal API integration for payment request and verification",
+
+        "acceptance_criteria": [
+          "src/integrations/zarinpal.py with gateway logic",
+          "request_payment(amount, description) method",
+          "verify_payment(reference_id) method",
+          "Error handling for API failures",
+          "Rate limiting respected",
+          "Sandbox testing completed",
+          "API responses parsed correctly"
+        ],
+
+        "zarinpal_api": {
+          "sandbox": "https://sandbox.zarinpal.com/pg/rest/WebGate.json",
+          "production": "https://www.zarinpal.com/pg/rest/WebGate.json",
+          "methods": {
+            "PaymentRequest": "POST /PaymentRequest.json",
+            "PaymentVerification": "POST /PaymentVerification.json"
+          }
+        },
+
+        "code_template": "# src/integrations/zarinpal.py\nimport aiohttp\nfrom typing import Tuple\nfrom src.logger import logger\n\nclass ZarinpalGateway:\n    def __init__(self, merchant_id: str, sandbox: bool = True):\n        self.merchant_id = merchant_id\n        self.base_url = 'https://sandbox.zarinpal.com/pg' if sandbox else 'https://www.zarinpal.com/pg'\n    \n    async def request_payment(self, amount: int, description: str) -> Tuple[bool, str]:\n        \"\"\"Request payment link from Zarinpal.\n        \n        Returns: (success, payment_url or error_message)\n        \"\"\"\n        async with aiohttp.ClientSession() as session:\n            payload = {\n                'MerchantID': self.merchant_id,\n                'Amount': amount,\n                'Description': description,\n                'CallbackURL': 'https://rufifo.ir/payment/callback'\n            }\n            \n            try:\n                async with session.post(\n                    f'{self.base_url}/rest/WebGate.json',\n                    json=payload,\n                    timeout=aiohttp.ClientTimeout(total=10)\n                ) as resp:\n                    data = await resp.json()\n                    \n                    if data['Status'] == 100:\n                        url = f'{self.base_url}/StartPay/{data[\"Authority\"]}'\n                        return True, url\n                    else:\n                        return False, f'Error: {data.get(\"Status\", \"Unknown\")}'\n            \n            except Exception as e:\n                logger.error(f'Zarinpal error: {e}')\n                return False, str(e)\n    \n    async def verify_payment(self, authority: str, amount: int) -> Tuple[bool, str]:\n        \"\"\"Verify payment with Zarinpal.\n        \n        Returns: (success, reference_id or error_message)\n        \"\"\"\n        async with aiohttp.ClientSession() as session:\n            payload = {\n                'MerchantID': self.merchant_id,\n                'Authority': authority,\n                'Amount': amount\n            }\n            \n            try:\n                async with session.post(\n                    f'{self.base_url}/rest/WebGate.json',\n                    json=payload,\n                    timeout=aiohttp.ClientTimeout(total=10)\n                ) as resp:\n                    data = await resp.json()\n                    \n                    if data['Status'] == 100:\n                        return True, data.get('RefID', '')\n                    else:\n                        return False, f'Payment failed: {data.get(\"Status\")}'\n            \n            except Exception as e:\n                logger.error(f'Zarinpal verification error: {e}')\n                return False, str(e)",
+
+        "testing_requirements": [
+          "Test payment request with sandbox",
+          "Verify payment URL is returned",
+          "Test payment verification",
+          "Test error handling"
+        ],
+
+        "commit_message": "T13: Integrate Zarinpal payment gateway\n\n- Create src/integrations/zarinpal.py\n- Implement request_payment() method\n- Implement verify_payment() method\n- Add error handling for API failures\n- Test with Zarinpal sandbox\n- Add logging for all transactions\n\nPart of M2 milestone"
+      },
+
+      {
+        "task_id": "T14",
+        "name": "Payment verification flow (polling)",
+        "milestone": "M2",
+        "sequence": 14,
+        "estimated_hours": 3,
+        "owner_role": "Backend",
+        "dependencies": ["T13", "T11"],
+        "description": "Implement polling mechanism to verify payment every 10 seconds for 5 minutes",
+
+        "acceptance_criteria": [
+          "Payment link sent to user",
+          "Polling loop starts after link sent",
+          "Check every 10 seconds for payment",
+          "Timeout after 5 minutes (30 checks)",
+          "On success: create subscription، activate routes، send confirmation",
+          "On timeout: send error message",
+          "On failure: send retry option",
+          "Logging for all payment events"
+        ],
+
+        "code_template": "# In src/core/subscription_service.py\nasync def process_payment_and_activate(self, user_id: int, authority: str, tier: str, amount: int):\n    \"\"\"Poll for payment verification and activate subscription.\"\"\"\n    max_attempts = 30  # 5 minutes with 10 second intervals\n    attempt = 0\n    \n    while attempt < max_attempts:\n        success, ref_id = await self.zarinpal.verify_payment(authority, amount)\n        \n        if success:\n            # Create subscription\n            await self.db.execute(\n                'INSERT INTO subscriptions (user_id, tier, start_date, end_date, is_active) '\n                'VALUES ($1, $2, NOW(), NOW() + interval \\'30 days\\', true)',\n                user_id, tier\n            )\n            \n            # Activate all routes for user\n            await self.db.execute(\n                'UPDATE routes SET is_active = true WHERE user_id = $1',\n                user_id\n            )\n            \n            # Store transaction\n            await self.db.execute(\n                'INSERT INTO transactions (user_id, amount, tier, status, reference_id) '\n                'VALUES ($1, $2, $3, $4, $5)',\n                user_id, amount, tier, 'completed', ref_id\n            )\n            \n            return True, 'Payment verified!'\n        \n        attempt += 1\n        if attempt < max_attempts:\n            await asyncio.sleep(10)  # Wait 10 seconds\n    \n    return False, 'Payment verification timeout'",
+
+        "testing_requirements": [
+          "Test successful payment verification",
+          "Test timeout scenario",
+          "Verify subscription created",
+          "Verify routes activated"
+        ],
+
+        "commit_message": "T14: Payment verification flow (polling)\n\n- Implement polling after payment link sent\n- Check every 10 seconds for 5 minutes\n- On success: create subscription، activate routes\n- On timeout: send error message\n- Store transaction in database\n- Add logging for all attempts\n\nPart of M2 milestone"
+      },
+
+      {
+        "task_id": "T15",
+        "name": "Transaction history storage",
+        "milestone": "M2",
+        "sequence": 15,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T14"],
+        "description": "Create TransactionService to store and query payment transaction history",
+
+        "acceptance_criteria": [
+          "src/core/transaction_service.py created",
+          "insert_transaction() method",
+          "get_transactions() method with filtering",
+          "get_transaction_by_reference() method",
+          "Calculate revenue statistics",
+          "Type hints on all methods",
+          "Docstrings for all methods"
+        ],
+
+        "code_template": "# src/core/transaction_service.py\nfrom datetime import datetime\nfrom typing import List, Optional\n\nclass TransactionService:\n    async def insert_transaction(self, user_id: int, amount: int, tier: str, \n                                 status: str, reference_id: str) -> int:\n        \"\"\"Insert transaction record.\"\"\"\n        result = await self.db.execute(\n            'INSERT INTO transactions (user_id, amount, tier, status, reference_id) '\n            'VALUES ($1, $2, $3, $4, $5) RETURNING id',\n            user_id, amount, tier, status, reference_id\n        )\n        return result\n    \n    async def get_transactions(self, user_id: Optional[int] = None, \n                               status: Optional[str] = None,\n                               limit: int = 100) -> List[dict]:\n        \"\"\"Get transactions with optional filtering.\"\"\"\n        query = 'SELECT * FROM transactions WHERE 1=1'\n        params = []\n        \n        if user_id:\n            query += ' AND user_id = $' + str(len(params) + 1)\n            params.append(user_id)\n        \n        if status:\n            query += ' AND status = $' + str(len(params) + 1)\n            params.append(status)\n        \n        query += ' ORDER BY created_at DESC LIMIT $' + str(len(params) + 1)\n        params.append(limit)\n        \n        return await self.db.fetch(query, *params)\n    \n    async def get_revenue_stats(self) -> dict:\n        \"\"\"Get revenue statistics.\"\"\"\n        result = await self.db.fetchrow(\n            'SELECT COUNT(*) as total_count, SUM(amount) as total_amount '\n            'FROM transactions WHERE status = \\'completed\\''\n        )\n        return dict(result)",
+
+        "testing_requirements": [
+          "Test transaction insertion",
+          "Test retrieval with filters",
+          "Verify data in database",
+          "Test revenue calculation"
+        ],
+
+        "commit_message": "T15: Transaction history storage\n\n- Create src/core/transaction_service.py\n- Implement insert_transaction() method\n- Implement get_transactions() with filtering\n- Implement revenue statistics calculation\n- Add type hints and docstrings\n\nPart of M2 milestone"
+      },
+
+      {
+        "task_id": "T16",
+        "name": "Subscription tier enforcement (route limits)",
+        "milestone": "M2",
+        "sequence": 16,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T10"],
+        "description": "Check route count limits based on subscription tier before creating new routes",
+
+        "acceptance_criteria": [
+          "Check route count before creating route",
+          "Basic tier: max 1 route",
+          "Pro tier: max 3 routes",
+          "Enterprise tier: max 10 routes",
+          "Send error message if at limit",
+          "Handle tier upgrades correctly",
+          "Integrated with /addroute command"
+        ],
+
+        "code_template": "# In src/core/route_service.py\nasync def can_create_route(self, user_id: int) -> Tuple[bool, str]:\n    \"\"\"Check if user can create new route.\"\"\"\n    # Get active subscription\n    subscription = await self.subscription_service.get_active_subscription(user_id)\n    \n    if not subscription:\n        return False, 'No active subscription. Use /buy to subscribe.'\n    \n    # Get route limit for tier\n    limit = self.subscription_service.TIER_LIMITS.get(subscription.tier, 0)\n    \n    # Count existing active routes\n    result = await self.db.fetchrow(\n        'SELECT COUNT(*) as count FROM routes WHERE user_id = $1 AND is_active = true',\n        user_id\n    )\n    current_count = result['count']\n    \n    if current_count >= limit:\n        tier_names = {'basic': 'پایه', 'pro': 'حرفه‌ای', 'enterprise': 'ویژه'}\n        return False, f'شما حداکثر {limit} مسیر برای پلان {tier_names[subscription.tier]} دارید.'\n    \n    return True, ''\n\n# In /addroute command:\ncan_create, error_msg = await route_service.can_create_route(user_id)\nif not can_create:\n    await bot.send_message(user_id, error_msg)\n    return",
+
+        "testing_requirements": [
+          "Create Basic subscription (max 1 route)",
+          "Try to create 2nd route (should fail)",
+          "Upgrade to Pro (max 3 routes)",
+          "Verify can create 3 routes total"
+        ],
+
+        "commit_message": "T16: Subscription tier enforcement (route limits)\n\n- Check route count before creating new route\n- Basic: max 1 route\n- Pro: max 3 routes\n- Enterprise: max 10 routes\n- Send error if at limit\n- Handle tier upgrades\n\nPart of M2 milestone"
+      },
+
+      {
+        "task_id": "T17",
+        "name": "Create /buy command payment flow",
+        "milestone": "M2",
+        "sequence": 17,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T13", "T14", "T11"],
+        "description": "Complete /buy command flow from tier selection to payment verification",
+
+        "acceptance_criteria": [
+          "User selects tier",
+          "Invoice displayed",
+          "Zarinpal payment link generated",
+          "Link sent to user",
+          "Polling verification starts",
+          "Success/failure messaging"
+        ],
+
+        "testing_requirements": [
+          "Run /buy command",
+          "Select tier",
+          "Verify payment link generated",
+          "Verify polling starts"
+        ],
+
+        "commit_message": "T17: Create /buy command payment flow\n\n- Complete /buy command flow\n- User selects subscription tier\n- Generate Zarinpal payment link\n- Send link to user\n- Start polling verification\n- Handle success/failure\n\nPart of M2 milestone"
+      },
+
+      {
+        "task_id": "T18",
+        "name": "Implement manual subscription renewal (/renew command)",
+        "milestone": "M2",
+        "sequence": 18,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T17"],
+        "description": "Implement /renew command for manual subscription renewal",
+
+        "acceptance_criteria": [
+          "/renew command handler",
+          "Show current subscription end date",
+          "Allow renewal for 30 more days",
+          "Generate new payment link",
+          "Start polling for verification"
+        ],
+
+        "testing_requirements": [
+          "Create active subscription",
+          "Send /renew command",
+          "Verify payment flow starts"
+        ],
+
+        "commit_message": "T18: Implement manual subscription renewal (/renew command)\n\n- Create /renew command handler\n- Show current subscription details\n- Generate new payment link\n- Start polling for verification\n- Extend subscription for 30 days\n\nPart of M2 milestone"
+      },
+
+      {
+        "task_id": "T19",
+        "name": "Create admin payment dashboard (view transactions)",
+        "milestone": "M2",
+        "sequence": 19,
+        "estimated_hours": 2,
+        "owner_role": "Admin",
+        "dependencies": ["T12", "T15"],
+        "description": "Create FastAPI endpoint for admin to view and filter transactions",
+
+        "acceptance_criteria": [
+          "/admin/transactions API endpoint",
+          "List all transactions",
+          "Filter by date، user، status",
+          "Show revenue stats",
+          "CSV export option"
+        ],
+
+        "code_template": "# In src/admin/routes.py\n@router.get('/admin/transactions')\nasync def get_transactions(\n    user_id: Optional[int] = None,\n    status: Optional[str] = None,\n    from_date: Optional[str] = None,\n    to_date: Optional[str] = None,\n    limit: int = 100,\n    token: str = Depends(verify_token)\n):\n    \"\"\"Get transactions with optional filters.\"\"\"\n    transactions = await transaction_service.get_transactions(\n        user_id=user_id,\n        status=status,\n        limit=limit\n    )\n    return {\"transactions\": transactions, \"count\": len(transactions)}",
+
+        "testing_requirements": [
+          "Query /admin/transactions",
+          "Test filtering",
+          "Verify CSV export"
+        ],
+
+        "commit_message": "T19: Create admin payment dashboard (view transactions)\n\n- Add /admin/transactions API endpoint\n- List transactions with filters\n- Show revenue statistics\n- Implement CSV export\n\nPart of M2 milestone"
+      }
+    ],
+
+    "milestone_3": [
+      {
+        "task_id": "T20",
+        "name": "Create Route and PostQueue models",
+        "milestone": "M3",
+        "sequence": 20,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T04"],
+        "description": "Create Route and PostQueue models with their corresponding service layers"
+      },
+
+      {
+        "task_id": "T21",
+        "name": "Implement /addroute command (part 1 - channel validation)",
+        "milestone": "M3",
+        "sequence": 21,
+        "estimated_hours": 3,
+        "owner_role": "Backend",
+        "dependencies": ["T20", "T05", "T16"],
+        "description": "Implement /addroute command validation phase - verify bot has admin access"
+      },
+
+      {
+        "task_id": "T22",
+        "name": "Implement /addroute command (part 2 - initial queue population)",
+        "milestone": "M3",
+        "sequence": 22,
+        "estimated_hours": 4,
+        "owner_role": "Backend",
+        "dependencies": ["T21"],
+        "description": "Complete /addroute with queue population from existing posts"
+      },
+
+      {
+        "task_id": "T23",
+        "name": "Implement /listroutes command",
+        "milestone": "M3",
+        "sequence": 23,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T22"],
+        "description": "Show all routes for current user with status and queue information"
+      },
+
+      {
+        "task_id": "T24",
+        "name": "Implement /removeroute command",
+        "milestone": "M3",
+        "sequence": 24,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T23"],
+        "description": "Delete route with confirmation, cascade delete plans and queue"
+      },
+
+      {
+        "task_id": "T25",
+        "name": "Implement /updatesource command (add new posts)",
+        "milestone": "M3",
+        "sequence": 25,
+        "estimated_hours": 3,
+        "owner_role": "Backend",
+        "dependencies": ["T22"],
+        "description": "Add new posts from source channel to end of queue"
+      },
+
+      {
+        "task_id": "T26",
+        "name": "Implement /sync command (remove deleted posts)",
+        "milestone": "M3",
+        "sequence": 26,
+        "estimated_hours": 3,
+        "owner_role": "Backend",
+        "dependencies": ["T22"],
+        "description": "Check and mark deleted posts as 'removed' in queue"
+      },
+
+      {
+        "task_id": "T27",
+        "name": "Add post queue management logic",
+        "milestone": "M3",
+        "sequence": 27,
+        "estimated_hours": 2,
+        "owner_role": "Backend",
+        "dependencies": ["T20"],
+        "description": "CRUD methods for queue management (get_next، mark_sent، mark_failed)"
+      },
+
+      {
+        "task_id": "T28",
+        "name": "Create admin route management view",
+        "milestone": "M3",
+        "sequence": 28,
+        "estimated_hours": 2,
+        "owner_role": "Admin",
+        "dependencies": ["T12"],
+        "description": "API endpoint for admin to view and manage all routes"
+      }
+    ]
+  },
+
+  "execution_guidelines": {
+    "code_quality_standards": {
+      "must_follow": [
+        "Use async/await for ALL database operations",
+        "Type hints on EVERY function definition",
+        "Docstrings for ALL public functions",
+        "Error handling with try/except blocks",
+        "Use logger instead of print()",
+        "Parameterized SQL queries (never f-strings with user data)",
+        "Service layer for business logic",
+        "No global state variables",
+        "asyncpg only (NO ORM like SQLAlchemy)"
+      ],
+      "must_avoid": [
+        "Synchronous database calls",
+        "Missing type hints",
+        "Missing docstrings",
+        "Bare except clauses",
+        "Global variables",
+        "ORM frameworks",
+        "Direct database calls in handlers",
+        "Hardcoded configuration values",
+        "SQL injection vulnerabilities"
+      ]
+    },
+
+    "folder_structure_rules": {
+      "must_maintain": [
+        "src/config.py - Configuration only",
+        "src/database.py - DB connection utilities",
+        "src/logger.py - Logging setup",
+        "src/bot/main.py - Bot entry point",
+        "src/bot/commands.py - Command handlers",
+        "src/core/*_service.py - Business logic",
+        "src/integrations/* - External API wrappers",
+        "src/models/*.py - Data models",
+        "src/admin/*.py - FastAPI routes",
+        "migrations/*.sql - Database migrations",
+        "tests/test_*.py - Unit and integration tests"
+      ]
+    },
+
+    "git_workflow": {
+      "before_task": [
+        "1. Check EXECUTION_TRACKER.md for task status",
+        "2. Verify all dependencies are completed",
+        "3. Read complete task description from this JSON",
+        "4. Update EXECUTION_TRACKER: mark as 🔄 In Progress",
+        "5. Create branch: git checkout -b T##-task-name"
+      ],
+      "during_task": [
+        "1. Follow all code quality standards",
+        "2. Write tests alongside code",
+        "3. Commit frequently (not just at the end)",
+        "4. Include T## in every commit message"
+      ],
+      "completing_task": [
+        "1. Self-review all code",
+        "2. Run all tests: pytest tests/",
+        "3. Final commit with complete message",
+        "4. git push origin T##-task-name",
+        "5. Update EXECUTION_TRACKER: mark as ✅ Done",
+        "6. Log any issues or risks found"
+      ]
+    },
+
+    "commit_message_format": {
+      "simple_update": "T##: Brief description\n\n- Point 1\n- Point 2",
+      "task_completion": "Complete T## - task name\n\n- Main accomplishment 1\n- Main accomplishment 2\n\nPart of M# milestone\nTests: ✅ passed\nIssues: None\nRisks: None"
+    }
+  },
+
+  "quality_metrics": {
+    "code_coverage_target": "80% minimum",
+    "test_framework": "pytest with asyncio",
+    "test_location": "tests/test_*.py",
+    "run_command": "pytest tests/",
+    "required_tests": [
+      "Unit tests for services",
+      "Integration tests with DB",
+      "E2E tests for command flows"
+    ]
+  },
+
+  "success_criteria_m0_m3": {
+    "code_completion": "All source files exist and follow architecture",
+    "database_setup": "All migrations run successfully، tables created with indexes",
+    "commands_implemented": "/start، /buy، /addroute، /listroutes، /removeroute، /updatesource، /sync",
+    "services_created": "user_service، subscription_service، route_service، queue_service، transaction_service",
+    "testing": "80%+ code coverage، all core flows tested",
+    "documentation": "All functions have docstrings، proper commit messages"
+  },
+
+  "timeline_estimate": {
+    "M0": "2 days (T01-T05)",
+    "M1": "3 days (T06-T12)",
+    "M2": "3 days (T13-T19)",
+    "M3": "3 days (T20-T28)",
+    "total_sequential": "11 days",
+    "total_parallel": "7-8 days with parallel execution"
+  },
+
+  "important_notes": {
+    "critical": [
+      "🔴 NO ORM - Use asyncpg with raw SQL only",
+      "🔴 Type hints EVERYWHERE - Not optional",
+      "🔴 Docstrings for all public functions",
+      "🔴 Async/await for everything - No sync code",
+      "🔴 No global state - Use dependency injection",
+      "🔴 Use service layer - Never put logic in handlers",
+      "🔴 Update EXECUTION_TRACKER after each task"
+    ],
+    "resources": [
+      "CLAUDE.md - Complete AI guidelines",
+      ".cursor/rules - Cursor IDE rules",
+      "docs/P7-WBS-and-milestones.md - Full task specifications",
+      "docs/EXECUTION_TRACKER.md - Progress tracking",
+      "docs/P3-technical-architecture.md - Architecture details"
+    ]
+  }
+}
