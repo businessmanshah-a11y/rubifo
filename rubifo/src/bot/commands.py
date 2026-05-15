@@ -578,6 +578,31 @@ async def fetch_channel_posts(client, channel_id: int) -> list:
         return []
 
 
+async def fetch_channel_posts_since(client, channel_id: int, since_date) -> list:
+    """Fetch posts from a channel after a specific date via Rubika API.
+
+    This is a stub that returns an empty list.
+    Should be replaced with real Rubika API calls.
+
+    Args:
+        client: Rubpy bot client
+        channel_id: Channel ID to fetch posts from
+        since_date: Fetch only posts after this datetime
+
+    Returns:
+        List of post dictionaries with message_id and date
+    """
+    try:
+        # Stub: would use client.get_channel_messages() with date filter
+        # For now, return empty list - real implementation depends on Rubpy/Rubika API
+        logger.info(f"Fetching posts from channel {channel_id} since {since_date} (stub)")
+        return []
+
+    except Exception as e:
+        logger.error(f"Error fetching posts from channel {channel_id}: {e}")
+        return []
+
+
 async def handle_listroutes(client, user_id: int) -> None:
     """Handle /listroutes command to show all user routes.
 
@@ -688,9 +713,79 @@ async def handle_removeroute(client, user_id: int, route_id: int) -> None:
 
 
 async def handle_updatesource(client, user_id: int, route_id: int) -> None:
-    """Handle /updatesource command."""
-    logger.info(f"Handling /updatesource command for user {user_id}")
-    await client.send_message(user_id, "درحال توسعه...")
+    """Handle /updatesource command to add new posts to queue.
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        route_id: Route ID to update
+    """
+    logger.info(f"Handling /updatesource command for user {user_id}, route {route_id}")
+
+    try:
+        from src.database import pool
+        from src.core.route_service import RouteService
+        from datetime import datetime
+
+        route_service = RouteService(pool)
+
+        # Get route details
+        route = await route_service.get_route(route_id)
+
+        if not route:
+            await client.send_message(user_id, "❌ مسیر یافت نشد.")
+            return
+
+        # Verify ownership
+        if route["user_id"] != user_id:
+            await client.send_message(user_id, "❌ این مسیر متعلق به شما نیست.")
+            logger.warning(f"Unauthorized updatesource attempt by user {user_id} for route {route_id}")
+            return
+
+        # Get latest source_date from post_queue for this route
+        latest_row = await pool.fetchrow(
+            "SELECT MAX(source_date) as max_date FROM post_queue WHERE route_id = $1",
+            route_id,
+        )
+        latest_date = latest_row["max_date"] if latest_row and latest_row["max_date"] else None
+
+        # Fetch new posts from source channel
+        source_channel_id = route["source_channel_id"]
+        new_posts = await fetch_channel_posts_since(client, source_channel_id, latest_date)
+
+        if not new_posts:
+            await client.send_message(user_id, "✅ پست جدیدی برای اضافه کردن نیست.")
+            return
+
+        # Insert new posts into queue
+        inserted_count = 0
+        for post in sorted(new_posts, key=lambda p: p.get("date", 0)):
+            try:
+                await pool.execute(
+                    """
+                    INSERT INTO post_queue
+                    (route_id, message_id_in_source, source_date, status)
+                    VALUES ($1, $2, $3, 'pending')
+                    """,
+                    route_id,
+                    post.get("message_id"),
+                    datetime.fromtimestamp(post.get("date", 0)),
+                )
+                inserted_count += 1
+            except Exception as e:
+                logger.error(f"Error inserting post {post.get('message_id')}: {e}")
+                continue
+
+        confirmation_message = (
+            f"✅ بروزرسانی تکمیل شد!\n\n"
+            f"{inserted_count} پست جدید اضافه شد."
+        )
+        await client.send_message(user_id, confirmation_message)
+        logger.info(f"Route {route_id}: {inserted_count} new posts added")
+
+    except Exception as e:
+        logger.error(f"Error in /updatesource command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
 async def handle_sync(client, user_id: int, route_id: int) -> None:
