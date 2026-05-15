@@ -368,3 +368,156 @@ async def delete_route(
     logger.info(f"Route {route_id} deactivated by admin {username}")
 
     return {"message": "Route deactivated successfully"}
+
+
+@router.get("/users")
+async def get_users(
+    username: str = Depends(verify_token),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """Get all users with subscription status.
+
+    Args:
+        username: Authenticated username
+        limit: Result limit
+        offset: Pagination offset
+
+    Returns:
+        List of users with subscription info
+    """
+    logger.info(f"Admin {username} accessing users list")
+
+    query = """
+        SELECT u.id, u.user_id, u.username, u.trial_start_at, u.trial_end_at,
+               u.is_trial_active, u.created_at,
+               s.tier as current_tier, s.end_date as subscription_end
+        FROM users u
+        LEFT JOIN subscriptions s ON u.id = s.user_id AND s.is_active = true
+        ORDER BY u.created_at DESC
+        LIMIT $1 OFFSET $2
+    """
+
+    # Count total users
+    total_row = await pool.fetchrow("SELECT COUNT(*) as count FROM users")
+    total = total_row["count"] if total_row else 0
+
+    results = await pool.fetch(query, limit, offset)
+    users = [dict(row) for row in results]
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "users": users,
+    }
+
+
+@router.get("/users/{user_id}")
+async def get_user_detail(
+    user_id: int, username: str = Depends(verify_token)
+) -> dict:
+    """Get detailed user information.
+
+    Args:
+        user_id: User ID
+        username: Authenticated username
+
+    Returns:
+        User details with subscriptions and routes
+    """
+    logger.info(f"Admin {username} accessing user {user_id} details")
+
+    # Get user
+    user = await pool.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Get subscriptions
+    subscriptions = await pool.fetch(
+        "SELECT * FROM subscriptions WHERE user_id = $1 ORDER BY created_at DESC",
+        user_id,
+    )
+
+    # Get routes
+    routes = await pool.fetch(
+        "SELECT * FROM routes WHERE user_id = $1 ORDER BY created_at DESC",
+        user_id,
+    )
+
+    # Get recent transactions
+    transactions = await pool.fetch(
+        """
+        SELECT * FROM transactions WHERE user_id = $1
+        ORDER BY created_at DESC LIMIT 10
+        """,
+        user_id,
+    )
+
+    return {
+        "user": dict(user),
+        "subscriptions": [dict(row) for row in subscriptions],
+        "routes": [dict(row) for row in routes],
+        "recent_transactions": [dict(row) for row in transactions],
+    }
+
+
+@router.get("/dashboard-summary")
+async def get_dashboard_summary(username: str = Depends(verify_token)) -> dict:
+    """Get dashboard summary with key metrics.
+
+    Args:
+        username: Authenticated username
+
+    Returns:
+        Dashboard metrics
+    """
+    logger.info(f"Admin {username} accessing dashboard summary")
+
+    # Total users
+    total_users = await pool.fetchrow("SELECT COUNT(*) as count FROM users")
+
+    # Active subscriptions
+    active_subs = await pool.fetchrow(
+        "SELECT COUNT(*) as count FROM subscriptions WHERE is_active = true"
+    )
+
+    # Active routes
+    active_routes = await pool.fetchrow(
+        "SELECT COUNT(*) as count FROM routes WHERE is_active = true"
+    )
+
+    # Pending posts in queues
+    pending_posts = await pool.fetchrow(
+        "SELECT COUNT(*) as count FROM post_queue WHERE status = 'pending'"
+    )
+
+    # Revenue (completed transactions)
+    revenue = await pool.fetchrow(
+        """
+        SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total
+        FROM transactions WHERE status = 'completed'
+        """
+    )
+
+    # Trial users
+    from datetime import datetime
+    trial_users = await pool.fetchrow(
+        """
+        SELECT COUNT(*) as count FROM users
+        WHERE is_trial_active = true AND trial_end_at > $1
+        """,
+        datetime.now(),
+    )
+
+    return {
+        "total_users": total_users["count"] if total_users else 0,
+        "active_subscriptions": active_subs["count"] if active_subs else 0,
+        "active_routes": active_routes["count"] if active_routes else 0,
+        "pending_posts": pending_posts["count"] if pending_posts else 0,
+        "total_revenue": {
+            "count": revenue["count"] if revenue else 0,
+            "total_amount": revenue["total"] if revenue else 0,
+        },
+        "active_trial_users": trial_users["count"] if trial_users else 0,
+    }
