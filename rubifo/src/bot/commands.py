@@ -32,9 +32,9 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
         from src.core.subscription_service import SubscriptionService
 
         user = await UserService(pool).get_or_create_user(user_id, username)
-        db_uid = user.id  # integer PK — used for all DB joins
+        db_uid = user.id  # integer PK — only for sources (sources.user_id = FK to users.id)
         sources = await SourceService(pool).get_user_sources(db_uid)
-        routes = await RouteService(pool).get_user_routes(db_uid)
+        routes = await RouteService(pool).get_user_routes(user_id)  # routes.user_id = TEXT (GUID)
         active_routes = [r for r in routes if r["is_active"]]
 
         def _sub_line(u) -> str:
@@ -74,7 +74,7 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
                 "SELECT COUNT(*) as c FROM post_queue pq "
                 "JOIN routes r ON pq.route_id = r.id "
                 "WHERE r.user_id = $1 AND pq.status = 'sent'",
-                db_uid,
+                user_id,  # routes.user_id = TEXT (GUID)
             )
             total_sent = sent_row["c"] if sent_row else 0
 
@@ -82,11 +82,11 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
                 "SELECT COUNT(*) as c FROM post_queue pq "
                 "JOIN routes r ON pq.route_id = r.id "
                 "WHERE r.user_id = $1 AND pq.status = 'pending'",
-                db_uid,
+                user_id,  # routes.user_id = TEXT (GUID)
             )
             total_pending = pending_row["c"] if pending_row else 0
 
-            sub = await SubscriptionService(pool).get_active_subscription(db_uid)
+            sub = await SubscriptionService(pool).get_active_subscription(user_id)  # subscriptions.user_id = TEXT
             if sub:
                 days_left = (sub.end_date - datetime.now().date()).days
                 tier_fa = {"basic": "پایه", "pro": "حرفه‌ای", "enterprise": "ویژه"}.get(sub.tier, sub.tier)
