@@ -33,6 +33,10 @@ async def route_message(client, user_id: int, message: dict) -> None:
                 await commands.handle_buy_enterprise(client, user_id)
             elif command == "/help":
                 await commands.handle_help(client, user_id)
+            elif command == "/calendar":
+                await commands.handle_calendar(client, user_id)
+            elif command == "/logs":
+                await commands.handle_logs(client, user_id)
             elif command == "/addroute":
                 await commands.handle_addroute(client, user_id)
             elif command == "/listroutes":

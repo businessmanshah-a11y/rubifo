@@ -268,15 +268,107 @@ async def handle_buy_enterprise(client, user_id: int) -> None:
 
 
 async def handle_help(client, user_id: int) -> None:
-    """Handle /help command."""
+    """Handle /help command (T41).
+
+    Display comprehensive help with all commands.
+    """
     logger.info(f"Handling /help command for user {user_id}")
-    help_text = (
-        "دستورات Rubifo:\n"
-        "/start - شروع\n"
-        "/buy - خرید اشتراک\n"
-        "/help - راهنما"
-    )
-    await client.send_message(user_id, help_text)
+    from src.localization import HELP_TEXT
+
+    await client.send_message(user_id, HELP_TEXT)
+
+
+async def handle_calendar(client, user_id: int) -> None:
+    """Handle /calendar command (T43).
+
+    Show calendar of scheduled activities.
+    """
+    logger.info(f"Handling /calendar command for user {user_id}")
+
+    try:
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+        from datetime import datetime
+
+        schedule_service = ScheduleService(pool)
+
+        # Get user's schedules
+        schedules = await schedule_service.get_user_schedules(user_id)
+
+        if not schedules:
+            await client.send_message(user_id, "شما هیچ برنامه‌ریزی ندارید.\n/addplan برای ایجاد.")
+            return
+
+        # Build calendar view (simplified - current month)
+        now = datetime.now()
+        calendar_text = f"📅 برنامه‌ریزی‌های {now.strftime('%B %Y')}:\n\n"
+
+        for sched in schedules:
+            sched_type = sched.schedule_type
+            if sched_type == "interval":
+                type_str = f"⏱️ {sched.interval_minutes} دقیقه"
+            else:
+                type_str = f"📊 {sched.daily_count} پیام/روز"
+
+            calendar_text += f"#{sched.id}: {type_str}\n"
+            calendar_text += f"   بعدی: {sched.next_run.strftime('%d/%m %H:%M')}\n\n"
+
+        await client.send_message(user_id, calendar_text)
+        logger.info(f"Calendar displayed for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /calendar command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_logs(client, user_id: int) -> None:
+    """Handle /logs command (T44).
+
+    Show recent activity logs.
+    """
+    logger.info(f"Handling /logs command for user {user_id}")
+
+    try:
+        from src.database import pool
+
+        # Get recent queue activities (sent/failed)
+        logs = await pool.fetch(
+            """
+            SELECT pq.id, pq.status, pq.created_at, pq.last_error,
+                   r.source_channel_id, r.target_channel_id
+            FROM post_queue pq
+            JOIN routes r ON pq.route_id = r.id
+            WHERE r.user_id = $1
+            ORDER BY pq.created_at DESC
+            LIMIT 20
+            """,
+            user_id,
+        )
+
+        if not logs:
+            await client.send_message(user_id, "هیچ فعالیتی برای نمایش وجود ندارد.")
+            return
+
+        # Build log message
+        log_text = "📋 **فعالیت‌های اخیر:**\n\n"
+
+        for log in logs:
+            status_emoji = "✅" if log["status"] == "sent" else "❌"
+            time_str = log["created_at"].strftime("%H:%M")
+            source = log["source_channel_id"]
+            target = log["target_channel_id"]
+
+            log_text += f"{status_emoji} {time_str} | {source} → {target}\n"
+
+            if log["status"] == "failed" and log["last_error"]:
+                log_text += f"   ❗ {log['last_error'][:50]}\n"
+
+        await client.send_message(user_id, log_text)
+        logger.info(f"Logs displayed for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error in /logs command: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
 async def handle_addroute(client, user_id: int) -> None:
