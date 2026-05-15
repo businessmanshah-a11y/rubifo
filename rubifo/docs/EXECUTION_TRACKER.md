@@ -142,6 +142,25 @@
 
 ---
 
+---
+
+## Progress Summary
+
+**Overall Status**: 72/75 Tasks Complete (96%)
+
+### Completion by Milestone
+- ✅ M0: Setup & Database (5/5)
+- ✅ M1: User & Auth System (7/7)
+- ✅ M2: Subscription & Payment (7/7)
+- ✅ M3: Routes & Queue System (9/9)
+- ✅ M4: Schedule & Execution (12/12)
+- ✅ M5: Bot Commands & UX (10/10)
+- ✅ M6: Admin Dashboard (12/12)
+- ⏳ M7: Testing & QA (0/8)
+- ⏳ M8: Deployment & Launch (0/5)
+
+---
+
 ## Legend
 
 ### وضعیت‌ها
