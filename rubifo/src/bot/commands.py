@@ -410,19 +410,99 @@ async def handle_addroute_conversation(client, user_id: int, text: str) -> None:
             # Remove from conversation states
             del conversation_states[user_id]
 
-            # Proceed to queue population (T22)
-            # For now, just send completion message
-            await client.send_message(
-                user_id, "✅ مسیر آماده است. /listroutes برای دیدن مسیرهایتان."
-            )
+            # Populate queue with existing posts from source channel
+            await populate_route_queue(client, user_id, route_id, source_channel_id)
 
-            logger.info(f"Route created for user {user_id}: {route_id}")
+            logger.info(f"Route created and queue populated for user {user_id}: {route_id}")
 
     except Exception as e:
         logger.error(f"Error in /addroute conversation for user {user_id}: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
         if user_id in conversation_states:
             del conversation_states[user_id]
+
+
+async def populate_route_queue(
+    client, user_id: int, route_id: int, source_channel_id: int
+) -> None:
+    """Populate queue with existing posts from source channel (T22).
+
+    Args:
+        client: Rubpy bot client
+        user_id: Rubika user ID
+        route_id: Route ID
+        source_channel_id: Source channel ID
+    """
+    try:
+        from src.database import pool
+        from datetime import datetime, timedelta
+
+        # Fetch posts from source channel via Rubika API
+        # For MVP, we'll create a stub that can be replaced with real API calls
+        posts = await fetch_channel_posts(client, source_channel_id)
+
+        if not posts:
+            await client.send_message(
+                user_id, "✅ مسیر ایجاد شد! (هیچ پست قدیمی برای فوروارد نیافت)"
+            )
+            return
+
+        # Insert posts into post_queue table, ordered by source_date ASC
+        inserted_count = 0
+        for post in sorted(posts, key=lambda p: p.get("date", 0)):
+            try:
+                await pool.execute(
+                    """
+                    INSERT INTO post_queue
+                    (route_id, message_id_in_source, source_date, status)
+                    VALUES ($1, $2, $3, 'pending')
+                    """,
+                    route_id,
+                    post.get("message_id"),
+                    datetime.fromtimestamp(post.get("date", 0)),
+                )
+                inserted_count += 1
+            except Exception as e:
+                logger.error(f"Error inserting post {post.get('message_id')}: {e}")
+                continue
+
+        completion_message = (
+            f"✅ مسیر ایجاد شد!\n\n"
+            f"تعداد پست‌های درج شده: {inserted_count}\n\n"
+            f"/listroutes برای دیدن مسیرهایتان."
+        )
+        await client.send_message(user_id, completion_message)
+        logger.info(f"Route {route_id}: {inserted_count} posts added to queue")
+
+    except Exception as e:
+        logger.error(f"Error populating queue for route {route_id}: {e}")
+        await client.send_message(
+            user_id, "خطایی در جمع‌آوری پست‌ها رخ داد. مسیر ایجاد شد اما بدون پست."
+        )
+
+
+async def fetch_channel_posts(client, channel_id: int) -> list:
+    """Fetch recent posts from a channel via Rubika API.
+
+    This is a stub that returns an empty list.
+    Should be replaced with real Rubika API calls.
+
+    Args:
+        client: Rubpy bot client
+        channel_id: Channel ID to fetch posts from
+
+    Returns:
+        List of post dictionaries with message_id and date
+    """
+    try:
+        # Stub: would use client.get_channel_messages() or similar
+        # For now, return empty list - real implementation depends on Rubpy/Rubika API
+        logger.info(f"Fetching posts from channel {channel_id} (stub implementation)")
+        return []
+
+    except Exception as e:
+        logger.error(f"Error fetching posts from channel {channel_id}: {e}")
+        return []
 
 
 async def handle_listroutes(client, user_id: int) -> None:
