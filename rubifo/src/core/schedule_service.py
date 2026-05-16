@@ -2,7 +2,6 @@ from typing import Optional, List, Tuple
 from datetime import datetime, timedelta
 from src.models.schedule import Schedule, ScheduleTime
 from src.logger import logger
-from src.utils import now_tehran
 
 
 class ScheduleService:
@@ -214,28 +213,30 @@ class ScheduleService:
         Returns:
             Next run datetime
         """
-        now = now_tehran()
+        now_utc = datetime.utcnow()
+        # Tehran = UTC+3:30 — used only for daily_count hour/minute logic
+        now_teh = now_utc + timedelta(hours=3, minutes=30)
 
         if schedule_type == "interval":
             if not interval_minutes:
                 raise ValueError("interval_minutes required for interval type")
-            return now + timedelta(minutes=interval_minutes)
+            return now_utc + timedelta(minutes=interval_minutes)
 
         elif schedule_type == "daily_count":
             if not times or len(times) == 0:
-                # If no times specified, default to 1 hour from now
-                return now + timedelta(hours=1)
+                return now_utc + timedelta(hours=1)
 
-            # Find the earliest time today after now
+            # Times are in Tehran — find next slot, store as UTC
             for hour, minute in sorted(times):
-                scheduled_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                if scheduled_time > now:
-                    return scheduled_time
+                teh_slot = now_teh.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if teh_slot > now_teh:
+                    return teh_slot - timedelta(hours=3, minutes=30)
 
-            # If all times have passed today, use first time tomorrow
+            # All slots passed today — use first slot tomorrow (Tehran → UTC)
             first_hour, first_minute = times[0]
-            tomorrow = now + timedelta(days=1)
-            return tomorrow.replace(hour=first_hour, minute=first_minute, second=0, microsecond=0)
+            tomorrow_teh = now_teh + timedelta(days=1)
+            teh_slot = tomorrow_teh.replace(hour=first_hour, minute=first_minute, second=0, microsecond=0)
+            return teh_slot - timedelta(hours=3, minutes=30)
 
         else:
             raise ValueError(f"Unknown schedule_type: {schedule_type}")

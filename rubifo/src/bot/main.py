@@ -163,11 +163,17 @@ class RubikaClient:
         fd, temp_path = tempfile.mkstemp(suffix=ext)
         os.close(fd)
         try:
+            import aiohttp
             logger.info(f"[REUPLOAD] Step 1: getFile for file_id={file_id[:20]}...")
             download_url = await self._bot.get_file(file_id)
-            logger.info(f"[REUPLOAD] Step 2: CDN URL obtained, downloading...")
+            logger.info(f"[REUPLOAD] Step 2: CDN URL={str(download_url)[:60]}...")
 
-            file_bytes = await self._bot.download_file(file_id, as_bytes=True, timeout=30)
+            dl_timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=dl_timeout) as session:
+                async with session.get(str(download_url)) as resp:
+                    if resp.status != 200:
+                        raise Exception(f"Failed to download file: {resp.status}")
+                    file_bytes = await resp.read()
             logger.info(f"[REUPLOAD] Step 3: Downloaded {len(file_bytes)} bytes OK")
 
             with open(temp_path, "wb") as f:

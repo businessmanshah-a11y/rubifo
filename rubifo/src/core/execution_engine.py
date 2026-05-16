@@ -219,7 +219,16 @@ class ExecutionEngine:
         os.close(fd)
 
         try:
-            await self.client._bot.download_file(old_file_id, save_as=temp_path)
+            import aiohttp
+            cdn_url = await self.client._bot.get_file(old_file_id)
+            dl_timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=dl_timeout) as session:
+                async with session.get(str(cdn_url)) as resp:
+                    if resp.status != 200:
+                        raise Exception(f"Failed to download file: {resp.status}")
+                    file_bytes = await resp.read()
+            with open(temp_path, "wb") as f:
+                f.write(file_bytes)
             upload_url = await self.client._bot.request_send_file(rubpy_type)
             new_fid = await self.client._bot.upload_file(
                 upload_url, f"media{ext}", temp_path
