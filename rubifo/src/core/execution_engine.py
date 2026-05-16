@@ -221,12 +221,25 @@ class ExecutionEngine:
         try:
             import aiohttp
             cdn_url = await self.client._bot.get_file(old_file_id)
+            logger.info(f"[REUPLOAD-ENG] CDN url={cdn_url[:80]}")
             dl_timeout = aiohttp.ClientTimeout(total=30)
-            async with aiohttp.ClientSession(timeout=dl_timeout) as session:
-                async with session.get(str(cdn_url)) as resp:
-                    if resp.status != 200:
-                        raise Exception(f"Failed to download file: {resp.status}")
-                    file_bytes = await resp.read()
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; RubikaBot/1.0)", "Referer": "https://rubika.ir/"}
+            # retry up to 3 times in case of transient CDN errors
+            last_err = None
+            for attempt in range(3):
+                try:
+                    async with aiohttp.ClientSession(timeout=dl_timeout) as session:
+                        async with session.get(cdn_url, headers=headers) as resp:
+                            if resp.status != 200:
+                                raise Exception(f"Failed to download file: {resp.status}")
+                            file_bytes = await resp.read()
+                    break
+                except Exception as e:
+                    last_err = e
+                    logger.warning(f"[REUPLOAD-ENG] Download attempt {attempt+1} failed: {e}")
+                    await asyncio.sleep(2)
+            else:
+                raise last_err
             with open(temp_path, "wb") as f:
                 f.write(file_bytes)
             upload_url = await self.client._bot.request_send_file(rubpy_type)

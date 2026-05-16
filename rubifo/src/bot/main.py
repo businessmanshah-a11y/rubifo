@@ -165,15 +165,26 @@ class RubikaClient:
         try:
             import aiohttp
             logger.info(f"[REUPLOAD] Step 1: getFile for file_id={file_id[:20]}...")
-            download_url = await self._bot.get_file(file_id)
-            logger.info(f"[REUPLOAD] Step 2: CDN URL={str(download_url)[:60]}...")
+            cdn_url = await self._bot.get_file(file_id)
+            logger.info(f"[REUPLOAD] Step 2: CDN url={cdn_url[:80]}")
 
             dl_timeout = aiohttp.ClientTimeout(total=30)
-            async with aiohttp.ClientSession(timeout=dl_timeout) as session:
-                async with session.get(str(download_url)) as resp:
-                    if resp.status != 200:
-                        raise Exception(f"Failed to download file: {resp.status}")
-                    file_bytes = await resp.read()
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; RubikaBot/1.0)", "Referer": "https://rubika.ir/"}
+            last_err = None
+            for attempt in range(3):
+                try:
+                    async with aiohttp.ClientSession(timeout=dl_timeout) as session:
+                        async with session.get(cdn_url, headers=headers) as resp:
+                            if resp.status != 200:
+                                raise Exception(f"Failed to download file: {resp.status}")
+                            file_bytes = await resp.read()
+                    break
+                except Exception as e:
+                    last_err = e
+                    logger.warning(f"[REUPLOAD] Download attempt {attempt+1} failed: {e}")
+                    await asyncio.sleep(2)
+            else:
+                raise last_err
             logger.info(f"[REUPLOAD] Step 3: Downloaded {len(file_bytes)} bytes OK")
 
             with open(temp_path, "wb") as f:
