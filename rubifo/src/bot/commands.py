@@ -3,6 +3,7 @@ from datetime import datetime
 import asyncio
 from src.logger import logger
 from src.config import SUBSCRIPTION_TIERS
+from src.utils import fmt_tehran
 from src.integrations.zarinpal import create_zarinpal_gateway
 
 # In-memory storage for pending payments (authority -> {tier, amount, user_id})
@@ -1126,7 +1127,7 @@ async def handle_addplan_interval(client, user_id: int, interval_minutes: int) -
         )
         await client.send_message(
             user_id,
-            f"✅ برنامه ساخته شد!\nنوع: هر {interval_minutes} دقیقه\nاجرای بعدی: {sched.next_run}",
+            f"✅ برنامه ساخته شد!\nنوع: هر {interval_minutes} دقیقه\nاجرای بعدی: {fmt_tehran(sched.next_run)}",
             with_keypad=True,
         )
     except Exception as e:
@@ -1136,7 +1137,7 @@ async def handle_addplan_interval(client, user_id: int, interval_minutes: int) -
 
 
 async def handle_addplan_daily_count(
-    client, user_id: int, daily_count: int, times: List[Tuple[int, int]]
+    client, user_id: str, daily_count: int, times: List[Tuple[int, int]]
 ) -> None:
     try:
         from src.database import pool
@@ -1176,7 +1177,7 @@ async def handle_listplans(client, user_id: int) -> None:
         for s in schedules:
             active = "✅" if s.is_active else "⛔"
             type_info = f"هر {s.interval_minutes} دقیقه" if s.schedule_type == "interval" else f"{s.daily_count} پیام/روز"
-            next_run = s.next_run.strftime("%d/%m %H:%M") if s.next_run else "—"
+            next_run = fmt_tehran(s.next_run, "%d/%m %H:%M") if s.next_run else "—"
             msg += f"{active} #{s.id} — مسیر #{s.route_id}\n   {type_info} | بعدی: {next_run}\n\n"
 
         msg += "/toggleplan [شناسه] — فعال/غیرفعال\n/removeplan [شناسه] — حذف"

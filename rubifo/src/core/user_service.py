@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from src.models.user import User
 from src.config import TRIAL_DURATION_HOURS
 from src.logger import logger
+from src.utils import now_tehran
 
 
 class UserService:
@@ -30,7 +31,7 @@ class UserService:
             return User(**result)
 
         logger.info(f"Creating new user {user_id} with trial")
-        trial_end = datetime.now() + timedelta(hours=TRIAL_DURATION_HOURS)
+        trial_end = now_tehran() + timedelta(hours=TRIAL_DURATION_HOURS)
 
         await self.db.execute(
             "INSERT INTO users (user_id, username, trial_end_at) VALUES ($1, $2, $3)",
@@ -84,7 +85,7 @@ class UserService:
         if not user:
             return False
 
-        if user.is_trial_active and datetime.now() > user.trial_end_at:
+        if user.is_trial_active and now_tehran() > user.trial_end_at:
             logger.info(f"Trial expired for user {user_id}, disabling routes")
 
             await self.db.execute(
@@ -106,7 +107,7 @@ class UserService:
             user_id: Rubika user ID
             hours: Number of hours to extend trial by
         """
-        new_end = datetime.now() + timedelta(hours=hours)
+        new_end = now_tehran() + timedelta(hours=hours)
         await self.db.execute(
             "UPDATE users SET trial_end_at = $1, is_trial_active = true "
             "WHERE user_id = $2",

@@ -2,6 +2,7 @@ from typing import Optional, List, Tuple
 from datetime import datetime, timedelta
 from src.models.schedule import Schedule, ScheduleTime
 from src.logger import logger
+from src.utils import now_tehran
 
 
 class ScheduleService:
@@ -213,7 +214,7 @@ class ScheduleService:
         Returns:
             Next run datetime
         """
-        now = datetime.now()
+        now = now_tehran()
 
         if schedule_type == "interval":
             if not interval_minutes:
