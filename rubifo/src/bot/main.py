@@ -11,6 +11,34 @@ from src.config import BOT_TOKEN
 
 OFFSET_FILE = "logs/bot_offset.json"
 
+_OFFSET_KEY = "offset_id"
+
+
+async def _load_offset_db() -> Optional[str]:
+    try:
+        from src.database import pool
+        row = await pool.fetchrow(
+            "SELECT value FROM bot_state WHERE key = $1", _OFFSET_KEY
+        )
+        if row and row["value"]:
+            return row["value"]
+    except Exception:
+        pass
+    return None
+
+
+async def _save_offset_db(offset_id: str) -> None:
+    try:
+        from src.database import pool
+        await pool.execute(
+            "INSERT INTO bot_state (key, value) VALUES ($1, $2) "
+            "ON CONFLICT (key) DO UPDATE SET value = $2",
+            _OFFSET_KEY, offset_id,
+        )
+    except Exception:
+        pass
+
+
 MAIN_KEYPAD = Keypad(rows=[
     KeypadRow(buttons=[
         Button(id="addsource", type=ButtonTypeEnum.SIMPLE, button_text="✏️ سورس جدید"),
@@ -157,6 +185,35 @@ class RubikaClient:
             except Exception:
                 pass
 
+    async def drain_old_updates(self) -> None:
+        """Skip all pending messages on fresh start — just fast-forward the offset."""
+        import aiohttp
+        url = f"https://botapi.rubika.ir/v3/{self.token}/getUpdates"
+        timeout = aiohttp.ClientTimeout(total=15)
+        drained = 0
+        try:
+            while True:
+                payload: Dict[str, Any] = {"limit": 50}
+                if self.offset_id:
+                    payload["offset_id"] = self.offset_id
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(url, json=payload) as resp:
+                        data = await resp.json(content_type=None)
+                body = data.get("data", data)
+                updates = body.get("updates") or []
+                next_offset = body.get("next_offset_id")
+                drained += len(updates)
+                if next_offset:
+                    self.offset_id = str(next_offset)
+                if not updates:
+                    break
+            if self.offset_id:
+                save_offset(self.offset_id)
+                await _save_offset_db(self.offset_id)
+            logger.info(f"Drained {drained} old updates. Offset: {self.offset_id}")
+        except Exception as e:
+            logger.warning(f"drain_old_updates failed: {e}")
+
     async def get_updates(self, limit: int = 50) -> List[Dict[str, Any]]:
         try:
             import aiohttp
@@ -176,6 +233,7 @@ class RubikaClient:
             if next_offset:
                 self.offset_id = str(next_offset)
                 save_offset(self.offset_id)
+                await _save_offset_db(self.offset_id)
 
             return self._normalize(updates)
         except Exception as e:
@@ -184,7 +242,9 @@ class RubikaClient:
 
     @staticmethod
     def _normalize(updates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        started_bot_users: set = set()
         messages = []
+
         for update in updates:
             update_type = update.get("type", "")
             chat_id = update.get("chat_id")
@@ -192,7 +252,7 @@ class RubikaClient:
                 continue
 
             if update_type == "StartedBot":
-                messages.append({"user_id": str(chat_id), "text": "/start"})
+                started_bot_users.add(str(chat_id))
 
             elif update_type == "NewMessage":
                 msg = update.get("new_message") or {}
@@ -221,10 +281,17 @@ class RubikaClient:
                     entry["forwarded_message_id"] = str(msg.get("message_id", ""))
 
                 if text or msg.get("file") or msg.get("sticker") or forwarded:
+                    # If Rubika sent StartedBot + NewMessage /start together, skip duplicate
+                    if text == "/start" and str(chat_id) in started_bot_users:
+                        started_bot_users.discard(str(chat_id))
                     messages.append(entry)
 
             else:
                 logger.info(f"Unknown update type: {update_type} | raw: {update}")
+
+        # Add /start for users who had StartedBot but no NewMessage /start
+        for uid in started_bot_users:
+            messages.insert(0, {"user_id": uid, "text": "/start"})
 
         return messages
 
@@ -266,6 +333,17 @@ class RufifoBot:
     async def _polling_loop(self) -> None:
         from src.bot.handlers import route_message
         logger.info("Message polling loop started")
+
+        # Load persisted offset from DB (survives restarts/redeploys)
+        db_offset = await _load_offset_db()
+        if db_offset:
+            self.client.offset_id = db_offset
+            logger.info(f"Offset restored from DB: {db_offset}")
+        else:
+            # Fresh start — skip all queued messages to avoid processing history
+            logger.info("No saved offset — draining old updates to start fresh...")
+            await self.client.drain_old_updates()
+
         consecutive_errors = 0
 
         while self.running:
