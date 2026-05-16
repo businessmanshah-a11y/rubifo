@@ -436,6 +436,11 @@ async def handle_addroute(client, user_id: int) -> None:
 
         can_create, error_msg = await RouteService(pool).can_create_route(user_id)
         if not can_create:
+            existing = await RouteService(pool).get_user_routes(user_id)
+            empty_routes = [r for r in existing if not r.get("source_id") and r["is_active"]]
+            if empty_routes:
+                route_list = "\n".join(f"  #{r['id']} → {r.get('target_channel_id','?')}" for r in empty_routes)
+                error_msg += f"\n\nمسیرهای بدون سورس:\n{route_list}\nبا /removeroute [id] حذف کنید و دوباره بسازید."
             await client.send_message(user_id, error_msg)
             return
 

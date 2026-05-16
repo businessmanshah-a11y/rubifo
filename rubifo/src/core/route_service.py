@@ -43,12 +43,13 @@ class RouteService:
         current_count = result["count"] if result else 0
 
         if current_count >= limit:
-            tier_names = {"basic": "پایه", "pro": "حرفه‌ای", "enterprise": "ویژه"}
-            tier_name = tier_names.get(subscription.tier, subscription.tier)
-            return (
-                False,
-                f"شما حداکثر {limit} مسیر برای پلان {tier_name} دارید.",
-            )
+            if subscription:
+                tier_names = {"basic": "پایه", "pro": "حرفه‌ای", "enterprise": "ویژه"}
+                tier_name = tier_names.get(subscription.tier, subscription.tier)
+                msg = f"شما حداکثر {limit} مسیر برای پلان {tier_name} دارید."
+            else:
+                msg = f"در دوره تریال فقط {limit} مسیر مجاز است.\n💳 /buy برای اشتراک بیشتر"
+            return False, msg
 
         return True, ""
 
