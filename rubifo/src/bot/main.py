@@ -76,7 +76,7 @@ class RubikaClient:
         try:
             kwargs: Dict[str, Any] = {"chat_id": str(chat_id), "file_id": file_id, "type": file_type}
             if caption:
-                kwargs["caption"] = caption
+                kwargs["text"] = caption  # rubpy uses 'text' not 'caption'
             await self._bot.send_file(**kwargs)
             return True
         except Exception as e:
@@ -98,6 +98,64 @@ class RubikaClient:
         except Exception as e:
             logger.error(f"Failed to send_music to {chat_id}: {e}")
             raise
+
+    async def forward_hidden(self, from_chat_id: str, message_id: str, to_chat_id: str) -> bool:
+        """Forward a message without 'forwarded from' attribution (hide_sender_name=True)."""
+        try:
+            await self._bot._make_request("forwardMessage", {
+                "from_chat_id": str(from_chat_id),
+                "message_id": str(message_id),
+                "to_chat_id": str(to_chat_id),
+                "hide_sender_name": True,
+            })
+            logger.info(f"Hidden forward msg {message_id} → {to_chat_id}")
+            return True
+        except Exception as e:
+            logger.error(f"forward_hidden failed: {e}")
+            raise
+
+    async def reupload_media(self, file_id: str, message_type: str) -> str:
+        """Download a file from Rubika CDN and re-upload via bot upload endpoint.
+
+        Returns a new bot-owned file_id usable for sendFile to channels.
+        Raises on failure.
+        """
+        import os
+        import tempfile
+
+        _type_map = {
+            "photo": ("Image", ".jpg"),
+            "video": ("Video", ".mp4"),
+            "voice": ("File", ".ogg"),
+            "music": ("File", ".mp3"),
+            "gif":   ("Gif",  ".gif"),
+        }
+        rubpy_type, ext = _type_map.get(message_type, ("File", ".bin"))
+
+        fd, temp_path = tempfile.mkstemp(suffix=ext)
+        os.close(fd)
+        try:
+            logger.info(f"[REUPLOAD] Step 1: getFile for file_id={file_id[:20]}...")
+            download_url = await self._bot.get_file(file_id)
+            logger.info(f"[REUPLOAD] Step 2: CDN URL obtained, downloading...")
+
+            file_bytes = await self._bot.download_file(file_id, as_bytes=True, timeout=30)
+            logger.info(f"[REUPLOAD] Step 3: Downloaded {len(file_bytes)} bytes OK")
+
+            with open(temp_path, "wb") as f:
+                f.write(file_bytes)
+
+            logger.info(f"[REUPLOAD] Step 4: Requesting upload slot ({rubpy_type})...")
+            upload_url = await self._bot.request_send_file(rubpy_type)
+            logger.info(f"[REUPLOAD] Step 5: Uploading to bot CDN...")
+            new_fid = await self._bot.upload_file(upload_url, f"media{ext}", temp_path)
+            logger.info(f"[REUPLOAD] Step 6: SUCCESS — new file_id={new_fid[:20]}...")
+            return new_fid
+        finally:
+            try:
+                os.unlink(temp_path)
+            except Exception:
+                pass
 
     async def get_updates(self, limit: int = 50) -> List[Dict[str, Any]]:
         try:

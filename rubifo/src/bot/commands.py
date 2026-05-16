@@ -161,7 +161,11 @@ async def handle_source_name_input(client, user_id: int, name: str) -> None:
 
 
 async def handle_source_collecting_message(client, user_id: int, message: Dict[str, Any]) -> None:
-    """Store an incoming message as a source post during collecting mode."""
+    """Store an incoming message as a source post during collecting mode.
+
+    Media files are immediately re-uploaded via the bot's own upload endpoint so the stored
+    file_id remains valid for future bot-to-channel sends.
+    """
     state = conversation_states.get(user_id, {})
     source_id = state.get("source_id")
     if not source_id:
@@ -169,8 +173,20 @@ async def handle_source_collecting_message(client, user_id: int, message: Dict[s
 
     try:
         from src.database import pool
-        from src.core.source_service import SourceService
-        post = await SourceService(pool).add_post_from_message(source_id, message)
+        from src.core.source_service import SourceService, _detect_message_type
+
+        msg_type, text, file_id, caption, raw = _detect_message_type(message)
+
+        # Re-upload media immediately so the file_id is bot-owned and never expires
+        if file_id and msg_type != "text":
+            try:
+                file_id = await client.reupload_media(file_id, msg_type)
+            except Exception as e:
+                logger.warning(f"reupload_media failed for user {user_id}: {e} — storing original file_id")
+
+        post = await SourceService(pool).add_post(
+            source_id, msg_type, text, file_id, caption, raw
+        )
 
         state["post_count"] = state.get("post_count", 0) + 1
         count = state["post_count"]
