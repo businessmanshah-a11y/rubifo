@@ -8,7 +8,7 @@ class User:
     """User model representing a Rubifo user."""
 
     id: int
-    user_id: int
+    user_id: str
     username: Optional[str]
     trial_start_at: datetime
     trial_end_at: Optional[datetime]

@@ -12,7 +12,7 @@ class UserService:
         self.db = db
 
     async def get_or_create_user(
-        self, user_id: int, username: Optional[str] = None
+        self, user_id: str, username: Optional[str] = None
     ) -> User:
         """Get existing user or create new one with trial.
 
@@ -41,7 +41,7 @@ class UserService:
 
         return await self.get_user(user_id)
 
-    async def get_user(self, user_id: int) -> Optional[User]:
+    async def get_user(self, user_id: str) -> Optional[User]:
         """Fetch user by user_id.
 
         Args:
@@ -70,7 +70,7 @@ class UserService:
         )
         return [User(**row) for row in results]
 
-    async def check_trial_expiration(self, user_id: int) -> bool:
+    async def check_trial_expiration(self, user_id: str) -> bool:
         """Check if trial has expired and disable routes if needed.
 
         Args:
@@ -99,7 +99,7 @@ class UserService:
 
         return False
 
-    async def update_trial_end(self, user_id: int, hours: int) -> None:
+    async def update_trial_end(self, user_id: str, hours: int) -> None:
         """Update trial end date for a user.
 
         Args:

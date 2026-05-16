@@ -9,7 +9,7 @@ from src.integrations.zarinpal import create_zarinpal_gateway
 pending_payments: Dict[str, Dict[str, Any]] = {}
 
 # In-memory conversation states (user_id -> conversation_data)
-conversation_states: Dict[int, Dict[str, Any]] = {}
+conversation_states: Dict[str, Dict[str, Any]] = {}
 
 
 async def _db_uid(pool, user_id) -> Optional[int]:

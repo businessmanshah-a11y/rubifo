@@ -10,7 +10,7 @@ class RouteService:
         self.db = db
         self.subscription_service = SubscriptionService(db)
 
-    async def can_create_route(self, user_id: int) -> Tuple[bool, str]:
+    async def can_create_route(self, user_id: str) -> Tuple[bool, str]:
         """Check if user can create a new route based on subscription.
 
         Args:
@@ -54,7 +54,7 @@ class RouteService:
         return True, ""
 
     async def create_route(
-        self, user_id: int, source_id: int, target_channel_id: str
+        self, user_id: str, source_id: int, target_channel_id: str
     ) -> int:
         """Create a new route for user.
 
@@ -77,7 +77,7 @@ class RouteService:
         logger.info(f"Route created for user {user_id}: source {source_id} → {target_channel_id}")
         return result["id"]
 
-    async def get_user_routes(self, user_id: int) -> List[Dict[str, Any]]:
+    async def get_user_routes(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all routes for a user.
 
         Args:

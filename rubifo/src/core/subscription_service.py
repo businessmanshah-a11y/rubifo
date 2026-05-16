@@ -12,7 +12,7 @@ class SubscriptionService:
     def __init__(self, db):
         self.db = db
 
-    async def get_active_subscription(self, user_id: int) -> Optional[Subscription]:
+    async def get_active_subscription(self, user_id: str) -> Optional[Subscription]:
         """Get current active subscription for user.
 
         Args:
@@ -28,7 +28,7 @@ class SubscriptionService:
 
         return Subscription(**result) if result else None
 
-    async def check_route_limit(self, user_id: int) -> int:
+    async def check_route_limit(self, user_id: str) -> int:
         """Get maximum routes allowed for user based on subscription.
 
         Args:
@@ -45,7 +45,7 @@ class SubscriptionService:
         return self.TIER_LIMITS.get(sub.tier, 0)
 
     async def create_subscription(
-        self, user_id: int, tier: str, days: int = 30
+        self, user_id: str, tier: str, days: int = 30
     ) -> Subscription:
         """Create a new subscription for user.
 
@@ -78,7 +78,7 @@ class SubscriptionService:
 
         return Subscription(**result)
 
-    async def extend_subscription(self, user_id: int, days: int = 30) -> Subscription:
+    async def extend_subscription(self, user_id: str, days: int = 30) -> Subscription:
         """Extend existing subscription by N days.
 
         Args:
@@ -105,7 +105,7 @@ class SubscriptionService:
 
         return Subscription(**result)
 
-    async def deactivate_subscription(self, user_id: int) -> None:
+    async def deactivate_subscription(self, user_id: str) -> None:
         """Deactivate all subscriptions for user.
 
         Args:

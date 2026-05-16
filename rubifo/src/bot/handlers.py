@@ -14,7 +14,7 @@ BUTTON_COMMAND_MAP = {
 }
 
 
-async def route_message(client, user_id: int, message: dict) -> None:
+async def route_message(client, user_id: str, message: dict) -> None:
     """Route incoming messages to appropriate command handlers."""
     try:
         text = (message.get("text") or "").strip()

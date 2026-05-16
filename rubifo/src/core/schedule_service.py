@@ -12,7 +12,7 @@ class ScheduleService:
 
     async def create_schedule(
         self,
-        user_id: int,
+        user_id: str,
         route_id: int,
         schedule_type: str,
         interval_minutes: Optional[int] = None,
