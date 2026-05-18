@@ -183,7 +183,13 @@ async def handle_source_collecting_message(client, user_id: int, message: Dict[s
             try:
                 file_id = await client.reupload_media(file_id, msg_type)
             except Exception as e:
-                logger.warning(f"reupload_media failed for user {user_id}: {e} — storing original file_id")
+                logger.warning(f"reupload_media failed for user {user_id}: {e} — media not stored")
+                await client.send_message(
+                    user_id,
+                    "❌ آپلود فایل کامل نشد و این پست ذخیره نشد.\n"
+                    "لطفاً همین پست را دوباره ارسال کنید تا فایل با شناسه معتبر بات ذخیره شود."
+                )
+                return
 
         post = await SourceService(pool).add_post(
             source_id, msg_type, text, file_id, caption, raw

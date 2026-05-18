@@ -114,9 +114,8 @@ class ExecutionEngine:
             await queue_service.mark_failed(queue_id, "source_post_not_found")
             return False
 
-        has_message_id = bool(post.raw_data and isinstance(post.raw_data, dict) and post.raw_data.get("message_id"))
-        if not post.file_id_valid and not has_message_id:
-            logger.warning(f"Source post {source_post_id} has no valid file_id or message_id — skipping")
+        if post.message_type != "text" and (not post.file_id_valid or not post.file_id):
+            logger.warning(f"Source post {source_post_id} has no valid file_id — skipping")
             await queue_service.mark_failed(queue_id, "file_id_invalid")
             return False
 
@@ -173,7 +172,7 @@ class ExecutionEngine:
 
         posts = await self.db.fetch(
             "SELECT id FROM source_posts WHERE source_id = $1 "
-            "AND (file_id_valid = true OR raw_data->>'message_id' IS NOT NULL) "
+            "AND (message_type = 'text' OR (file_id_valid = true AND file_id IS NOT NULL)) "
             "ORDER BY order_index ASC",
             source_id,
         )
@@ -264,7 +263,7 @@ class ExecutionEngine:
 
         Primary path: sendFile with bot-owned file_id (no attribution, created at collection time).
         Fallback: re-upload on demand (if file_id is original/expired).
-        Last resort: hidden forward (shows sender name — avoided when possible).
+        Never forwards media as a last resort, because Rubika forwardMessage preserves attribution.
         """
         t = post.message_type
         fid = post.file_id
@@ -301,20 +300,6 @@ class ExecutionEngine:
             except Exception as e:
                 return False, str(e)
 
-        # Last resort: hidden forward (will show sender name — only if no other option)
-        dm_msg_id = None
-        if post.raw_data and isinstance(post.raw_data, dict):
-            dm_msg_id = post.raw_data.get("message_id")
-
-        if dm_msg_id and user_guid:
-            logger.warning(f"[SEND] Falling back to forward_hidden for post {post.id} (will show sender)")
-            try:
-                await self.client.forward_hidden(user_guid, dm_msg_id, target_channel_id)
-                return True, ""
-            except Exception as e:
-                logger.warning(f"[SEND] forward_hidden also failed for post {post.id}: {e}")
-                return False, str(e)
-
         return False, orig_error if fid else "no_file_id"
 
     @staticmethod
@@ -327,11 +312,20 @@ class ExecutionEngine:
             sent = await self.db.fetchrow("SELECT COUNT(*) as c FROM post_queue WHERE status='sent'")
             failed = await self.db.fetchrow("SELECT COUNT(*) as c FROM post_queue WHERE status='failed'")
             pending = await self.db.fetchrow("SELECT COUNT(*) as c FROM post_queue WHERE status='pending'")
+
+            def count_value(row) -> int:
+                if not row:
+                    return 0
+                try:
+                    return row["c"]
+                except KeyError:
+                    return row["count"]
+
             return {
                 "status": "running" if self.is_running else "stopped",
-                "sent": sent["c"] if sent else 0,
-                "failed": failed["c"] if failed else 0,
-                "pending": pending["c"] if pending else 0,
+                "sent": count_value(sent),
+                "failed": count_value(failed),
+                "pending": count_value(pending),
                 "timestamp": datetime.now(),
             }
         except Exception as e:

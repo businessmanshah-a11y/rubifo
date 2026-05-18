@@ -2,6 +2,7 @@
 
 import pytest
 import asyncio
+from types import SimpleNamespace
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 from src.core.execution_engine import ExecutionEngine, create_execution_engine
@@ -167,19 +168,61 @@ class TestExecutionEngine:
 
         assert result is False
 
-    async def test_forward_message_success(self, execution_engine):
-        """Test successful message forwarding."""
-        success, error = await execution_engine._forward_message(111, 222, 999)
+    async def test_send_text_post_success(self, execution_engine, mock_bot_client):
+        """Test successful text post sending."""
+        post = SimpleNamespace(
+            id=1,
+            message_type="text",
+            file_id=None,
+            caption=None,
+            text_content="hello",
+            raw_data={"message_id": "999"},
+        )
+
+        success, error = await execution_engine._send_source_post(post, 222)
 
         assert success is True
         assert error == ""
+        mock_bot_client.send_message.assert_awaited_once_with(222, "hello")
 
-    async def test_forward_message_handles_error(self, execution_engine):
-        """Test message forwarding error handling."""
-        success, error = await execution_engine._forward_message(111, 222, 999)
+    async def test_send_text_post_handles_error(self, execution_engine, mock_bot_client):
+        """Test text post send error handling."""
+        post = SimpleNamespace(
+            id=1,
+            message_type="text",
+            file_id=None,
+            caption=None,
+            text_content="hello",
+            raw_data={"message_id": "999"},
+        )
+        mock_bot_client.send_message.side_effect = Exception("send failed")
 
-        if not success:
-            assert isinstance(error, str)
+        success, error = await execution_engine._send_source_post(post, 222)
+
+        assert success is False
+        assert error == "send failed"
+
+    async def test_invalid_media_is_not_forwarded_with_sender_label(self, execution_engine, mock_bot_client):
+        """Invalid media must fail instead of using forward fallback with attribution."""
+        post = SimpleNamespace(
+            id=10,
+            message_type="photo",
+            file_id="expired-file-id",
+            caption="caption",
+            text_content=None,
+            raw_data={"message_id": "1732781246254391090"},
+        )
+        mock_bot_client.send_file.side_effect = Exception("RubikaAPIError: file_id is not valid")
+        mock_bot_client.forward_hidden = AsyncMock(return_value=True)
+        execution_engine._reupload_file = AsyncMock(side_effect=Exception("Failed to download file: 502"))
+
+        success, error = await execution_engine._send_source_post(
+            post, "@testrubifo2", user_guid="b0HRK4L0ecU03e486bf939548b07c117"
+        )
+
+        assert success is False
+        assert "Failed to download file: 502" in error
+        mock_bot_client.forward_hidden.assert_not_awaited()
 
     async def test_get_execution_stats(self, execution_engine, mock_db):
         """Test getting execution statistics."""
