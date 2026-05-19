@@ -7,10 +7,10 @@ from typing import Literal
 class Subscription:
     """Subscription model representing a user's paid subscription."""
 
-    id: int
-    user_id: int
-    tier: Literal["basic", "pro", "enterprise"]
-    start_date: date
-    end_date: date
-    is_active: bool
-    created_at: date
+    id: int = 0
+    user_id: int = 0
+    tier: Literal["basic", "pro", "enterprise"] = "basic"
+    start_date: date = date.today()
+    end_date: date = date.today()
+    is_active: bool = True
+    created_at: date = date.today()

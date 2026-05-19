@@ -9,24 +9,55 @@ class QueueService:
     def __init__(self, db):
         self.db = db
 
-    async def get_next_pending(self, route_id: int):
+    async def get_next_pending(self, route_id: int, message_type: Optional[str] = None):
         """Get next pending post in FIFO order (by source_date then id).
 
         Joins source_posts to get order_index for proper ordering.
         Returns raw dict so execution engine can access source_post_id.
         """
+        type_filter = "AND sp.message_type = $2" if message_type else ""
+        args = [route_id]
+        if message_type:
+            args.append(message_type)
         result = await self.db.fetchrow(
-            """
+            f"""
             SELECT pq.*, sp.order_index
             FROM post_queue pq
             LEFT JOIN source_posts sp ON pq.source_post_id = sp.id
             WHERE pq.route_id = $1 AND pq.status = 'pending'
+            {type_filter}
             ORDER BY sp.order_index ASC NULLS LAST, pq.id ASC
             LIMIT 1
             """,
-            route_id,
+            *args,
         )
         return dict(result) if result else None
+
+    async def rebuild_pending_from_source(self, route_id: int) -> int:
+        """Rebuild pending queue items from the route source for looped plans."""
+        route = await self.db.fetchrow("SELECT source_id FROM routes WHERE id = $1", route_id)
+        source_id = route["source_id"] if route else None
+        if not source_id:
+            logger.warning(f"Route {route_id} has no source_id for queue rebuild")
+            return 0
+
+        posts = await self.db.fetch(
+            """
+            SELECT id FROM source_posts
+            WHERE source_id = $1
+              AND (message_type = 'text' OR (file_id_valid = true AND file_id IS NOT NULL))
+            ORDER BY order_index ASC
+            """,
+            source_id,
+        )
+        for post in posts:
+            await self.db.execute(
+                "INSERT INTO post_queue (route_id, source_post_id, status) VALUES ($1, $2, 'pending')",
+                route_id,
+                post["id"],
+            )
+        logger.info(f"Rebuilt route {route_id} queue with {len(posts)} posts")
+        return len(posts)
 
     async def mark_sent(self, queue_id: int) -> None:
         """Mark a queued post as successfully sent.

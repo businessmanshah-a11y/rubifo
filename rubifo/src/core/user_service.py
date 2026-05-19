@@ -51,8 +51,10 @@ class UserService:
         Returns:
             User instance or None if not found
         """
+        if isinstance(user_id, int) and user_id < 0:
+            raise ValueError("user_id must be positive")
         result = await self.db.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
-        return User(**result) if result else None
+        return User(**dict(result)) if result else None
 
     async def list_users(self, limit: int = 100, offset: int = 0):
         """List users with pagination.
@@ -69,7 +71,7 @@ class UserService:
             limit,
             offset,
         )
-        return [User(**row) for row in results]
+        return [User(**dict(row)) for row in results]
 
     async def check_trial_expiration(self, user_id: str) -> bool:
         """Check if trial has expired and disable routes if needed.
@@ -115,3 +117,12 @@ class UserService:
             user_id,
         )
         logger.info(f"Trial extended for user {user_id} by {hours} hours")
+
+    async def update_trial_status(self, user_id: str, is_active: bool) -> None:
+        """Update trial active flag for a user."""
+        await self.db.execute(
+            "UPDATE users SET is_trial_active = $1 WHERE user_id = $2",
+            is_active,
+            user_id,
+        )
+        logger.info(f"Trial status updated for user {user_id}: {is_active}")

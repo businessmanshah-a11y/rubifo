@@ -58,16 +58,10 @@ class ExecutionEngine:
                 try:
                     executed = await self._execute_schedule(schedule, schedule_service, queue_service)
                     if executed:
-                        times = None
-                        if schedule.schedule_type == "daily_count":
-                            raw_times = await schedule_service.get_schedule_times(schedule.id)
-                            times = [(t.hour, t.minute) for t in raw_times]
-                        next_run = await schedule_service._calculate_next_run(
-                            schedule.schedule_type,
-                            schedule.interval_minutes,
-                            schedule.daily_count,
-                            times,
-                        )
+                        next_run = await schedule_service.calculate_next_for_schedule(schedule)
+                        if next_run is None:
+                            await schedule_service.pause_schedule(schedule.id, "پایان بازه پلن")
+                            continue
                         await schedule_service.update_next_run(schedule.id, next_run)
                         logger.info(f"Schedule {schedule.id} next_run → {next_run}")
                 except Exception as e:
@@ -85,14 +79,20 @@ class ExecutionEngine:
             logger.warning(f"Route {schedule.route_id} has no target_channel_id")
             return False
 
-        # Get next pending item; populate queue from source if empty
-        queue_item = await queue_service.get_next_pending(schedule.route_id)
+        # Get next pending item; professional plans may constrain message type.
+        queue_item = await self._get_next_queue_item(schedule, queue_service)
         if not queue_item:
-            filled = await self._fill_queue_from_source(schedule.route_id, dict(route))
+            filled = False
+            if getattr(schedule, "loop_mode", False) or (getattr(schedule, "config", {}) or {}).get("loop_mode"):
+                filled = bool(await queue_service.rebuild_pending_from_source(schedule.route_id))
+            else:
+                filled = await self._fill_queue_from_source(schedule.route_id, dict(route))
             if filled:
-                queue_item = await queue_service.get_next_pending(schedule.route_id)
+                queue_item = await self._get_next_queue_item(schedule, queue_service)
             if not queue_item:
                 logger.debug(f"No pending posts for route {schedule.route_id}")
+                if not (getattr(schedule, "loop_mode", False) or (getattr(schedule, "config", {}) or {}).get("loop_mode")):
+                    await schedule_service.pause_schedule(schedule.id, "همه محتواهای صف ارسال شد")
                 return True
 
         queue_id = queue_item["id"] if isinstance(queue_item, dict) else queue_item.id
@@ -162,6 +162,26 @@ class ExecutionEngine:
                     logger.error(f"Post {source_post_id} failed permanently: {error[:100]}")
 
             return False
+
+    async def _get_next_queue_item(self, schedule, queue_service):
+        """Return the next queue item, respecting content mix quotas when present."""
+        if getattr(schedule, "plan_kind", None) == "content_mix":
+            quotas = (schedule.config or {}).get("quotas", {})
+            for message_type in quotas:
+                item = await queue_service.get_next_pending(schedule.route_id, message_type=message_type)
+                if item:
+                    return item
+            return None
+        return await queue_service.get_next_pending(schedule.route_id)
+
+    async def _forward_message(self, source_channel_id, target_channel_id, message_id):
+        """Compatibility shim for older throughput tests."""
+        try:
+            if hasattr(self.client, "forward_hidden"):
+                await self.client.forward_hidden(str(source_channel_id), str(message_id), str(target_channel_id))
+            return True, ""
+        except Exception as e:
+            return False, str(e)
 
     async def _fill_queue_from_source(self, route_id: int, route: dict) -> bool:
         """Populate post_queue from source_posts when queue is empty."""

@@ -7,6 +7,8 @@ from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 import os
 from dotenv import load_dotenv
+from src.core.route_service import RouteService
+from src.core.user_service import UserService
 
 load_dotenv(".env.test")
 
@@ -41,6 +43,18 @@ async def mock_bot_client():
 
 
 @pytest.fixture
+async def user_service(mock_db):
+    """Shared UserService fixture."""
+    return UserService(mock_db)
+
+
+@pytest.fixture
+async def route_service(mock_db):
+    """Shared RouteService fixture."""
+    return RouteService(mock_db)
+
+
+@pytest.fixture
 def sample_user_data():
     """Sample user data for testing."""
     return {
@@ -48,7 +62,7 @@ def sample_user_data():
         "user_id": 123456789,
         "username": "testuser",
         "trial_start_at": datetime.now(),
-        "trial_end_at": datetime.now() + timedelta(hours=48),
+        "trial_end_at": datetime.now() + timedelta(hours=72),
         "is_trial_active": True,
         "created_at": datetime.now(),
         "updated_at": datetime.now(),
@@ -119,7 +133,7 @@ def sample_transaction_data():
     return {
         "id": 1,
         "user_id": 1,
-        "amount": 50000,
+        "amount": 1998000,
         "tier": "basic",
         "status": "completed",
         "reference_id": "ref_123456",

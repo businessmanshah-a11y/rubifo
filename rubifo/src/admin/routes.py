@@ -14,6 +14,30 @@ from src.logger import logger
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
+class _EmptyAdminDb:
+    """Empty async DB used by tests before the real pool is initialized."""
+
+    async def fetchrow(self, query: str, *args):
+        if "AVG(" in query:
+            return {"avg": 0}
+        if "SUM(amount)" in query:
+            return {"count": 0, "total": 0, "total_count": 0, "total_amount": 0}
+        return {"count": 0}
+
+    async def fetch(self, query: str, *args):
+        return []
+
+    async def execute(self, query: str, *args):
+        return None
+
+
+_EMPTY_DB = _EmptyAdminDb()
+
+
+def _db():
+    return db_module.pool or _EMPTY_DB
+
+
 @router.get("/transactions")
 async def get_transactions(
     username: str = Depends(verify_token),
@@ -42,7 +66,7 @@ async def get_transactions(
     """
     logger.info(f"Admin {username} accessing transactions")
 
-    transaction_service = TransactionService(db_module.pool)
+    transaction_service = TransactionService(_db())
 
     # Build query with filters
     query = "SELECT * FROM transactions WHERE 1=1"
@@ -88,7 +112,7 @@ async def get_transactions(
         count_query += f" AND created_at::date <= ${len(count_params) + 1}"
         count_params.append(end_date)
 
-    total_row = await db_module.pool.fetchrow(count_query, *count_params)
+    total_row = await _db().fetchrow(count_query, *count_params)
     total = total_row["count"] if total_row else 0
 
     # Add ordering and pagination
@@ -96,7 +120,7 @@ async def get_transactions(
     params.extend([limit, offset])
 
     # Fetch transactions
-    results = await db_module.pool.fetch(query, *params)
+    results = await _db().fetch(query, *params)
     transactions = [dict(row) for row in results]
 
     return {
@@ -119,7 +143,7 @@ async def get_stats(username: str = Depends(verify_token)) -> dict:
     """
     logger.info(f"Admin {username} accessing stats")
 
-    transaction_service = TransactionService(db_module.pool)
+    transaction_service = TransactionService(_db())
 
     # Get overall stats
     overall_stats = await transaction_service.get_revenue_stats()
@@ -128,17 +152,17 @@ async def get_stats(username: str = Depends(verify_token)) -> dict:
     tier_breakdown = await transaction_service.get_revenue_by_tier()
 
     # Get active subscription count
-    active_subs = await db_module.pool.fetchrow(
+    active_subs = await _db().fetchrow(
         "SELECT COUNT(*) as count FROM subscriptions WHERE is_active = true"
     )
     active_subscriptions = active_subs["count"] if active_subs else 0
 
     # Get total users
-    total_users = await db_module.pool.fetchrow("SELECT COUNT(*) as count FROM users")
+    total_users = await _db().fetchrow("SELECT COUNT(*) as count FROM users")
     total_user_count = total_users["count"] if total_users else 0
 
     # Get transactions by status
-    status_breakdown = await db_module.pool.fetch(
+    status_breakdown = await _db().fetch(
         "SELECT status, COUNT(*) as count FROM transactions GROUP BY status"
     )
     status_stats = {row["status"]: row["count"] for row in status_breakdown}
@@ -199,7 +223,7 @@ async def export_transactions(
     query += " ORDER BY created_at DESC"
 
     # Fetch transactions
-    results = await db_module.pool.fetch(query, *params)
+    results = await _db().fetch(query, *params)
     transactions = [dict(row) for row in results]
 
     # Create CSV
@@ -276,13 +300,13 @@ async def get_routes(
         count_query += f" AND user_id = ${len(count_params) + 1}"
         count_params.append(user_id)
 
-    total_row = await db_module.pool.fetchrow(count_query, *count_params)
+    total_row = await _db().fetchrow(count_query, *count_params)
     total = total_row["count"] if total_row else 0
 
     query += f" LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}"
     params.extend([limit, offset])
 
-    results = await db_module.pool.fetch(query, *params)
+    results = await _db().fetch(query, *params)
     routes = [dict(row) for row in results]
 
     return {
@@ -314,12 +338,12 @@ async def get_route_detail(
     logger.info(f"Admin {username} accessing route {route_id}")
 
     # Get route info
-    route = await db_module.pool.fetchrow("SELECT * FROM routes WHERE id = $1", route_id)
+    route = await _db().fetchrow("SELECT * FROM routes WHERE id = $1", route_id)
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
 
     # Get queue items
-    queue = await db_module.pool.fetch(
+    queue = await _db().fetch(
         "SELECT * FROM post_queue WHERE route_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
         route_id,
         limit,
@@ -327,7 +351,7 @@ async def get_route_detail(
     )
 
     # Get queue stats
-    stats = await db_module.pool.fetchrow(
+    stats = await _db().fetchrow(
         """
         SELECT status, COUNT(*) as count FROM post_queue
         WHERE route_id = $1 GROUP BY status
@@ -358,12 +382,12 @@ async def delete_route(
     logger.info(f"Admin {username} deleting route {route_id}")
 
     # Check if route exists
-    route = await db_module.pool.fetchrow("SELECT * FROM routes WHERE id = $1", route_id)
+    route = await _db().fetchrow("SELECT * FROM routes WHERE id = $1", route_id)
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
 
     # Deactivate route
-    await db_module.pool.execute("UPDATE routes SET is_active = false WHERE id = $1", route_id)
+    await _db().execute("UPDATE routes SET is_active = false WHERE id = $1", route_id)
 
     logger.info(f"Route {route_id} deactivated by admin {username}")
 
@@ -399,10 +423,10 @@ async def get_users(
     """
 
     # Count total users
-    total_row = await db_module.pool.fetchrow("SELECT COUNT(*) as count FROM users")
+    total_row = await _db().fetchrow("SELECT COUNT(*) as count FROM users")
     total = total_row["count"] if total_row else 0
 
-    results = await db_module.pool.fetch(query, limit, offset)
+    results = await _db().fetch(query, limit, offset)
     users = [dict(row) for row in results]
 
     return {
@@ -429,24 +453,24 @@ async def get_user_detail(
     logger.info(f"Admin {username} accessing user {user_id} details")
 
     # Get user
-    user = await db_module.pool.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+    user = await _db().fetchrow("SELECT * FROM users WHERE id = $1", user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Get subscriptions
-    subscriptions = await db_module.pool.fetch(
+    subscriptions = await _db().fetch(
         "SELECT * FROM subscriptions WHERE user_id = $1 ORDER BY created_at DESC",
         user_id,
     )
 
     # Get routes
-    routes = await db_module.pool.fetch(
+    routes = await _db().fetch(
         "SELECT * FROM routes WHERE user_id = $1 ORDER BY created_at DESC",
         user_id,
     )
 
     # Get recent transactions
-    transactions = await db_module.pool.fetch(
+    transactions = await _db().fetch(
         """
         SELECT * FROM transactions WHERE user_id = $1
         ORDER BY created_at DESC LIMIT 10
@@ -475,25 +499,25 @@ async def get_dashboard_summary(username: str = Depends(verify_token)) -> dict:
     logger.info(f"Admin {username} accessing dashboard summary")
 
     # Total users
-    total_users = await db_module.pool.fetchrow("SELECT COUNT(*) as count FROM users")
+    total_users = await _db().fetchrow("SELECT COUNT(*) as count FROM users")
 
     # Active subscriptions
-    active_subs = await db_module.pool.fetchrow(
+    active_subs = await _db().fetchrow(
         "SELECT COUNT(*) as count FROM subscriptions WHERE is_active = true"
     )
 
     # Active routes
-    active_routes = await db_module.pool.fetchrow(
+    active_routes = await _db().fetchrow(
         "SELECT COUNT(*) as count FROM routes WHERE is_active = true"
     )
 
     # Pending posts in queues
-    pending_posts = await db_module.pool.fetchrow(
+    pending_posts = await _db().fetchrow(
         "SELECT COUNT(*) as count FROM post_queue WHERE status = 'pending'"
     )
 
     # Revenue (completed transactions)
-    revenue = await db_module.pool.fetchrow(
+    revenue = await _db().fetchrow(
         """
         SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total
         FROM transactions WHERE status = 'completed'
@@ -502,7 +526,7 @@ async def get_dashboard_summary(username: str = Depends(verify_token)) -> dict:
 
     # Trial users
     from datetime import datetime
-    trial_users = await db_module.pool.fetchrow(
+    trial_users = await _db().fetchrow(
         """
         SELECT COUNT(*) as count FROM users
         WHERE is_trial_active = true AND trial_end_at > $1
@@ -594,14 +618,14 @@ async def get_logs(
         count_query += f" AND created_at::date <= ${len(count_params) + 1}"
         count_params.append(end_date)
 
-    total_row = await db_module.pool.fetchrow(count_query, *count_params)
+    total_row = await _db().fetchrow(count_query, *count_params)
     total = total_row["count"] if total_row else 0
 
     # Add ordering and pagination
     query += f" ORDER BY created_at DESC LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}"
     params.extend([limit, offset])
 
-    results = await db_module.pool.fetch(query, *params)
+    results = await _db().fetch(query, *params)
     logs = [dict(row) for row in results]
 
     return {
@@ -629,28 +653,28 @@ async def get_performance_metrics(username: str = Depends(verify_token)) -> dict
     one_hour_ago = datetime.now() - timedelta(hours=1)
     one_day_ago = datetime.now() - timedelta(days=1)
 
-    messages_1h = await db_module.pool.fetchrow(
+    messages_1h = await _db().fetchrow(
         "SELECT COUNT(*) as count FROM post_queue WHERE status = 'sent' AND created_at > $1",
         one_hour_ago,
     )
 
-    messages_24h = await db_module.pool.fetchrow(
+    messages_24h = await _db().fetchrow(
         "SELECT COUNT(*) as count FROM post_queue WHERE status = 'sent' AND created_at > $1",
         one_day_ago,
     )
 
     # Failed messages
-    failed_messages = await db_module.pool.fetchrow(
+    failed_messages = await _db().fetchrow(
         "SELECT COUNT(*) as count FROM post_queue WHERE status = 'failed'"
     )
 
     # Average retry count
-    avg_retry = await db_module.pool.fetchrow(
+    avg_retry = await _db().fetchrow(
         "SELECT AVG(retry_count) as avg FROM post_queue"
     )
 
     # Queue performance
-    queue_stats = await db_module.pool.fetch(
+    queue_stats = await _db().fetch(
         """
         SELECT route_id, COUNT(*) as count,
                ROUND(AVG(EXTRACT(EPOCH FROM (created_at - NOW())))) as avg_age_seconds
@@ -663,7 +687,7 @@ async def get_performance_metrics(username: str = Depends(verify_token)) -> dict
     )
 
     # Subscription tier distribution
-    tier_distribution = await db_module.pool.fetch(
+    tier_distribution = await _db().fetch(
         """
         SELECT tier, COUNT(*) as count
         FROM subscriptions

@@ -114,6 +114,39 @@ class TestExecutionEngine:
 
         assert isinstance(result, bool)
 
+    async def test_execute_schedule_sends_pending_text_post(self, execution_engine, mock_db, mock_bot_client):
+        """A due schedule loads the queued source post and sends it."""
+        schedule = Schedule(
+            id=1,
+            route_id=1,
+            user_id=1,
+            schedule_type="interval",
+            interval_minutes=30,
+            next_run=datetime.now(),
+            is_active=True,
+        )
+        mock_db.fetchrow.side_effect = [
+            {"id": 1, "user_id": 123456789, "target_channel_id": 222, "is_active": True},
+            {"id": 10, "route_id": 1, "source_post_id": 99, "status": "pending", "retry_count": 0},
+            {
+                "id": 99,
+                "source_id": 5,
+                "order_index": 0,
+                "message_type": "text",
+                "text_content": "hello",
+                "file_id": None,
+                "caption": None,
+                "raw_data": None,
+                "file_id_valid": True,
+                "added_at": datetime.now(),
+            },
+        ]
+
+        result = await execution_engine._execute_schedule(schedule, ScheduleService(mock_db), QueueService(mock_db))
+
+        assert result is True
+        mock_bot_client.send_message.assert_awaited_with(222, "hello")
+
     async def test_execute_schedule_inactive_route(self, execution_engine, mock_db):
         """Test execution skips inactive routes."""
         schedule_data = {

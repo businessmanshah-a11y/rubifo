@@ -44,7 +44,7 @@ async def serve_html_page(page: str):
 
 @app.get("/")
 async def root():
-    return FileResponse(static_dir / "login.html", media_type="text/html")
+    return FileResponse(static_dir / "index.html", media_type="text/html")
 
 
 @app.get("/admin/")

@@ -141,7 +141,7 @@
 - **Description**:
   - Create src/models/subscription.py
   - Create src/core/subscription_service.py
-  - Implement get_active_subscription(), check_route_limit()
+  - Implement get_active_subscription(), check_destination_limit()
 - **Output**: subscription_service.py
 - **Dependencies**: T06
 - **Status**: ⏳ Pending
@@ -210,7 +210,7 @@
 - **Dependencies**: T14
 - **Status**: ⏳ Pending
 
-### T16: Implement subscription tier enforcement (route limits)
+### T16: Implement subscription tier enforcement (destination limits)
 - **Owner**: Backend
 - **Duration**: 2 hours
 - **Description**:
@@ -873,7 +873,7 @@
   - Mock Zarinpal API responses
   - Test polling verification
   - Test subscription activation
-  - Test route limit enforcement
+  - Test destination limit enforcement
 - **Output**: test_payment_flow.py
 - **Dependencies**: T63، T13
 - **Status**: ⏳ Pending
@@ -989,4 +989,3 @@
 - P8: دستورالعمل‌های AI (CLAUDE.md، AGENTS.md)
 - P9: چک‌لیست‌های deployment و محتوا
 - شروع اجرا از T01
-

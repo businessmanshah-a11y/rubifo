@@ -7,11 +7,11 @@ from typing import Optional
 class User:
     """User model representing a Rubifo user."""
 
-    id: int
-    user_id: str
-    username: Optional[str]
-    trial_start_at: datetime
-    trial_end_at: Optional[datetime]
-    is_trial_active: bool
-    created_at: datetime
-    updated_at: datetime
+    id: int = 0
+    user_id: str = ""
+    username: Optional[str] = None
+    trial_start_at: datetime = datetime.now()
+    trial_end_at: Optional[datetime] = None
+    is_trial_active: bool = True
+    created_at: datetime = datetime.now()
+    updated_at: datetime = datetime.now()

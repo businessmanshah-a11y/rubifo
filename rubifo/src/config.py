@@ -24,7 +24,7 @@ LOG_FILE = os.getenv("LOG_FILE", "rubifo.log")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # Trial Configuration
-TRIAL_DURATION_HOURS = int(os.getenv("TRIAL_DURATION_HOURS", "48"))
+TRIAL_DURATION_HOURS = int(os.getenv("TRIAL_DURATION_HOURS", "72"))
 TRIAL_REMINDER_HOURS = int(os.getenv("TRIAL_REMINDER_HOURS", "24"))
 
 # Rubika User Session (for reading channel posts)
@@ -39,7 +39,19 @@ SCHEDULE_CHECK_INTERVAL = int(os.getenv("SCHEDULE_CHECK_INTERVAL", "30"))
 
 # Subscription Tiers
 SUBSCRIPTION_TIERS = {
-    "basic": {"max_routes": 1, "price_monthly": 50000},
-    "pro": {"max_routes": 3, "price_monthly": 120000},
-    "enterprise": {"max_routes": 10, "price_monthly": 350000},
+    "basic": {
+        "display_name_fa": "شروع حرفه‌ای",
+        "max_destinations": 1,
+        "price_monthly": 1998000,
+    },
+    "pro": {
+        "display_name_fa": "رشد",
+        "max_destinations": 3,
+        "price_monthly": 3998000,
+    },
+    "enterprise": {
+        "display_name_fa": "مقیاس",
+        "max_destinations": 10,
+        "price_monthly": 9998000,
+    },
 }

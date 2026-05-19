@@ -47,19 +47,20 @@ class ZarinpalGateway:
                 ) as resp:
                     data = await resp.json()
 
-                    if data.get("Status") == 100 or data.get("Status") == "100":
-                        authority = data.get("Authority")
+                    status_value = data.get("Status", data.get("result"))
+                    if status_value == 100 or status_value == "100":
+                        authority = data.get("Authority") or data.get("authority")
                         url = f"{self.base_url}/StartPay/{authority}"
                         logger.info(
                             f"Payment request created: {authority}, amount: {amount}"
                         )
                         return True, url
 
-                    status = data.get("Status")
+                    status = data.get("Status", data.get("result"))
                     logger.error(f"Zarinpal error: {status}")
                     return False, f"Payment request failed: {status}"
 
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, TimeoutError) as e:
             logger.error(f"Zarinpal HTTP error: {e}")
             return False, f"Connection error: {str(e)}"
         except Exception as e:
@@ -89,16 +90,17 @@ class ZarinpalGateway:
                 ) as resp:
                     data = await resp.json()
 
-                    if data.get("Status") == 100 or data.get("Status") == "100":
-                        ref_id = data.get("RefID", "")
+                    status_value = data.get("Status", data.get("result"))
+                    if status_value == 100 or status_value == "100":
+                        ref_id = data.get("RefID", data.get("ref_id", ""))
                         logger.info(f"Payment verified: {authority}, RefID: {ref_id}")
                         return True, ref_id
 
-                    status = data.get("Status")
+                    status = data.get("Status", data.get("result"))
                     logger.warning(f"Payment verification failed: {status}")
                     return False, f"Verification failed: {status}"
 
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, TimeoutError) as e:
             logger.error(f"Zarinpal verification HTTP error: {e}")
             return False, f"Connection error: {str(e)}"
         except Exception as e:

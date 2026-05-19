@@ -3,6 +3,7 @@
 import pytest
 import asyncio
 import time
+from unittest.mock import patch
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
 from src.core.queue_service import QueueService
@@ -174,7 +175,7 @@ class TestConcurrentUserOperations:
 
         # Simulate 20 concurrent route creations
         tasks = [
-            route_service.can_create_route(i)
+            route_service.can_create_route(i, f"@destination_{i}")
             for i in range(20)
         ]
 
@@ -306,7 +307,7 @@ class TestResponseTimeMetrics:
 
         start = time.time()
 
-        with __import__("unittest.mock").patch("src.database.pool", mock_db):
+        with patch("src.database.pool", mock_db):
             await commands.handle_start(mock_bot_client, 123456789, "user")
 
         duration = time.time() - start
@@ -326,7 +327,7 @@ class TestResponseTimeMetrics:
 
         start = time.time()
 
-        with __import__("unittest.mock").patch("src.database.pool", mock_db):
+        with patch("src.database.pool", mock_db):
             await commands.handle_listroutes(mock_bot_client, 123456789)
 
         duration = time.time() - start

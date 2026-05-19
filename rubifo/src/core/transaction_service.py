@@ -34,8 +34,9 @@ class TransactionService:
             reference_id,
         )
 
-        logger.info(f"Transaction created: {result['id']} for user {user_id}")
-        return result["id"]
+        transaction_id = result["id"] if result and "id" in result else 0
+        logger.info(f"Transaction created: {transaction_id} for user {user_id}")
+        return transaction_id
 
     async def get_transactions(
         self,
@@ -112,8 +113,8 @@ class TransactionService:
         )
 
         return {
-            "total_count": result["total_count"],
-            "total_amount": result["total_amount"],
+            "total_count": result.get("total_count", result.get("count", 0)) if result else 0,
+            "total_amount": result.get("total_amount", result.get("total", 0)) if result else 0,
         }
 
     async def get_revenue_by_tier(self) -> List[Dict[str, Any]]:

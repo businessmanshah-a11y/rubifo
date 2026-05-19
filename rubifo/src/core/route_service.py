@@ -1,6 +1,20 @@
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any, Optional
 from src.core.subscription_service import SubscriptionService
 from src.logger import logger
+from src.utils import now_tehran
+
+
+def _row_get(row: Any, key: str, default: Any = None) -> Any:
+    """Read a value from asyncpg records or dict-like test doubles."""
+    if not row:
+        return default
+    if hasattr(row, "get"):
+        value = row.get(key)
+    elif key in row:
+        value = row[key]
+    else:
+        value = default
+    return default if value is None else value
 
 
 class RouteService:
@@ -10,48 +24,96 @@ class RouteService:
         self.db = db
         self.subscription_service = SubscriptionService(db)
 
-    async def can_create_route(self, user_id: str) -> Tuple[bool, str]:
-        """Check if user can create a new route based on subscription.
+    async def can_create_route(
+        self, user_id: str, target_channel_id: str
+    ) -> Tuple[bool, Optional[str]]:
+        """Check if user can create a route to the target destination.
 
         Args:
             user_id: Rubika user ID
+            target_channel_id: Normalized destination channel id
 
         Returns:
             Tuple of (can_create, error_message_if_no)
         """
-        # Get active subscription
         subscription = await self.subscription_service.get_active_subscription(user_id)
 
-        if not subscription:
-            from src.database import fetchrow
-            user = await fetchrow(
-                "SELECT is_trial_active FROM users WHERE user_id = $1", user_id
-            )
-            if not user or not user["is_trial_active"]:
-                return False, "⚠️ تریال یا اشتراک فعالی ندارید.\n💳 /buy برای خرید اشتراک"
-            limit = 1
-        else:
-            # Get route limit for tier
+        if subscription:
             limit = self.subscription_service.TIER_LIMITS.get(subscription.tier, 0)
+            access_state = "paid"
+        else:
+            access_state = "expired"
+            try:
+                user = await self.db.fetchrow(
+                    "SELECT is_trial_active, trial_end_at FROM users WHERE user_id = $1",
+                    user_id,
+                )
+            except Exception:
+                user = None
+            if user:
+                trial_end = user.get("trial_end_at") if hasattr(user, "get") else user["trial_end_at"]
+                is_trial_active = (
+                    user.get("is_trial_active") if hasattr(user, "get") else user["is_trial_active"]
+                )
+                if is_trial_active and trial_end and trial_end > now_tehran():
+                    access_state = "trial"
+            if access_state != "trial":
+                return False, (
+                    "⚠️ تریال یا اشتراک فعالی ندارید.\n"
+                    "💳 /buy برای خرید اشتراک و فعال‌سازی کانال‌های مقصد"
+                )
+            limit = 1
 
-        # Count existing active routes
+        existing_destination = await self.db.fetchrow(
+            """
+            SELECT EXISTS(
+                SELECT 1 FROM routes
+                WHERE user_id = $1 AND target_channel_id = $2 AND is_active = true
+            ) AS exists
+            """,
+            user_id,
+            target_channel_id,
+        )
+        destination_exists = bool(_row_get(existing_destination, "exists", False))
+        if destination_exists:
+            return True, None
+
+        # Count existing active destinations; multiple routes to the same
+        # destination should only consume one subscription slot.
         result = await self.db.fetchrow(
-            "SELECT COUNT(*) as count FROM routes WHERE user_id = $1 AND is_active = true",
+            """
+            SELECT COUNT(DISTINCT target_channel_id) as count
+            FROM routes
+            WHERE user_id = $1 AND is_active = true
+            """,
             user_id,
         )
 
-        current_count = result["count"] if result else 0
+        current_count = _row_get(result, "count", 0)
 
         if current_count >= limit:
             if subscription:
-                tier_names = {"basic": "پایه", "pro": "حرفه‌ای", "enterprise": "ویژه"}
+                tier_names = {
+                    "basic": "شروع حرفه‌ای",
+                    "pro": "رشد",
+                    "enterprise": "مقیاس",
+                }
                 tier_name = tier_names.get(subscription.tier, subscription.tier)
-                msg = f"شما حداکثر {limit} مسیر برای پلان {tier_name} دارید."
+                if subscription.tier == "basic":
+                    msg = (
+                        "پلن شروع حرفه‌ای فقط 1 کانال مقصد فعال دارد.\n"
+                        "برای کانال‌های مقصد بیشتر پلن رشد یا مقیاس را بخرید. 💳 /buy"
+                    )
+                else:
+                    msg = f"شما حداکثر {limit} کانال مقصد برای پلن {tier_name} دارید."
             else:
-                msg = f"در دوره تریال فقط {limit} مسیر مجاز است.\n💳 /buy برای اشتراک بیشتر"
+                msg = (
+                    "در تریال فقط یک کانال مقصد دارید؛ برای کانال‌های مقصد بیشتر پلن رشد یا مقیاس را بخرید.\n"
+                    "💳 /buy"
+                )
             return False, msg
 
-        return True, ""
+        return True, None
 
     async def create_route(
         self, user_id: str, source_id: int, target_channel_id: str

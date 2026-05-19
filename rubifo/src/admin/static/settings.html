@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rubifo Admin - Settings</title>
+    <title>Rubifo — Settings</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -11,16 +11,16 @@
         <!-- Sidebar Navigation -->
         <nav class="sidebar">
             <div class="logo">
-                <h2>🤖 Rubifo</h2>
-                <p>Admin Panel</p>
+                <h2>Rubifo</h2>
+                <p>Admin</p>
             </div>
 
             <ul class="nav-menu">
-                <li><a href="/admin/dashboard.html">📊 Dashboard</a></li>
-                <li><a href="/admin/users.html">👥 Users</a></li>
-                <li><a href="/admin/logs.html">📋 Logs</a></li>
-                <li><a href="/admin/performance.html">⚡ Performance</a></li>
-                <li><a href="/admin/settings.html" class="active">⚙️ Settings</a></li>
+                <li><a href="/admin/dashboard.html">Dashboard</a></li>
+                <li><a href="/admin/users.html">Users</a></li>
+                <li><a href="/admin/logs.html">Logs</a></li>
+                <li><a href="/admin/performance.html">Performance</a></li>
+                <li><a href="/admin/settings.html" class="active">Settings</a></li>
             </ul>
 
             <div class="user-info">
@@ -37,7 +37,7 @@
 
             <!-- System Settings -->
             <div class="settings-section">
-                <h2>🔧 System Settings</h2>
+                <h2>System Settings</h2>
 
                 <div class="setting-item">
                     <h3>Bot Configuration</h3>
@@ -46,9 +46,9 @@
                         <label>
                             <span>Bot Status:</span>
                             <select id="botStatus">
-                                <option value="running">✅ Running</option>
-                                <option value="stopped">⏹️ Stopped</option>
-                                <option value="maintenance">🔧 Maintenance</option>
+                                <option value="running">Running</option>
+                                <option value="stopped">Stopped</option>
+                                <option value="maintenance">Maintenance</option>
                             </select>
                         </label>
                     </div>
@@ -58,8 +58,8 @@
                     <h3>Database Settings</h3>
                     <p>Database connection and maintenance</p>
                     <div class="setting-controls">
-                        <button class="btn btn-secondary" onclick="runBackup()">💾 Backup Database</button>
-                        <button class="btn btn-secondary" onclick="optimizeDB()">⚡ Optimize DB</button>
+                        <button class="btn btn-secondary" onclick="runBackup()">Backup Database</button>
+                        <button class="btn btn-secondary" onclick="optimizeDB()">Optimize DB</button>
                     </div>
                 </div>
 
@@ -75,7 +75,7 @@
 
             <!-- Subscription Settings -->
             <div class="settings-section">
-                <h2>💳 Subscription Settings</h2>
+                <h2>Subscription Settings</h2>
 
                 <div class="setting-item">
                     <h3>Tier Configuration</h3>
@@ -90,21 +90,21 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td>Basic</td>
+                                <td>شروع حرفه‌ای</td>
                                 <td>1</td>
-                                <td>50,000 تومان</td>
+                                <td>1,998,000 تومان</td>
                                 <td><button class="btn btn-small" onclick="editTier('basic')">Edit</button></td>
                             </tr>
                             <tr>
-                                <td>Pro</td>
+                                <td>رشد</td>
                                 <td>3</td>
-                                <td>120,000 تومان</td>
+                                <td>3,998,000 تومان</td>
                                 <td><button class="btn btn-small" onclick="editTier('pro')">Edit</button></td>
                             </tr>
                             <tr>
-                                <td>Enterprise</td>
+                                <td>مقیاس</td>
                                 <td>10</td>
-                                <td>350,000 تومان</td>
+                                <td>9,998,000 تومان</td>
                                 <td><button class="btn btn-small" onclick="editTier('enterprise')">Edit</button></td>
                             </tr>
                         </tbody>
@@ -125,7 +125,7 @@
 
             <!-- Security Settings -->
             <div class="settings-section">
-                <h2>🔐 Security Settings</h2>
+                <h2>Security</h2>
 
                 <div class="setting-item">
                     <h3>Admin Account</h3>
@@ -155,14 +155,14 @@
 
             <!-- Support & Documentation -->
             <div class="settings-section">
-                <h2>📚 Support & Documentation</h2>
+                <h2>Support & Documentation</h2>
 
                 <div class="setting-item">
                     <h3>Resources</h3>
                     <ul>
-                        <li><a href="https://docs.rubifo.ir" target="_blank">📖 Documentation</a></li>
-                        <li><a href="https://api.rubifo.ir/docs" target="_blank">🔗 API Reference</a></li>
-                        <li><a href="mailto:support@rubifo.ir">✉️ Support Email</a></li>
+                        <li><a href="https://docs.rubifo.ir" target="_blank">Documentation</a></li>
+                        <li><a href="https://api.rubifo.ir/docs" target="_blank">API Reference</a></li>
+                        <li><a href="mailto:support@rubifo.ir">Support Email</a></li>
                     </ul>
                 </div>
 

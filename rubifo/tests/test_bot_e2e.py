@@ -56,9 +56,11 @@ class TestBotBuyCommand:
             await commands.handle_buy(mock_bot_client, 123456789)
 
         assert mock_bot_client.send_message.called
-        call_args = mock_bot_client.send_message.call_args
+        message = mock_bot_client.send_message.call_args.args[1]
         # Should show tier options
-        assert "پایه" in str(call_args) or "Basic" in str(call_args)
+        assert "شروع حرفه‌ای" in message
+        assert "1,998,000" in message
+        assert "حذف ادمین بارگذاری" in message
 
     async def test_buy_command_existing_subscription(self, mock_bot_client, mock_db):
         """Test /buy with existing subscription."""
@@ -80,13 +82,63 @@ class TestBotRouteCommands:
 
     async def test_addroute_conversation_flow(self, mock_bot_client, mock_db):
         """Test /addroute command conversation."""
-        mock_db.fetchrow.return_value = {"tier": "basic"}
+        mock_db.fetchrow.return_value = {"id": 1, "user_id": 123456789}
         mock_db.fetch.return_value = []
 
         with patch("src.database.pool", mock_db):
             await commands.handle_addroute(mock_bot_client, 123456789)
 
         assert mock_bot_client.send_message.called
+        message = mock_bot_client.send_message.call_args.args[1]
+        assert "ابتدا باید یک سورس بسازید" in message
+
+    async def test_addroute_does_not_check_destination_limit_before_target_input(self, mock_bot_client, mock_db):
+        """Route creation asks for a source before enforcing destination limits."""
+        mock_db.fetchrow.return_value = {"id": 1, "user_id": 123456789}
+        mock_db.fetch.return_value = [
+            {
+                "id": 10,
+                "user_id": 1,
+                "name": "کمپین",
+                "is_active": True,
+                "created_at": datetime.now(),
+            }
+        ]
+
+        with patch("src.database.pool", mock_db):
+            with patch("src.core.source_service.SourceService.count_posts", new_callable=AsyncMock) as mock_count:
+                with patch("src.core.route_service.RouteService.can_create_route", new_callable=AsyncMock) as mock_can_create:
+                    mock_count.return_value = 4
+                    await commands.handle_addroute(mock_bot_client, 123456789)
+
+        mock_can_create.assert_not_called()
+        message = mock_bot_client.send_message.call_args.args[1]
+        assert "کدام سورس" in message
+
+    async def test_addroute_blocks_new_destination_after_target_input_when_limit_full(self, mock_bot_client, mock_db):
+        """Destination limit is enforced after target normalization."""
+        user_id = 123456789
+        commands.conversation_states[user_id] = {
+            "command": "addroute",
+            "step": 2,
+            "source_id": 10,
+            "source_name": "کمپین",
+        }
+
+        with patch("src.database.pool", mock_db):
+            with patch("src.core.route_service.RouteService.can_create_route", new_callable=AsyncMock) as mock_can_create:
+                with patch("src.core.route_service.RouteService.create_route", new_callable=AsyncMock) as mock_create:
+                    mock_can_create.return_value = (False, "شما حداکثر 1 کانال مقصد دارید.")
+                    await commands.handle_addroute_conversation(
+                        mock_bot_client,
+                        user_id,
+                        "https://rubika.ir/new_dest",
+                    )
+
+        mock_can_create.assert_awaited_once_with(user_id, "@new_dest")
+        mock_create.assert_not_called()
+        message = mock_bot_client.send_message.call_args.args[1]
+        assert "کانال مقصد" in message
 
     async def test_listroutes_empty(self, mock_bot_client, mock_db):
         """Test /listroutes with no routes."""
@@ -129,6 +181,63 @@ class TestBotPlanCommands:
 
         assert mock_bot_client.send_message.called
 
+    async def test_trial_user_sees_professional_plan_lock(self, mock_bot_client, mock_db):
+        """Trial users can see professional options but cannot enter them."""
+        user_id = 123456789
+        commands.conversation_states[user_id] = {
+            "command": "addplan_type_select",
+            "route_id": 1,
+        }
+        mock_db.fetchrow.side_effect = [
+            None,
+            {"is_trial_active": True, "trial_end_at": datetime.now() + timedelta(hours=24)},
+        ]
+
+        with patch("src.database.pool", mock_db):
+            await commands.handle_addplan_type_selection(mock_bot_client, user_id, "3")
+
+        assert commands.conversation_states[user_id]["command"] == "addplan_type_select"
+        message = mock_bot_client.send_message.call_args.args[1]
+        assert "در تریال" in message
+        assert "پلن‌های حرفه‌ای بعد از خرید فعال می‌شوند" in message
+
+    async def test_paid_user_can_enter_professional_plan_flow(self, mock_bot_client, mock_db):
+        """Paid users can create professional plans."""
+        user_id = 123456789
+        commands.conversation_states[user_id] = {
+            "command": "addplan_type_select",
+            "route_id": 1,
+        }
+        mock_db.fetchrow.return_value = {
+            "tier": "pro",
+            "end_date": datetime.now().date() + timedelta(days=20),
+        }
+
+        with patch("src.database.pool", mock_db):
+            await commands.handle_addplan_type_selection(mock_bot_client, user_id, "3")
+
+        assert commands.conversation_states[user_id]["command"] == "addplan_professional_input"
+        assert commands.conversation_states[user_id]["plan_kind"] == "campaign"
+
+    async def test_trial_daily_count_auto_distributes_times(self, mock_bot_client, mock_db):
+        """Simple daily count asks only for count and auto-generates distribution times."""
+        user_id = 123456789
+        commands.conversation_states[user_id] = {
+            "command": "addplan_daily_count",
+            "route_id": 1,
+            "sub_step": 1,
+        }
+
+        with patch("src.database.pool", mock_db):
+            with patch("src.core.schedule_service.ScheduleService.create_schedule", new_callable=AsyncMock) as mock_create:
+                mock_create.return_value.next_run = datetime.now() + timedelta(hours=1)
+                await commands.handle_addplan_daily_count_input(mock_bot_client, user_id, "3")
+
+        _, kwargs = mock_create.call_args
+        assert kwargs["daily_count"] == 3
+        assert kwargs["times"] == [(9, 0), (13, 40), (18, 20)]
+        assert user_id not in commands.conversation_states
+
     async def test_listplans_empty(self, mock_bot_client, mock_db):
         """Test /listplans with no plans."""
         mock_db.fetch.return_value = []
@@ -166,9 +275,11 @@ class TestBotUtilityCommands:
         await commands.handle_help(mock_bot_client, 123456789)
 
         assert mock_bot_client.send_message.called
-        call_args = mock_bot_client.send_message.call_args
+        message = mock_bot_client.send_message.call_args.args[1]
         # Should contain help text
-        assert "دستور" in str(call_args) or "command" in str(call_args)
+        assert "دستور" in message or "command" in message
+        assert "حذف ادمین بارگذاری" in message
+        assert "آپلود دستی" in message
 
     async def test_calendar_command(self, mock_bot_client, mock_db):
         """Test /calendar command."""

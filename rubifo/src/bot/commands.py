@@ -5,12 +5,73 @@ from src.logger import logger
 from src.config import SUBSCRIPTION_TIERS
 from src.utils import fmt_tehran
 from src.integrations.zarinpal import create_zarinpal_gateway
+from src.core.professional_schedule import (
+    CampaignPlanConfig,
+    ContentMixPlanConfig,
+    MultiStagePlanConfig,
+    PersianQuickPlanParser,
+    SmartQueuePlanConfig,
+    TimingPatternPlanConfig,
+    describe_plan,
+    expand_weekday_range,
+    format_hhmm,
+)
 
 # In-memory storage for pending payments (authority -> {tier, amount, user_id})
 pending_payments: Dict[str, Dict[str, Any]] = {}
 
 # In-memory conversation states (user_id -> conversation_data)
 conversation_states: Dict[str, Dict[str, Any]] = {}
+
+
+def _format_price(amount: int) -> str:
+    """Format toman prices for Farsi bot messages."""
+    return f"{amount:,}"
+
+
+def _tier_name(tier: str) -> str:
+    return SUBSCRIPTION_TIERS.get(tier, {}).get("display_name_fa", tier)
+
+
+def _tier_price(tier: str) -> int:
+    return SUBSCRIPTION_TIERS.get(tier, {}).get("price_monthly", 0)
+
+
+def _plan_type_menu() -> str:
+    return (
+        "📅 نوع برنامه را انتخاب کنید:\n\n"
+        "1️⃣ بازه‌ای — هر N دقیقه یک پیام\n"
+        "2️⃣ روزانه ساده — فقط تعداد پست در روز\n\n"
+        "3️⃣ کمپین حرفه‌ای — تاریخ، روزهای هفته، بازه ارسال\n"
+        "4️⃣ صف هوشمند — ادامه خودکار و حالت چرخشی\n"
+        "5️⃣ الگوی زمانی — انسانی/فروشگاهی/کم‌ریسک/لانچ\n"
+        "6️⃣ چندمرحله‌ای — شدت ارسال متغیر در زمان\n"
+        "7️⃣ ترکیب محتوا — سهمیه متن/عکس/ویدیو/فایل\n"
+        "8️⃣ دستور سریع فارسی\n\n"
+        "در تریال گزینه‌های 3 تا 8 قابل مشاهده‌اند اما بعد از خرید فعال می‌شوند.\n"
+        "عدد 1 تا 8 را وارد کنید:"
+    )
+
+
+def _professional_plan_locked_message() -> str:
+    return (
+        "🔒 این پلن حرفه‌ای در تریال قفل است.\n\n"
+        "در تریال می‌توانید هر N دقیقه یا N پست در روز بسازید؛ "
+        "پلن‌های حرفه‌ای بعد از خرید فعال می‌شوند.\n\n"
+        "Rubifo کار تکراری ادمین بارگذاری را حذف می‌کند. برای آزاد شدن همه امکانات، /buy را بفرستید."
+    )
+
+
+def _auto_daily_times(daily_count: int) -> List[Tuple[int, int]]:
+    """Distribute simple daily plans between 09:00 and 23:00."""
+    start_minutes = 9 * 60
+    end_minutes = 23 * 60
+    span = end_minutes - start_minutes
+    times = []
+    for index in range(daily_count):
+        total_minutes = int(start_minutes + (span * index / daily_count))
+        times.append((total_minutes // 60, total_minutes % 60))
+    return times
 
 
 async def _db_uid(pool, user_id) -> Optional[int]:
@@ -48,9 +109,10 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
             sub_line = _sub_line(user)
             msg = (
                 "👋 خوش آمدید به Rubifo!\n\n"
-                "ربات محتوای شما را ذخیره می‌کند و طبق برنامه به کانال‌هایتان می‌فرستد.\n\n"
+                "Rubifo کار تکراری ادمین بارگذاری را حذف می‌کند و طبق برنامه به کانال‌هایتان می‌فرستد.\n"
+                "مثل پنل‌های مدیریت محتوا نیاز به آپلود دستی ندارید؛ محتوا را در سورس آماده یا فوروارد کنید.\n\n"
                 "✨ ۳ قدم تا ارسال اول:\n"
-                "1️⃣ سورس بساز — محتواهایت را آپلود کن\n"
+                "1️⃣ سورس بساز — محتواهایت را آماده یا فوروارد کن\n"
                 "2️⃣ مسیر وصل کن — سورس ← کانال مقصد\n"
                 "3️⃣ زمان‌بندی تنظیم کن — هر N دقیقه یا N بار در روز\n\n"
                 f"{sub_line}\n\n"
@@ -62,7 +124,8 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
             msg = (
                 "👋 سلام!\n\n"
                 f"📦 {src_count} سورس دارید اما هیچ مسیری تنظیم نشده.\n"
-                "محتوا ارسال نخواهد شد تا مسیر بسازید.\n\n"
+                "محتوا ارسال نخواهد شد تا مسیر بسازید.\n"
+                "Rubifo برای حذف ادمین بارگذاری، صف و انتشار منظم را خودش انجام می‌دهد.\n\n"
                 f"{sub_line}\n\n"
                 "⚡ قدم بعدی: دکمه «➕ مسیر جدید»"
             )
@@ -90,7 +153,7 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
             sub = await SubscriptionService(pool).get_active_subscription(user_id)  # subscriptions.user_id = TEXT
             if sub:
                 days_left = (sub.end_date - datetime.now().date()).days
-                tier_fa = {"basic": "پایه", "pro": "حرفه‌ای", "enterprise": "ویژه"}.get(sub.tier, sub.tier)
+                tier_fa = _tier_name(sub.tier)
                 sub_line = f"💳 اشتراک {tier_fa}: {days_left} روز باقیمانده"
             else:
                 sub_line = _sub_line(user)
@@ -449,22 +512,11 @@ async def handle_addroute(client, user_id: int) -> None:
     try:
         from src.database import pool
         from src.core.source_service import SourceService
-        from src.core.route_service import RouteService
         from src.core.user_service import UserService
 
         user = await UserService(pool).get_user(user_id)
         if not user:
             await client.send_message(user_id, "ابتدا /start را بفرستید.")
-            return
-
-        can_create, error_msg = await RouteService(pool).can_create_route(user_id)
-        if not can_create:
-            existing = await RouteService(pool).get_user_routes(user_id)
-            empty_routes = [r for r in existing if not r.get("source_id") and r["is_active"]]
-            if empty_routes:
-                route_list = "\n".join(f"  #{r['id']} → {r.get('target_channel_id','?')}" for r in empty_routes)
-                error_msg += f"\n\nمسیرهای بدون سورس:\n{route_list}\nبا /removeroute [id] حذف کنید و دوباره بسازید."
-            await client.send_message(user_id, error_msg)
             return
 
         db_id = await _db_uid(pool, user_id)
@@ -540,6 +592,11 @@ async def handle_addroute_conversation(client, user_id: int, text: str) -> None:
                 target = "@" + target.rstrip("/").split("rubika.ir/")[-1].strip()
             elif not target.startswith("@"):
                 target = "@" + target.lstrip("@")
+
+            can_create, error_msg = await RouteService(pool).can_create_route(user_id, target)
+            if not can_create:
+                await client.send_message(user_id, error_msg)
+                return
 
             source_id = state["source_id"]
             source_name = state["source_name"]
@@ -716,6 +773,10 @@ async def handle_conversation_response(client, user_id: int, text: str) -> None:
         await handle_addplan_interval_input(client, user_id, text)
     elif command == "addplan_daily_count":
         await handle_addplan_daily_count_input(client, user_id, text)
+    elif command == "addplan_professional_input":
+        await handle_addplan_professional_input(client, user_id, text)
+    elif command == "addplan_confirm":
+        await handle_addplan_confirm(client, user_id, text)
 
 
 # ─────────────────────────────────────────────
@@ -729,18 +790,31 @@ async def handle_buy(client, user_id: int) -> None:
         from src.core.subscription_service import SubscriptionService
         active_sub = await SubscriptionService(pool).get_active_subscription(user_id)
         if active_sub:
+            tier_fa = _tier_name(active_sub.tier)
             await client.send_message(
                 user_id,
-                f"شما اشتراک {active_sub.tier} دارید.\nتاریخ پایان: {active_sub.end_date}\n\n/renew برای تمدید"
+                f"شما اشتراک {tier_fa} دارید.\n"
+                f"تاریخ پایان: {active_sub.end_date}\n\n"
+                "/renew برای تمدید"
             )
             return
 
         await client.send_message(
             user_id,
-            "سطح‌های اشتراک Rubifo:\n\n"
-            "📦 پایه (Basic)\n   • 1 مسیر | 50,000 تومان/ماه\n   /buy_basic\n\n"
-            "⭐ حرفه‌ای (Pro)\n   • 3 مسیر | 120,000 تومان/ماه\n   /buy_pro\n\n"
-            "👑 ویژه (Enterprise)\n   • 10 مسیر | 350,000 تومان/ماه\n   /buy_enterprise"
+            "💳 اشتراک‌های Rubifo\n\n"
+            "Rubifo برای حذف ادمین بارگذاری ساخته شده است؛ با کسری از هزینه حقوق ماهانه.\n"
+            "تریال برای تست ارزش اصلی است. با خرید، همه امکانات آزاد می‌شود و فقط تعداد کانال مقصد محدود است.\n\n"
+            f"📦 شروع حرفه‌ای\n"
+            f"   • 1 کانال مقصد | {_format_price(_tier_price('basic'))} تومان/ماه\n"
+            "   /buy_basic\n\n"
+            f"⭐ رشد\n"
+            f"   • 3 کانال مقصد | {_format_price(_tier_price('pro'))} تومان/ماه\n"
+            "   /buy_pro\n\n"
+            f"👑 مقیاس\n"
+            f"   • 10 کانال مقصد | {_format_price(_tier_price('enterprise'))} تومان/ماه\n"
+            "   /buy_enterprise\n\n"
+            "🏢 سازمانی\n"
+            "   • سفارشی، از 15,000,000 تومان/ماه — تماس با پشتیبانی"
         )
     except Exception as e:
         logger.error(f"/buy error: {e}")
@@ -756,9 +830,10 @@ async def handle_buy_tier(client, user_id: int, tier: str) -> None:
         from src.database import pool
         from src.core.subscription_service import SubscriptionService
         amount = SUBSCRIPTION_TIERS[tier]["price_monthly"]
+        tier_fa = _tier_name(tier)
         gateway = create_zarinpal_gateway(sandbox=True)
         success, result = await gateway.request_payment(
-            amount=amount, description=f"اشتراک {tier} - Rubifo", callback_url=None
+            amount=amount, description=f"اشتراک {tier_fa} - Rubifo", callback_url=None
         )
         if not success:
             await client.send_message(user_id, f"خطا در درخواست پرداخت: {result}")
@@ -766,7 +841,12 @@ async def handle_buy_tier(client, user_id: int, tier: str) -> None:
 
         authority = result.split("/StartPay/")[-1]
         pending_payments[authority] = {"user_id": user_id, "tier": tier, "amount": amount}
-        await client.send_message(user_id, f"لینک پرداخت:\n{result}\n\nلطفا منتظر تأیید بمانید...")
+        await client.send_message(
+            user_id,
+            f"لینک پرداخت پلن {tier_fa} ({_format_price(amount)} تومان):\n"
+            f"{result}\n\n"
+            "لطفا منتظر تأیید بمانید..."
+        )
         asyncio.create_task(
             verify_payment_polling(client, SubscriptionService(pool), authority, amount)
         )
@@ -793,7 +873,10 @@ async def verify_payment_polling(client, subscription_service, authority: str, a
                 del pending_payments[authority]
                 await client.send_message(
                     user_id,
-                    f"✅ پرداخت تأیید شد!\n\nاشتراک {tier} فعال شد.\nتاریخ پایان: {sub.end_date}"
+                    f"✅ پرداخت تأیید شد!\n\n"
+                    f"اشتراک {_tier_name(tier)} فعال شد.\n"
+                    "همه امکانات Rubifo برای شما باز است؛ محدودیت فقط تعداد کانال مقصد پلن شماست.\n"
+                    f"تاریخ پایان: {sub.end_date}"
                 )
                 return
             await asyncio.sleep(10)
@@ -830,9 +913,10 @@ async def handle_renew(client, user_id: int) -> None:
 
         tier = sub.tier
         amount = SUBSCRIPTION_TIERS.get(tier, {}).get("price_monthly", 0)
+        tier_fa = _tier_name(tier)
         gateway = create_zarinpal_gateway(sandbox=True)
         success, result = await gateway.request_payment(
-            amount=amount, description=f"تمدید اشتراک {tier} - Rubifo", callback_url=None
+            amount=amount, description=f"تمدید اشتراک {tier_fa} - Rubifo", callback_url=None
         )
         if not success:
             await client.send_message(user_id, f"خطا: {result}")
@@ -840,7 +924,12 @@ async def handle_renew(client, user_id: int) -> None:
 
         authority = result.split("/StartPay/")[-1]
         pending_payments[authority] = {"user_id": user_id, "tier": tier, "amount": amount, "is_renewal": True}
-        await client.send_message(user_id, f"لینک تمدید:\n{result}\n\nلطفا منتظر تأیید بمانید...")
+        await client.send_message(
+            user_id,
+            f"لینک تمدید پلن {tier_fa} ({_format_price(amount)} تومان):\n"
+            f"{result}\n\n"
+            "لطفا منتظر تأیید بمانید..."
+        )
         asyncio.create_task(
             verify_renewal_payment_polling(client, SubscriptionService(pool), authority, amount)
         )
@@ -867,7 +956,8 @@ async def verify_renewal_payment_polling(client, subscription_service, authority
                 del pending_payments[authority]
                 await client.send_message(
                     user_id,
-                    f"✅ تمدید انجام شد!\nتاریخ پایان جدید: {sub.end_date}"
+                    f"✅ تمدید پلن {_tier_name(tier)} انجام شد!\n"
+                    f"تاریخ پایان جدید: {sub.end_date}"
                 )
                 return
             await asyncio.sleep(10)
@@ -887,7 +977,9 @@ async def verify_renewal_payment_polling(client, subscription_service, authority
 async def handle_help(client, user_id: int) -> None:
     logger.info(f"/help for user {user_id}")
     msg = (
-        "📖 راهنمای Rubifo\n\n"
+        "📖 راهنمای دستورات Rubifo\n\n"
+        "Rubifo برای حذف ادمین بارگذاری ساخته شده است؛ بدون آپلود دستی در پنل، "
+        "محتوا را آماده یا فوروارد کنید تا صف و انتشار منظم خودکار انجام شود.\n\n"
         "✏️ سورس‌ها:\n"
         "/addsource — سورس جدید\n"
         "/mysources — سورس‌های من\n"
@@ -996,13 +1088,7 @@ async def _start_addplan_for_route(client, user_id: int, route_id: int) -> None:
         "command": "addplan_type_select",
         "route_id": route_id,
     }
-    await client.send_message(
-        user_id,
-        "📅 نوع برنامه را انتخاب کنید:\n\n"
-        "1️⃣ بازه‌ای — هر N دقیقه یک پیام\n"
-        "2️⃣ روزانه — N پیام در اوقات مشخص\n\n"
-        "1 یا 2 وارد کنید:",
-    )
+    await client.send_message(user_id, _plan_type_menu())
 
 
 async def handle_addplan(client, user_id: int) -> None:
@@ -1011,6 +1097,15 @@ async def handle_addplan(client, user_id: int) -> None:
         from src.database import pool
         from src.core.route_service import RouteService
         from src.core.source_service import SourceService
+        from src.core.subscription_service import SubscriptionService
+        access_state = await SubscriptionService(pool).get_access_state(user_id)
+        if access_state == "expired":
+            await client.send_message(
+                user_id,
+                "⚠️ تریال یا اشتراک فعالی ندارید.\n"
+                "برای ساخت برنامه و ادامه انتشار، /buy را بفرستید."
+            )
+            return
         routes = await RouteService(pool).get_user_routes(user_id)
         active = [r for r in routes if r["is_active"]]
         if not active:
@@ -1050,26 +1145,80 @@ async def handle_addplan_route_selection(client, user_id: int, text: str) -> Non
 
     state["route_id"] = route_id
     state["command"] = "addplan_type_select"
-    await client.send_message(
-        user_id,
-        "📅 نوع برنامه را انتخاب کنید:\n\n"
-        "1️⃣ بازه‌ای — هر N دقیقه یک پیام\n"
-        "2️⃣ روزانه — N پیام در اوقات مشخص\n\n"
-        "1 یا 2 وارد کنید:",
-    )
+    await client.send_message(user_id, _plan_type_menu())
 
 
 async def handle_addplan_type_selection(client, user_id: int, text: str) -> None:
     state = conversation_states.get(user_id, {})
-    if text.strip() == "1":
+    choice = text.strip()
+    if choice in {"3", "4", "5", "6", "7", "8"}:
+        from src.database import pool
+        from src.core.subscription_service import SubscriptionService
+        if not await SubscriptionService(pool).can_use_professional_plans(user_id):
+            await client.send_message(user_id, _professional_plan_locked_message())
+            return
+
+    if choice == "1":
         state["command"] = "addplan_interval"
         await client.send_message(user_id, "⏱️ هر چند دقیقه یک پیام؟ (مثال: 60)")
-    elif text.strip() == "2":
+    elif choice == "2":
         state["command"] = "addplan_daily_count"
         state["sub_step"] = 1
         await client.send_message(user_id, "📊 چند پیام در روز؟ (مثال: 3)")
+    elif choice == "3":
+        state["command"] = "addplan_professional_input"
+        state["plan_kind"] = "campaign"
+        await client.send_message(
+            user_id,
+            "🚀 کمپین حرفه‌ای را وارد کنید:\n"
+            "فرمت: 1403/03/01 تا 1403/03/15 | 6 | شنبه تا چهارشنبه | 10 تا 23"
+        )
+    elif choice == "4":
+        state["command"] = "addplan_professional_input"
+        state["plan_kind"] = "smart_queue"
+        await client.send_message(
+            user_id,
+            "🔁 صف هوشمند را وارد کنید:\n"
+            "فرمت: 8 | 10 تا 23 | چرخشی\n"
+            "برای حالت یک‌بار به جای چرخشی بنویسید: یک‌بار"
+        )
+    elif choice == "5":
+        state["command"] = "addplan_professional_input"
+        state["plan_kind"] = "timing_pattern"
+        await client.send_message(
+            user_id,
+            "🧠 الگوی زمانی را وارد کنید:\n"
+            "فرمت: humanized | 5 | 09 تا 23 | 12\n"
+            "الگوها: humanized, store, low_risk, launch"
+        )
+    elif choice == "6":
+        state["command"] = "addplan_professional_input"
+        state["plan_kind"] = "multi_stage"
+        await client.send_message(
+            user_id,
+            "📈 پلن چندمرحله‌ای را وارد کنید:\n"
+            "فرمت سریع: 3 روز اول روزی 10 پست بعد 7 روز روزی 5 پست"
+        )
+    elif choice == "7":
+        state["command"] = "addplan_professional_input"
+        state["plan_kind"] = "content_mix"
+        await client.send_message(
+            user_id,
+            "🎛️ ترکیب محتوا را وارد کنید:\n"
+            "فرمت: روزی 2 ویدیو 3 عکس 1 متن بین 9 تا 22"
+        )
+    elif choice == "8":
+        state["command"] = "addplan_professional_input"
+        state["plan_kind"] = "quick"
+        await client.send_message(
+            user_id,
+            "⚡ دستور سریع را بفرستید. نمونه‌ها:\n"
+            "روزی 6 پست بین 10 تا 23 چرخشی\n"
+            "از 1403/03/01 تا 1403/03/15 روزی 5 پست شنبه تا چهارشنبه\n"
+            "روزی 2 ویدیو 3 عکس 1 متن بین 9 تا 22"
+        )
     else:
-        await client.send_message(user_id, "❌ عدد 1 یا 2 وارد کنید.")
+        await client.send_message(user_id, "❌ عدد 1 تا 8 وارد کنید.")
 
 
 async def handle_addplan_interval_input(client, user_id: int, text: str) -> None:
@@ -1097,12 +1246,7 @@ async def handle_addplan_daily_count_input(client, user_id: int, text: str) -> N
         if not 1 <= count <= 48:
             await client.send_message(user_id, "❌ بین 1 و 48.")
             return
-        state["daily_count"] = count
-        state["sub_step"] = 2
-        await client.send_message(
-            user_id,
-            f"{count} وقت را وارد کنید:\nفرمت: HH:MM HH:MM ...\nمثال: 09:00 14:00 19:00"
-        )
+        await handle_addplan_daily_count(client, user_id, count, _auto_daily_times(count))
     elif sub_step == 2:
         times = []
         try:
@@ -1169,6 +1313,124 @@ async def handle_addplan_daily_count(
         await client.send_message(user_id, "خطایی رخ داد.")
 
 
+def _parse_professional_plan(plan_kind: str, text: str) -> Tuple[str, Dict[str, Any]]:
+    raw = text.strip()
+    if plan_kind == "quick":
+        parsed = PersianQuickPlanParser().parse(raw)
+        return parsed.plan_kind, parsed.config
+
+    if plan_kind == "campaign":
+        parts = [p.strip() for p in raw.split("|")]
+        if len(parts) != 4 or "تا" not in parts[0] or "تا" not in parts[2] or "تا" not in parts[3]:
+            raise ValueError("فرمت کمپین درست نیست.")
+        start_date, end_date = [p.strip() for p in parts[0].split("تا", 1)]
+        weekday_start, weekday_end = [p.strip() for p in parts[2].split("تا", 1)]
+        start_time, end_time = [p.strip() for p in parts[3].split("تا", 1)]
+        config = CampaignPlanConfig(
+            start_date=start_date,
+            end_date=end_date,
+            daily_count=int(parts[1]),
+            active_weekdays=expand_weekday_range(weekday_start, weekday_end),
+            start_time=start_time,
+            end_time=end_time,
+            loop_mode=False,
+        ).model_dump()
+        return "campaign", config
+
+    if plan_kind == "smart_queue":
+        parts = [p.strip() for p in raw.split("|")]
+        if len(parts) != 3 or "تا" not in parts[1]:
+            raise ValueError("فرمت صف هوشمند درست نیست.")
+        start_time, end_time = [p.strip() for p in parts[1].split("تا", 1)]
+        config = SmartQueuePlanConfig(
+            daily_count=int(parts[0]),
+            start_time=start_time,
+            end_time=end_time,
+            loop_mode="چرخشی" in parts[2],
+        ).model_dump()
+        return "smart_queue", config
+
+    if plan_kind == "timing_pattern":
+        parts = [p.strip() for p in raw.split("|")]
+        if len(parts) != 4 or "تا" not in parts[2]:
+            raise ValueError("فرمت الگوی زمانی درست نیست.")
+        start_time, end_time = [p.strip() for p in parts[2].split("تا", 1)]
+        pattern_map = {"فروشگاهی": "store", "انسانی": "humanized", "کم‌ریسک": "low_risk", "لانچ": "launch"}
+        pattern = pattern_map.get(parts[0], parts[0])
+        config = TimingPatternPlanConfig(
+            pattern=pattern,
+            daily_count=int(parts[1]),
+            start_time=start_time,
+            end_time=end_time,
+            jitter_minutes=int(parts[3]),
+        ).model_dump()
+        return "timing_pattern", config
+
+    if plan_kind in ("multi_stage", "content_mix"):
+        parsed = PersianQuickPlanParser().parse(raw)
+        if parsed.plan_kind != plan_kind:
+            raise ValueError("فرمت با نوع پلن انتخاب‌شده هم‌خوان نیست.")
+        return parsed.plan_kind, parsed.config
+
+    raise ValueError("نوع پلن پشتیبانی نمی‌شود.")
+
+
+async def handle_addplan_professional_input(client, user_id: int, text: str) -> None:
+    state = conversation_states.get(user_id, {})
+    try:
+        plan_kind, config = _parse_professional_plan(state.get("plan_kind", "quick"), text)
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+        preview = ScheduleService(pool).preview_plan(plan_kind, config)
+        state["command"] = "addplan_confirm"
+        state["plan_kind"] = plan_kind
+        state["config"] = config
+        await client.send_message(
+            user_id,
+            f"📋 پیش‌نمایش پلن:\n\n{preview}\n\n"
+            "برای ساخت/ذخیره «بله» را بفرستید. برای لغو هر چیز دیگری بفرستید."
+        )
+    except Exception as e:
+        await client.send_message(
+            user_id,
+            f"❌ نتوانستم پلن را بخوانم: {e}\n"
+            "نمونه دستور سریع: روزی 6 پست بین 10 تا 23 چرخشی"
+        )
+
+
+async def handle_addplan_confirm(client, user_id: int, text: str) -> None:
+    state = conversation_states.pop(user_id, {})
+    if text.strip().lower() not in {"بله", "yes", "y", "آره", "اره", "ok", "اوکی"}:
+        await client.send_message(user_id, "❌ ساخت پلن لغو شد.", with_keypad=True)
+        return
+    try:
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+        service = ScheduleService(pool)
+        plan_kind = state["plan_kind"]
+        config = state["config"]
+        if state.get("edit_schedule_id"):
+            sched = await service.update_professional_schedule(state["edit_schedule_id"], plan_kind, config)
+            action = "به‌روزرسانی شد"
+        else:
+            sched = await service.create_professional_schedule(
+                user_id=user_id,
+                route_id=state["route_id"],
+                plan_kind=plan_kind,
+                config=config,
+            )
+            action = "ساخته شد"
+        await client.send_message(
+            user_id,
+            f"✅ پلن حرفه‌ای #{sched.id} {action}!\n{describe_plan(plan_kind, config)}\n"
+            f"اجرای بعدی: {fmt_tehran(sched.next_run)}",
+            with_keypad=True,
+        )
+    except Exception as e:
+        logger.error(f"addplan_confirm error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد.")
+
+
 async def handle_listplans(client, user_id: int) -> None:
     logger.info(f"/listplans for user {user_id}")
     try:
@@ -1182,9 +1444,13 @@ async def handle_listplans(client, user_id: int) -> None:
         msg = "📅 برنامه‌های شما:\n\n"
         for s in schedules:
             active = "✅" if s.is_active else "⛔"
-            type_info = f"هر {s.interval_minutes} دقیقه" if s.schedule_type == "interval" else f"{s.daily_count} پیام/روز"
+            if (s.plan_kind or s.schedule_type) in ("interval", "daily_count"):
+                type_info = f"هر {s.interval_minutes} دقیقه" if s.schedule_type == "interval" else f"{s.daily_count} پیام/روز"
+            else:
+                type_info = describe_plan(s.plan_kind or s.schedule_type, s.config or {})
             next_run = fmt_tehran(s.next_run, "%d/%m %H:%M") if s.next_run else "—"
-            msg += f"{active} #{s.id} — مسیر #{s.route_id}\n   {type_info} | بعدی: {next_run}\n\n"
+            paused = f"\n   دلیل توقف: {s.paused_reason}" if getattr(s, "paused_reason", None) else ""
+            msg += f"{active} #{s.id} — مسیر #{s.route_id}\n   {type_info}\n   بعدی: {next_run}{paused}\n\n"
 
         msg += "/toggleplan [شناسه] — فعال/غیرفعال\n/removeplan [شناسه] — حذف"
         await client.send_message(user_id, msg, with_keypad=True)
@@ -1245,10 +1511,26 @@ async def handle_removeplan_confirmation(client, user_id: int, text: str) -> Non
 
 
 async def handle_editplan(client, user_id: int, schedule_id: int) -> None:
-    await client.send_message(
-        user_id,
-        "ویرایش برنامه در دسترس نیست.\nلطفا برنامه را حذف و دوباره بسازید.\n/removeplan"
-    )
+    try:
+        from src.database import pool
+        from src.core.schedule_service import ScheduleService
+        sched = await ScheduleService(pool).get_schedule(schedule_id)
+        if not sched or sched.user_id != user_id:
+            await client.send_message(user_id, "❌ برنامه یافت نشد.")
+            return
+        conversation_states[user_id] = {
+            "command": "addplan_type_select",
+            "route_id": sched.route_id,
+            "edit_schedule_id": schedule_id,
+        }
+        await client.send_message(
+            user_id,
+            f"✏️ ویرایش پلن #{schedule_id}\n"
+            f"{_plan_type_menu()}"
+        )
+    except Exception as e:
+        logger.error(f"/editplan error: {e}")
+        await client.send_message(user_id, "خطایی رخ داد.")
 
 
 async def handle_calendar(client, user_id: int) -> None:

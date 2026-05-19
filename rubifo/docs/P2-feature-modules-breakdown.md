@@ -36,7 +36,7 @@ Rubifo یک ربات خودکار فوروارد برای روبیکا است ک
 ## ۲. ماژول Subscription & Payment
 
 ### وظایف
-- سه سطح اشتراک: Basic (۱ مسیر)، Pro (۳ مسیر)، Enterprise (۱۰ مسیر)
+- سه سطح اشتراک: Basic (۱ کانال مقصد)، Pro (۳ کانال مقصد)، Enterprise (۱۰ کانال مقصد)
 - اتصال به درگاه زرین‌پال
 - فاکتور تولید و لینک پرداخت
 - تأیید تراکنش (webhook یا polling)
@@ -55,7 +55,7 @@ Rubifo یک ربات خودکار فوروارد برای روبیکا است ک
 
 ### وابستگی
 - User Management
-- Route Management (برای محدود کردن تعداد مسیرها)
+- Route Management (با محدودیت روی تعداد کانال‌های مقصد فعال)
 - Logging
 
 ### V1 / Post-V1
@@ -81,7 +81,7 @@ Rubifo یک ربات خودکار فوروارد برای روبیکا است ک
 
 ### وابستگی
 - User Management (تعلق به کاربر)
-- Subscription Management (محدود شدن تعداد مسیرها)
+- Subscription Management (محدود شدن تعداد کانال‌های مقصد)
 - Post Queue System (صف پست‌ها)
 - Logging
 
@@ -299,4 +299,3 @@ Subscription & Payment ← Route Management ← Post Queue System ← Schedule S
 - **V1 vs Post-V1** جدا شده‌اند
 - **خروجی Database** روشن است
 - مراحل بعدی: **P3 - معماری فنی**
-

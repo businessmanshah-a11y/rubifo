@@ -312,6 +312,23 @@ class RubikaClient:
 
         return messages
 
+    @staticmethod
+    def normalize_updates(updates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Compatibility helper for older Bot API update shapes used in tests."""
+        normalized = []
+        for update in updates:
+            message = update.get("message") or {}
+            text = (message.get("text") or "").strip()
+            chat_id = message.get("chat_id")
+            if chat_id and text:
+                normalized.append({"user_id": str(chat_id), "text": text})
+        if normalized:
+            return normalized
+        return RubikaClient._normalize(updates)
+
+
+RubikaBotApiClient = RubikaClient
+
 
 class RufifoBot:
     """Main bot class."""

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rubifo Admin - Performance</title>
+    <title>Rubifo — Performance</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -11,16 +11,16 @@
         <!-- Sidebar Navigation -->
         <nav class="sidebar">
             <div class="logo">
-                <h2>🤖 Rubifo</h2>
-                <p>Admin Panel</p>
+                <h2>Rubifo</h2>
+                <p>Admin</p>
             </div>
 
             <ul class="nav-menu">
-                <li><a href="/admin/dashboard.html">📊 Dashboard</a></li>
-                <li><a href="/admin/users.html">👥 Users</a></li>
-                <li><a href="/admin/logs.html">📋 Logs</a></li>
-                <li><a href="/admin/performance.html" class="active">⚡ Performance</a></li>
-                <li><a href="/admin/settings.html">⚙️ Settings</a></li>
+                <li><a href="/admin/dashboard.html">Dashboard</a></li>
+                <li><a href="/admin/users.html">Users</a></li>
+                <li><a href="/admin/logs.html">Logs</a></li>
+                <li><a href="/admin/performance.html" class="active">Performance</a></li>
+                <li><a href="/admin/settings.html">Settings</a></li>
             </ul>
 
             <div class="user-info">
@@ -39,29 +39,29 @@
             <!-- Metrics Grid -->
             <div class="metrics-grid">
                 <div class="metric-card">
-                    <h3>📨 Messages/Hour</h3>
+                    <h3>Messages / Hour</h3>
                     <p class="metric-value" id="messagesPerHour">0</p>
                 </div>
 
                 <div class="metric-card">
-                    <h3>📨 Messages/24h</h3>
+                    <h3>Messages / 24h</h3>
                     <p class="metric-value" id="messagesPerDay">0</p>
                 </div>
 
                 <div class="metric-card">
-                    <h3>❌ Failed Messages</h3>
+                    <h3>Failed Messages</h3>
                     <p class="metric-value" id="failedMessages">0</p>
                 </div>
 
                 <div class="metric-card">
-                    <h3>🔄 Avg Retries</h3>
+                    <h3>Avg Retries</h3>
                     <p class="metric-value" id="avgRetries">0</p>
                 </div>
             </div>
 
             <!-- Queue Status -->
             <div class="section">
-                <h2>📤 Queue Status (Top 10 Routes)</h2>
+                <h2>Queue Status — Top 10 Routes</h2>
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -78,7 +78,7 @@
 
             <!-- Subscription Distribution -->
             <div class="section">
-                <h2>💳 Subscription Distribution</h2>
+                <h2>Subscription Distribution</h2>
                 <div id="subscriptionChart" class="chart">
                     <ul id="subscriptionList">
                         <li>Loading...</li>

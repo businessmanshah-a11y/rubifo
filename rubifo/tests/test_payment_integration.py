@@ -1,6 +1,7 @@
 """Integration tests for payment system (T68)."""
 
 import pytest
+import asyncio
 from unittest.mock import AsyncMock, patch
 from datetime import datetime, timedelta
 from src.integrations.zarinpal import ZarinpalGateway
@@ -132,7 +133,8 @@ class TestSubscriptionPaymentFlow:
         }
 
         sub = await subscription_service.create_subscription(1, "basic")
-        assert mock_db.execute.called
+        assert mock_db.fetchrow.called
+        assert sub.tier == "basic"
 
     async def test_payment_failure_recovery(self, mock_db):
         """Test recovery from payment failure."""
@@ -165,7 +167,8 @@ class TestTransactionTracking:
             reference_id="ref_123",
         )
 
-        assert mock_db.execute.called
+        assert mock_db.fetchrow.called
+        assert result == 0
 
     async def test_get_transactions(self, mock_db):
         """Test retrieving transactions."""

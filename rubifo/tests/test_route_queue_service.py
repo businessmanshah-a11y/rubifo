@@ -18,42 +18,136 @@ class TestRouteService:
         """Create RouteService instance."""
         return RouteService(mock_db)
 
-    async def test_can_create_route_within_limit(self, route_service, mock_db):
-        """Test user can create route when within limit."""
-        # User with basic tier (limit = 1) has 0 routes
+    async def test_can_create_route_basic_allows_new_destination_within_limit(self, route_service, mock_db):
+        """Basic users can create a route when they have no active destination yet."""
         mock_db.fetchrow.side_effect = [
             {"tier": "basic"},  # Subscription query
-            {"count": 0},  # Count of existing routes
+            {"exists": False},
+            {"count": 0},  # Count of existing active destinations
         ]
 
-        can_create, error = await route_service.can_create_route(1)
+        can_create, error = await route_service.can_create_route(1, "@dest1")
 
         assert can_create is True
         assert error is None
 
-    async def test_can_create_route_at_limit(self, route_service, mock_db):
-        """Test user cannot create route when at limit."""
-        # User with basic tier (limit = 1) already has 1 route
+    async def test_can_create_route_basic_blocks_new_destination_at_limit(self, route_service, mock_db):
+        """Basic users cannot add a second active destination."""
         mock_db.fetchrow.side_effect = [
             {"tier": "basic"},  # Subscription query
-            {"count": 1},  # Count of existing routes
+            {"exists": False},
+            {"count": 1},  # Count of existing active destinations
         ]
 
-        can_create, error = await route_service.can_create_route(1)
+        can_create, error = await route_service.can_create_route(1, "@dest2")
 
         assert can_create is False
         assert error is not None
+        assert "کانال مقصد" in error
+
+    async def test_can_create_route_basic_allows_additional_route_to_existing_destination(self, route_service, mock_db):
+        """Routes to an already-counted destination are not capped by route count."""
+        mock_db.fetchrow.side_effect = [
+            {"tier": "basic"},
+            {"exists": True},
+        ]
+
+        can_create, error = await route_service.can_create_route(1, "@dest1")
+
+        assert can_create is True
+        assert error is None
 
     async def test_can_create_route_no_subscription(self, route_service, mock_db):
         """Test user without subscription cannot create route."""
         mock_db.fetchrow.side_effect = [
             None,  # No subscription
+            None,  # No active trial
         ]
 
-        can_create, error = await route_service.can_create_route(1)
+        can_create, error = await route_service.can_create_route(1, "@dest1")
 
         assert can_create is False
         assert error is not None
+
+    async def test_can_create_route_trial_with_zero_destinations(self, route_service, mock_db):
+        """Trial users can create their single allowed destination."""
+        mock_db.fetchrow.side_effect = [
+            None,
+            {"is_trial_active": True, "trial_end_at": datetime.now() + timedelta(hours=24)},
+            {"exists": False},
+            {"count": 0},
+        ]
+
+        can_create, error = await route_service.can_create_route(1, "@dest1")
+
+        assert can_create is True
+        assert error is None
+
+    async def test_can_create_route_trial_at_destination_limit(self, route_service, mock_db):
+        """Trial users are blocked after one active destination."""
+        mock_db.fetchrow.side_effect = [
+            None,
+            {"is_trial_active": True, "trial_end_at": datetime.now() + timedelta(hours=24)},
+            {"exists": False},
+            {"count": 1},
+        ]
+
+        can_create, error = await route_service.can_create_route(1, "@dest2")
+
+        assert can_create is False
+        assert "تریال فقط یک کانال مقصد" in error
+
+    async def test_can_create_route_basic_upgrade_message_for_second_destination(self, route_service, mock_db):
+        """Starting paid tier gets all features but only one destination."""
+        mock_db.fetchrow.side_effect = [
+            {"tier": "basic"},
+            {"exists": False},
+            {"count": 1},
+        ]
+
+        can_create, error = await route_service.can_create_route(1, "@dest2")
+
+        assert can_create is False
+        assert "رشد" in error
+
+    async def test_can_create_route_pro_allows_third_destination(self, route_service, mock_db):
+        """Growth tier allows up to three active destinations."""
+        mock_db.fetchrow.side_effect = [
+            {"tier": "pro"},
+            {"exists": False},
+            {"count": 2},
+        ]
+
+        can_create, error = await route_service.can_create_route(1, "@dest3")
+
+        assert can_create is True
+        assert error is None
+
+    async def test_can_create_route_pro_blocks_fourth_destination(self, route_service, mock_db):
+        """Growth tier blocks a fourth active destination."""
+        mock_db.fetchrow.side_effect = [
+            {"tier": "pro"},
+            {"exists": False},
+            {"count": 3},
+        ]
+
+        can_create, error = await route_service.can_create_route(1, "@dest4")
+
+        assert can_create is False
+        assert "3 کانال مقصد" in error
+
+    async def test_can_create_route_enterprise_allows_tenth_destination(self, route_service, mock_db):
+        """Scale tier allows up to ten active destinations."""
+        mock_db.fetchrow.side_effect = [
+            {"tier": "enterprise"},
+            {"exists": False},
+            {"count": 9},
+        ]
+
+        can_create, error = await route_service.can_create_route(1, "@dest10")
+
+        assert can_create is True
+        assert error is None
 
     async def test_create_route_success(self, route_service, mock_db, sample_route_data):
         """Test successfully creating a route."""
@@ -63,7 +157,7 @@ class TestRouteService:
         route = await route_service.create_route(1, 111111, 222222)
 
         assert route is not None
-        assert mock_db.execute.called
+        assert mock_db.fetchrow.called
 
     async def test_deactivate_route(self, route_service, mock_db):
         """Test deactivating a route."""
@@ -139,7 +233,8 @@ class TestQueueService:
 
         stats = await queue_service.get_queue_stats(1)
 
-        assert isinstance(stats, list)
+        assert isinstance(stats, dict)
+        assert stats["pending"] == 5
         assert mock_db.fetch.called
 
     async def test_queue_ordering_by_source_date(self, queue_service, mock_db):
@@ -172,7 +267,7 @@ class TestRouteAndQueueIntegration:
         route = await route_service.create_route(1, 111111, 222222)
 
         # Queue should be populated
-        assert mock_db.execute.called
+        assert mock_db.fetchrow.called
 
     async def test_deactivate_route_marks_queue_removed(self, mock_db):
         """Test deactivating a route marks queue items as removed."""
