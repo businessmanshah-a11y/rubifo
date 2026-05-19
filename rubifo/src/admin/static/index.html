@@ -5,9 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>روبیفو | انتشار خودکار روبیکا</title>
   <meta name="description" content="محتوا رو به ربات بفرست — روبیفو اونو طبق زمانبندیت در کانال روبیکاییت منتشر می‌کنه. بدون بارگذاری دستی، بدون واترمارک." />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    @font-face { font-family: 'Morabba'; src: url('./fonts/Morabba-UltraLight.woff2') format('woff2'); font-weight: 200; font-display: swap; }
+    @font-face { font-family: 'Morabba'; src: url('./fonts/Morabba-Light.woff2')      format('woff2'); font-weight: 300; font-display: swap; }
+    @font-face { font-family: 'Morabba'; src: url('./fonts/Morabba-Regular.woff2')    format('woff2'); font-weight: 400; font-display: swap; }
+    @font-face { font-family: 'Morabba'; src: url('./fonts/Morabba-Medium.woff2')     format('woff2'); font-weight: 500; font-display: swap; }
+    @font-face { font-family: 'Morabba'; src: url('./fonts/Morabba-SemiBold.woff2')   format('woff2'); font-weight: 600; font-display: swap; }
+    @font-face { font-family: 'Morabba'; src: url('./fonts/Morabba-Bold.woff2')       format('woff2'); font-weight: 700; font-display: swap; }
+    @font-face { font-family: 'Morabba'; src: url('./fonts/Morabba-ExtraBold.woff2')  format('woff2'); font-weight: 800; font-display: swap; }
+    @font-face { font-family: 'Morabba'; src: url('./fonts/Morabba-Black.woff2')      format('woff2'); font-weight: 900; font-display: swap; }
+    @font-face { font-family: 'Morabba'; src: url('./fonts/Morabba-Heavy.woff2')      format('woff2'); font-weight: 950; font-display: swap; }
+  </style>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -41,11 +49,14 @@
     html { scroll-behavior: smooth; }
 
     body {
-      font-family: 'Vazirmatn', sans-serif;
+      font-family: 'Morabba', sans-serif;
       background: var(--black);
       color: var(--t1);
-      line-height: 1.7;
+      line-height: 1.75;
       overflow-x: hidden;
+    }
+    input, button, textarea, select, a {
+      font-family: 'Morabba', sans-serif;
     }
 
     ::-webkit-scrollbar { width: 3px; }
@@ -125,7 +136,7 @@
       background: rgba(5,5,7,0.72);
       border: 1px solid rgba(168,85,247,0.20);
       border-radius: 9999px;
-      padding: 8px 8px 8px 24px;
+      padding: 8px 20px 8px 24px;
       backdrop-filter: blur(32px);
       -webkit-backdrop-filter: blur(32px);
       box-shadow: inset 0 1px 1px rgba(255,255,255,0.07),
@@ -139,45 +150,29 @@
                   0 0 48px rgba(168,85,247,0.1);
     }
     .nav-logo {
-      display: flex; align-items: center; gap: 10px;
+      display: flex; align-items: center;
       text-decoration: none; flex-shrink: 0;
     }
-    .logo-outer {
-      background: rgba(168,85,247,0.1);
-      border: 1px solid rgba(168,85,247,0.24);
-      border-radius: 14px; padding: 5px;
-      transition: box-shadow 0.4s;
-    }
-    .nav-logo:hover .logo-outer { box-shadow: 0 0 24px rgba(168,85,247,0.3); }
-    .logo-inner {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, var(--purple), var(--violet));
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px;
-      box-shadow: inset 0 1px 1px rgba(255,255,255,0.2),
-                  0 4px 14px rgba(91,46,138,0.45);
-      transition: transform 0.4s cubic-bezier(0.32,0.72,0,1);
-    }
-    .nav-logo:hover .logo-inner { transform: scale(1.08) rotate(-5deg); }
     .nav-wordmark {
-      font-size: 19px; font-weight: 800;
-      color: var(--t1); letter-spacing: -0.4px;
+      font-size: 26px; font-weight: 800;
+      color: var(--t1); letter-spacing: 0;
+      display: inline-block; transform: translateY(4px); line-height: 1;
     }
     .nav-wordmark em { font-style: normal; color: var(--violet); }
 
+    /* nav height = 2×10 + 14 = 34px; icon = 28px fits with 3px auto-margin each side */
     .nav-cta {
-      display: inline-flex; align-items: center; gap: 0;
-      background: rgba(110,44,220,0.26);
-      backdrop-filter: blur(18px) saturate(1.5);
-      -webkit-backdrop-filter: blur(18px) saturate(1.5);
-      border: 1px solid rgba(168,85,247,0.48);
+      display: inline-flex; align-items: center; gap: 10px;
+      background: rgba(91,46,138,0.84);
+      backdrop-filter: blur(12px) saturate(1.5);
+      -webkit-backdrop-filter: blur(12px) saturate(1.5);
+      border: 1px solid rgba(192,132,252,0.45);
       color: #fff; text-decoration: none;
-      padding: 10px 10px 10px 20px;
-      border-radius: 9999px; font-size: 13px; font-weight: 700;
+      padding: 10px 18px 10px 10px;
+      border-radius: 9999px; font-size: 13px; font-weight: 700; line-height: 1;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.22),
-                  inset 0 -1px 0 rgba(0,0,0,0.14),
-                  0 4px 22px rgba(91,46,138,0.40);
+                  inset 0 -1px 0 rgba(0,0,0,0.18),
+                  0 4px 20px rgba(91,46,138,0.45);
       transition: transform 0.4s cubic-bezier(0.32,0.72,0,1),
                   box-shadow 0.4s, background 0.4s, border-color 0.4s;
       position: relative; overflow: hidden;
@@ -185,29 +180,26 @@
     .nav-cta::before {
       content: '';
       position: absolute; inset: 0;
-      background: linear-gradient(135deg, rgba(255,255,255,0.14) 0%, transparent 55%);
+      background: linear-gradient(160deg, rgba(255,255,255,0.16) 0%, transparent 50%);
       opacity: 1; pointer-events: none; border-radius: 9999px;
     }
     .nav-cta:hover {
       transform: scale(0.97);
-      background: rgba(110,44,220,0.38);
-      border-color: rgba(168,85,247,0.68);
+      background: rgba(91,46,138,0.96);
+      border-color: rgba(192,132,252,0.62);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.26),
-                  inset 0 -1px 0 rgba(0,0,0,0.14),
-                  0 8px 32px rgba(91,46,138,0.58);
+                  inset 0 -1px 0 rgba(0,0,0,0.18),
+                  0 8px 28px rgba(91,46,138,0.58);
     }
-    .nav-cta-text { margin-left: 0; margin-right: 12px; }
-    [dir="rtl"] .nav-cta-text { margin-right: 12px; margin-left: 0; }
+    .nav-cta-text { line-height: 1; white-space: nowrap; transform: translateY(4px); display: inline-block; }
     .nav-cta-icon {
-      width: 32px; height: 32px; border-radius: 9999px;
-      background: rgba(0,0,0,0.22);
+      width: 28px; height: 28px; border-radius: 9999px; flex-shrink: 0;
+      background: rgba(0,0,0,0.28);
       display: flex; align-items: center; justify-content: center;
-      font-size: 14px;
-      box-shadow: inset 0 1px 1px rgba(255,255,255,0.14);
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.16);
       transition: transform 0.4s cubic-bezier(0.32,0.72,0,1);
     }
-    .nav-cta:hover .nav-cta-icon { transform: translateX(3px) translateY(-1px) scale(1.1); }
-    [dir="rtl"] .nav-cta:hover .nav-cta-icon { transform: translateX(-3px) translateY(-1px) scale(1.1); }
+    .nav-cta:hover .nav-cta-icon { transform: translateY(-1px) scale(1.1); }
 
     /* ── HERO ── */
     .hero {
@@ -217,31 +209,10 @@
       padding: 140px 20px 100px;
       position: relative; overflow: hidden;
     }
-    .aurora-wrap { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-    .aurora-blob { position: absolute; border-radius: 50%; filter: blur(90px); }
-    .aurora-1 {
-      width: 75vw; height: 65vh;
-      background: radial-gradient(ellipse, rgba(91,46,138,0.7) 0%, transparent 68%);
-      top: -25%; left: 12%;
-      animation: aurora1 30s ease-in-out infinite;
-    }
-    .aurora-2 {
-      width: 55vw; height: 60vh;
-      background: radial-gradient(ellipse, rgba(16,185,129,0.14) 0%, transparent 70%);
-      top: 45%; right: -5%;
-      animation: aurora2 38s ease-in-out infinite;
-    }
-    .aurora-3 {
-      width: 60vw; height: 55vh;
-      background: radial-gradient(ellipse, rgba(168,85,247,0.12) 0%, transparent 70%);
-      bottom: -15%; left: -5%;
-      animation: aurora3 45s ease-in-out infinite;
-    }
-    .aurora-4 {
-      width: 40vw; height: 40vh;
-      background: radial-gradient(ellipse, rgba(245,158,11,0.06) 0%, transparent 70%);
-      top: 20%; right: 20%;
-      animation: aurora2 52s ease-in-out infinite reverse;
+    /* aurora blobs replaced by WebGL shader */
+    #hero-shader {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      z-index: 0; pointer-events: none; display: block;
     }
     .hero-grid {
       position: absolute; inset: 0; pointer-events: none;
@@ -254,16 +225,25 @@
     canvas#particles {
       position: absolute; inset: 0; pointer-events: none;
     }
-    .hero-content { position: relative; z-index: 1; max-width: 920px; }
+    .hero-glass {
+      position: absolute; inset: 0; z-index: 1; pointer-events: none;
+      backdrop-filter: blur(6px) saturate(1.15);
+      -webkit-backdrop-filter: blur(6px) saturate(1.15);
+      background: rgba(5,5,7,0.04);
+    }
+    html[data-theme="light"] .hero-glass {
+      background: rgba(244,240,255,0.05);
+    }
+    .hero-content { position: relative; z-index: 2; max-width: 920px; }
 
     .eyebrow {
       display: inline-flex; align-items: center; gap: 9px;
       background: rgba(168,85,247,0.08);
       border: 1px solid rgba(168,85,247,0.30);
       border-radius: 9999px;
-      padding: 7px 20px 7px 12px;
-      font-size: 11px; font-weight: 700;
-      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 8px 20px 8px 12px;
+      font-size: 12px; font-weight: 600;
+      letter-spacing: 0; text-transform: none;
       color: var(--violet-l); margin-bottom: 38px;
       box-shadow: 0 0 32px rgba(168,85,247,0.12);
     }
@@ -275,10 +255,11 @@
     }
 
     .hero-h1 {
-      font-size: clamp(44px, 8vw, 88px);
+      font-size: clamp(40px, 7.5vw, 82px);
       font-weight: 900;
-      line-height: 1.08; letter-spacing: -2px;
-      margin-bottom: 28px;
+      line-height: 1.25; letter-spacing: 0;
+      margin-bottom: 30px;
+      color: #FFFFFF;
     }
     .grad-purple {
       background: linear-gradient(135deg, var(--violet-l) 0%, var(--violet) 45%, #7C3AED 100%);
@@ -290,29 +271,34 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
+    .hero-white { color: #FFFFFF; }
 
     .hero-sub {
-      font-size: clamp(15px, 2.2vw, 20px);
-      color: var(--t2);
-      max-width: 640px; margin: 0 auto 54px;
-      font-weight: 400; line-height: 1.9;
+      font-size: clamp(15px, 2.2vw, 19px);
+      color: rgba(255,255,255,0.72);
+      max-width: 860px; margin: 0 auto 54px;
+      font-weight: 400; line-height: 2;
+      white-space: nowrap;
     }
+    .hero-sub strong { color: rgba(255,255,255,0.95); font-weight: 600; }
+    @media (max-width: 680px) { .hero-sub { white-space: normal; font-size: 14px; } }
 
-    .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; align-items: center; }
+    /* Morabba baseline shift fix — glyphs sit high in em-box */
+    .btn-txt { display: inline-block; transform: translateY(4px); line-height: 1; }
 
     /* FILLED BUTTON */
     .btn-filled {
-      display: inline-flex; align-items: center; gap: 0;
-      text-decoration: none; padding: 16px 12px 16px 30px;
-      border-radius: 9999px; font-size: 15px; font-weight: 700; color: #fff;
-      background: rgba(110,44,220,0.28);
-      backdrop-filter: blur(20px) saturate(1.6);
-      -webkit-backdrop-filter: blur(20px) saturate(1.6);
-      border: 1px solid rgba(168,85,247,0.50);
+      display: inline-flex; align-items: center; gap: 12px;
+      text-decoration: none; padding: 12px 22px 12px 12px;
+      border-radius: 9999px; font-size: 15px; font-weight: 700; color: #fff; line-height: 1;
+      background: rgba(91,46,138,0.84);
+      backdrop-filter: blur(12px) saturate(1.5);
+      -webkit-backdrop-filter: blur(12px) saturate(1.5);
+      border: 1px solid rgba(192,132,252,0.45);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.22),
-                  inset 0 -1px 0 rgba(0,0,0,0.16),
-                  0 8px 36px rgba(91,46,138,0.45),
-                  0 0 0 1px rgba(168,85,247,0.08);
+                  inset 0 -1px 0 rgba(0,0,0,0.20),
+                  0 8px 32px rgba(91,46,138,0.50);
       transition: transform 0.45s cubic-bezier(0.32,0.72,0,1),
                   box-shadow 0.45s cubic-bezier(0.32,0.72,0,1),
                   background 0.45s, border-color 0.45s;
@@ -321,37 +307,34 @@
     .btn-filled::before {
       content: '';
       position: absolute; inset: 0; border-radius: 9999px;
-      background: linear-gradient(135deg, rgba(255,255,255,0.14) 0%, transparent 55%);
+      background: linear-gradient(160deg, rgba(255,255,255,0.16) 0%, transparent 50%);
       opacity: 1; pointer-events: none;
     }
     .btn-filled:hover {
       transform: translateY(-4px);
-      background: rgba(110,44,220,0.38);
-      border-color: rgba(168,85,247,0.70);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.26),
-                  inset 0 -1px 0 rgba(0,0,0,0.16),
-                  0 18px 54px rgba(91,46,138,0.60),
-                  0 0 48px rgba(168,85,247,0.20);
+      background: rgba(91,46,138,0.96);
+      border-color: rgba(192,132,252,0.65);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.28),
+                  inset 0 -1px 0 rgba(0,0,0,0.20),
+                  0 18px 48px rgba(91,46,138,0.65),
+                  0 0 44px rgba(168,85,247,0.22);
     }
     .btn-filled:active { transform: scale(0.97); }
     .btn-icon {
-      width: 38px; height: 38px; border-radius: 9999px;
-      background: rgba(0,0,0,0.22);
+      width: 32px; height: 32px; border-radius: 9999px; flex-shrink: 0;
+      background: rgba(0,0,0,0.26);
       display: flex; align-items: center; justify-content: center;
-      margin-left: 14px;
-      box-shadow: inset 0 1px 1px rgba(255,255,255,0.16);
-      font-size: 16px;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.18);
+      font-size: 14px; line-height: 1;
       transition: transform 0.45s cubic-bezier(0.32,0.72,0,1);
     }
-    [dir="rtl"] .btn-icon { margin-left: 0; margin-right: 14px; }
-    .btn-filled:hover .btn-icon { transform: translateX(3px) translateY(-2px) scale(1.14); }
-    [dir="rtl"] .btn-filled:hover .btn-icon { transform: translateX(-3px) translateY(-2px) scale(1.14); }
+    .btn-filled:hover .btn-icon { transform: translateY(-2px) scale(1.12); }
 
     /* GHOST BUTTON */
     .btn-ghost {
       display: inline-flex; align-items: center; gap: 8px;
-      text-decoration: none; padding: 16px 30px;
-      border-radius: 9999px; font-size: 15px; font-weight: 600; color: var(--t1);
+      text-decoration: none; padding: 12px 26px;
+      border-radius: 9999px; font-size: 15px; font-weight: 600; color: var(--t1); line-height: 1;
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(168,85,247,0.26);
       box-shadow: inset 0 1px 1px rgba(255,255,255,0.06);
@@ -380,13 +363,13 @@
     }
     [dir="rtl"] .stat-item + .stat-item::before { right: 0; left: auto; }
     .stat-num {
-      font-size: 38px; font-weight: 900;
+      font-size: 32px; font-weight: 700;
       background: linear-gradient(135deg, var(--violet), var(--violet-l));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
-      line-height: 1; margin-bottom: 8px;
+      line-height: 1.4; margin-bottom: 6px;
     }
-    .stat-lbl { font-size: 12px; color: var(--t3); letter-spacing: 0.05em; }
+    .stat-lbl { font-size: 13px; color: var(--t3); letter-spacing: 0; line-height: 1.6; font-weight: 400; }
 
     /* ── SECTIONS ── */
     section { padding: 120px 20px; }
@@ -396,16 +379,16 @@
       display: inline-block;
       background: rgba(168,85,247,0.07);
       border: 1px solid rgba(168,85,247,0.24);
-      color: var(--violet); padding: 5px 16px;
-      border-radius: 9999px; font-size: 10px; font-weight: 700;
-      letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 20px;
+      color: var(--violet); padding: 6px 18px;
+      border-radius: 9999px; font-size: 11px; font-weight: 600;
+      letter-spacing: 0; text-transform: none; margin-bottom: 20px;
     }
     .section-h2 {
-      font-size: clamp(30px, 4.8vw, 56px);
-      font-weight: 900; line-height: 1.12; letter-spacing: -0.9px; margin-bottom: 18px;
+      font-size: clamp(28px, 4.5vw, 52px);
+      font-weight: 900; line-height: 1.3; letter-spacing: 0; margin-bottom: 18px;
     }
     .section-p {
-      font-size: 17px; color: var(--t2); max-width: 580px; line-height: 1.9;
+      font-size: 16px; color: var(--t2); max-width: 580px; line-height: 2;
     }
 
     /* ── 3D CARD SYSTEM ── */
@@ -451,10 +434,13 @@
                   0 0 72px rgba(168,85,247,0.12);
     }
     .visual-inner {
-      background: var(--black-3);
+      background: rgba(13,13,24,0.52);
+      backdrop-filter: blur(22px) saturate(1.4);
+      -webkit-backdrop-filter: blur(22px) saturate(1.4);
       border-radius: calc(var(--r-lg) - 6px);
       padding: 28px 24px; position: relative; overflow: hidden;
-      box-shadow: inset 0 1px 1px rgba(255,255,255,0.05);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.09),
+                  inset 0 0 0 1px rgba(168,85,247,0.05);
     }
     .visual-top-bar {
       display: flex; align-items: center; gap: 7px; margin-bottom: 22px;
@@ -477,9 +463,11 @@
     }
     .flow-avatar {
       width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center; font-size: 17px;
+      display: flex; align-items: center; justify-content: center;
       background: rgba(168,85,247,0.12); border: 1px solid rgba(168,85,247,0.22);
+      color: rgba(168,85,247,0.85);
     }
+    .flow-avatar svg { width: 18px; height: 18px; display: block; }
     .flow-info { flex: 1; }
     .flow-name { font-size: 10px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 3px; }
     .flow-text { font-size: 13px; color: var(--t1); line-height: 1.5; }
@@ -532,14 +520,15 @@
       background: linear-gradient(135deg, var(--purple), var(--violet));
       border-radius: 13px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 22px;
+      color: rgba(255,255,255,0.95);
       box-shadow: inset 0 1px 1px rgba(255,255,255,0.2),
                   0 4px 18px rgba(91,46,138,0.45);
       transition: transform 0.45s cubic-bezier(0.32,0.72,0,1);
     }
+    .point-icon-inner svg { width: 22px; height: 22px; display: block; }
     .unique-point:hover .point-icon-inner { transform: scale(1.1) rotate(-5deg); }
-    .point-title { font-size: 16px; font-weight: 700; margin-bottom: 5px; color: var(--t1); }
-    .point-desc  { font-size: 14px; color: var(--t2); line-height: 1.82; }
+    .point-title { font-size: 16px; font-weight: 700; margin-bottom: 5px; color: var(--t1); line-height: 1.5; }
+    .point-desc  { font-size: 14px; color: var(--t2); line-height: 2; }
 
     /* ── BENTO ── */
     .features-section { background: var(--black); }
@@ -550,8 +539,8 @@
       gap: 14px; margin-top: 68px;
     }
     .bento-card {
-      background: rgba(168,85,247,0.03);
-      border: 1px solid var(--border);
+      background: rgba(168,85,247,0.05);
+      border: 1px solid rgba(168,85,247,0.16);
       border-radius: var(--r-lg); padding: 5px;
       transition: border-color 0.5s, box-shadow 0.5s;
       cursor: default;
@@ -563,12 +552,15 @@
     .bento-card.gb:hover { box-shadow: 0 0 48px rgba(59,130,246,0.14); border-color: rgba(59,130,246,0.24); }
 
     .bento-inner {
-      background: var(--black-3);
+      background: rgba(13,13,24,0.52);
+      backdrop-filter: blur(22px) saturate(1.4);
+      -webkit-backdrop-filter: blur(22px) saturate(1.4);
       border-radius: calc(var(--r-lg) - 5px);
       padding: 30px 26px; height: 100%;
       display: flex; flex-direction: column;
       position: relative; overflow: hidden;
-      box-shadow: inset 0 1px 1px rgba(255,255,255,0.04);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.09),
+                  inset 0 0 0 1px rgba(168,85,247,0.05);
     }
     .bento-card.wide   { grid-column: span 4; }
     .bento-card.narrow { grid-column: span 2; }
@@ -587,13 +579,18 @@
     .bento-card.gb .bento-glow { background: radial-gradient(circle, rgba(59,130,246,0.11), transparent 65%); }
 
     .bento-icon {
-      font-size: 30px; margin-bottom: 18px;
-      display: inline-block;
-      transition: transform 0.45s cubic-bezier(0.32,0.72,0,1);
+      width: 32px; height: 32px; margin-bottom: 18px;
+      display: block;
+      transition: transform 0.5s cubic-bezier(0.34,1.56,0.64,1);
     }
-    .bento-card:hover .bento-icon { transform: scale(1.22) rotate(-6deg); }
-    .bento-title { font-size: 17px; font-weight: 800; margin-bottom: 9px; }
-    .bento-desc  { font-size: 13px; color: var(--t2); line-height: 1.82; flex: 1; }
+    .bento-icon svg { width: 32px; height: 32px; display: block; }
+    .bento-card:hover .bento-icon { transform: scale(1.04) translateY(-2px) rotate(-3deg); }
+    .bento-card.gv .bento-icon { color: var(--violet); }
+    .bento-card.ge .bento-icon { color: var(--emerald); }
+    .bento-card.gg .bento-icon { color: var(--gold); }
+    .bento-card.gb .bento-icon { color: #60a5fa; }
+    .bento-title { font-size: 16px; font-weight: 800; margin-bottom: 9px; line-height: 1.5; }
+    .bento-desc  { font-size: 13px; color: var(--t2); line-height: 2; flex: 1; }
 
     .bento-badge {
       display: inline-flex; align-items: center; gap: 5px;
@@ -661,9 +658,13 @@
       transform: translateY(-5px);
     }
     .step-inner {
-      background: var(--black-3); border-radius: calc(var(--r-md) - 4px);
+      background: rgba(13,13,24,0.52);
+      backdrop-filter: blur(22px) saturate(1.4);
+      -webkit-backdrop-filter: blur(22px) saturate(1.4);
+      border-radius: calc(var(--r-md) - 4px);
       padding: 30px 20px; text-align: center;
-      box-shadow: inset 0 1px 1px rgba(255,255,255,0.04);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.09),
+                  inset 0 0 0 1px rgba(168,85,247,0.05);
     }
     .step-num-outer {
       width: 72px; height: 72px; border-radius: 50%;
@@ -681,14 +682,15 @@
       width: 56px; height: 56px; border-radius: 50%;
       background: linear-gradient(135deg, var(--purple), var(--violet));
       display: flex; align-items: center; justify-content: center;
-      font-size: 22px; font-weight: 900;
+      font-size: 22px; font-weight: 900; line-height: 1;
+      padding-top: 4px;
       box-shadow: 0 4px 22px rgba(91,46,138,0.55),
                   inset 0 1px 1px rgba(255,255,255,0.2);
       transition: transform 0.45s cubic-bezier(0.32,0.72,0,1);
     }
     .step-card:hover .step-num-inner { transform: scale(1.1); }
-    .step-title { font-size: 15px; font-weight: 700; margin-bottom: 9px; }
-    .step-desc  { font-size: 13px; color: var(--t2); line-height: 1.78; }
+    .step-title { font-size: 15px; font-weight: 700; margin-bottom: 9px; line-height: 1.55; }
+    .step-desc  { font-size: 13px; color: var(--t2); line-height: 2; }
 
     /* ── PLANS ── */
     .plans-section { background: var(--black); }
@@ -716,10 +718,13 @@
     .plan-outer.popular:hover { transform: translateY(-20px) scale(1.025); }
 
     .plan-inner {
-      background: var(--black-3);
+      background: rgba(13,13,24,0.52);
+      backdrop-filter: blur(22px) saturate(1.4);
+      -webkit-backdrop-filter: blur(22px) saturate(1.4);
       border-radius: calc(var(--r-lg) - 5px);
       padding: 28px 22px; position: relative; overflow: hidden;
-      box-shadow: inset 0 1px 1px rgba(255,255,255,0.05);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.09),
+                  inset 0 0 0 1px rgba(168,85,247,0.05);
     }
     /* Shimmer sweep on popular */
     .plan-outer.popular .plan-inner::before {
@@ -732,47 +737,59 @@
     .popular-pill {
       position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
       background: linear-gradient(135deg, var(--gold), var(--gold-l));
-      color: #1a0f30; padding: 4px 22px;
+      color: #1a0f30; padding: 5px 22px;
       border-radius: 0 0 14px 14px;
-      font-size: 11px; font-weight: 800; letter-spacing: 0.06em; white-space: nowrap;
+      font-size: 11px; font-weight: 800; letter-spacing: 0; white-space: nowrap;
       box-shadow: 0 4px 16px rgba(245,158,11,0.4);
     }
-    .plan-name   { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
-    .plan-target { font-size: 12px; color: var(--t3); margin-bottom: 22px; }
-    .plan-price  { font-size: 32px; font-weight: 900; line-height: 1; margin-bottom: 4px; }
+    .plan-name   { font-size: 17px; font-weight: 800; margin-bottom: 4px; line-height: 1.5; display: flex; align-items: center; gap: 8px; }
+    .plan-name svg { flex-shrink: 0; }
+    .plan-target { font-size: 12px; color: var(--t3); margin-bottom: 22px; line-height: 1.6; }
+    .plan-price  { font-size: 30px; font-weight: 900; line-height: 1.2; margin-bottom: 4px; }
     .plan-price .unit { font-size: 14px; font-weight: 500; color: var(--t2); }
     .plan-period { font-size: 12px; color: var(--t3); margin-bottom: 24px; }
     .plan-rule   { height: 1px; background: var(--border); margin-bottom: 20px; }
     .plan-features { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
     .plan-features li {
       display: flex; align-items: flex-start; gap: 8px;
-      font-size: 13px; color: var(--t2);
+      font-size: 13px; color: var(--t2); line-height: 1.7;
     }
-    .plan-features li .chk  { color: var(--emerald); font-weight: 700; flex-shrink: 0; }
-    .plan-features li .xchk { color: #f87171; font-weight: 700; flex-shrink: 0; }
+    .plan-features li .chk  { color: var(--emerald); flex-shrink: 0; display: inline-flex; align-items: center; margin-top: 2px; }
+    .plan-features li .xchk { color: #f87171; flex-shrink: 0; display: inline-flex; align-items: center; margin-top: 2px; }
     .plan-features li.muted { color: var(--t3); }
 
     .plan-btn-filled {
       display: flex; align-items: center; justify-content: center;
-      text-decoration: none; padding: 13px 16px; border-radius: 9999px;
-      font-size: 14px; font-weight: 700; color: #fff;
-      background: linear-gradient(135deg, var(--purple), var(--violet));
-      box-shadow: 0 6px 26px rgba(91,46,138,0.45);
-      transition: opacity 0.4s, transform 0.4s, box-shadow 0.4s;
+      text-decoration: none; padding: 14px 22px; border-radius: 9999px;
+      font-size: 14px; font-weight: 700; color: #fff; line-height: 1;
+      background: rgba(91,46,138,0.84);
+      backdrop-filter: blur(12px) saturate(1.5);
+      -webkit-backdrop-filter: blur(12px) saturate(1.5);
+      border: 1px solid rgba(192,132,252,0.45);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22),
+                  inset 0 -1px 0 rgba(0,0,0,0.18),
+                  0 6px 24px rgba(91,46,138,0.45);
+      transition: transform 0.4s, box-shadow 0.4s, background 0.4s, border-color 0.4s;
       position: relative; overflow: hidden;
     }
     .plan-btn-filled::before {
       content: ''; position: absolute; inset: 0; border-radius: 9999px;
-      background: linear-gradient(135deg, rgba(255,255,255,0.16), transparent);
-      opacity: 0; transition: opacity 0.3s;
+      background: linear-gradient(160deg, rgba(255,255,255,0.16) 0%, transparent 50%);
+      opacity: 1; pointer-events: none;
     }
-    .plan-btn-filled:hover::before { opacity: 1; }
-    .plan-btn-filled:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(91,46,138,0.6); }
+    .plan-btn-filled:hover {
+      transform: translateY(-2px);
+      background: rgba(91,46,138,0.96);
+      border-color: rgba(192,132,252,0.62);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.26),
+                  inset 0 -1px 0 rgba(0,0,0,0.18),
+                  0 12px 34px rgba(91,46,138,0.60);
+    }
 
     .plan-btn-outline {
-      display: block; text-align: center; text-decoration: none;
-      padding: 13px; border-radius: 9999px; font-size: 14px; font-weight: 700;
-      color: var(--violet); border: 1px solid rgba(168,85,247,0.34);
+      display: flex; align-items: center; justify-content: center; text-decoration: none;
+      padding: 14px 22px; border-radius: 9999px; font-size: 14px; font-weight: 700;
+      color: var(--violet); border: 1px solid rgba(168,85,247,0.34); line-height: 1;
       transition: background 0.4s, transform 0.4s, border-color 0.4s;
     }
     .plan-btn-outline:hover {
@@ -814,19 +831,19 @@
     .tp5 { width: 3px; height: 3px; top: 50%; left: 50%; animation: float 5s ease-in-out infinite 1.5s; background: rgba(245,158,11,0.3); }
     .trial-content { position: relative; z-index: 1; }
     .trial-h2 {
-      font-size: clamp(28px, 4.8vw, 54px);
-      font-weight: 900; letter-spacing: -0.6px; margin-bottom: 20px;
+      font-size: clamp(26px, 4.5vw, 50px);
+      font-weight: 900; letter-spacing: 0; margin-bottom: 20px;
     }
-    .trial-p   { font-size: 17px; color: var(--t2); margin-bottom: 46px; line-height: 1.85; }
+    .trial-p   { font-size: 16px; color: var(--t2); margin-bottom: 46px; line-height: 2; }
     .trial-chips {
       display: flex; gap: 28px; justify-content: center;
       flex-wrap: wrap; margin-bottom: 50px;
     }
     .trial-chip {
       display: flex; align-items: center; gap: 8px;
-      font-size: 14px; font-weight: 600; color: var(--t2);
+      font-size: 14px; font-weight: 600; color: var(--t2); line-height: 1.6;
     }
-    .trial-chip .dot { color: var(--emerald); font-size: 18px; font-weight: 900; }
+    .trial-chip .dot { color: var(--emerald); display: inline-flex; align-items: center; }
 
     /* ── FAQ ── */
     .faq-section { background: var(--black); }
@@ -839,16 +856,21 @@
     .faq-outer:hover { border-color: rgba(168,85,247,0.2); }
     .faq-outer.open { border-color: var(--border-s); box-shadow: 0 0 32px rgba(168,85,247,0.08); }
     .faq-body {
-      background: var(--black-3); border-radius: calc(var(--r-md) - 3px);
-      overflow: hidden; box-shadow: inset 0 1px 1px rgba(255,255,255,0.04);
+      background: rgba(13,13,24,0.52);
+      backdrop-filter: blur(22px) saturate(1.4);
+      -webkit-backdrop-filter: blur(22px) saturate(1.4);
+      border-radius: calc(var(--r-md) - 3px);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.07),
+                  inset 0 0 0 1px rgba(168,85,247,0.04);
     }
     .faq-q {
       width: 100%; background: none; border: none; color: var(--t1);
-      font-family: 'Vazirmatn', sans-serif;
+      font-family: 'Morabba', sans-serif;
       font-size: 15px; font-weight: 700; text-align: right;
       padding: 22px 24px; cursor: pointer;
       display: flex; justify-content: space-between; align-items: center; gap: 12px;
-      transition: color 0.3s;
+      transition: color 0.3s; line-height: 1.65;
     }
     .faq-q:hover { color: var(--violet-l); }
     .faq-arrow {
@@ -866,7 +888,7 @@
     .faq-a {
       max-height: 0; overflow: hidden;
       transition: max-height 0.52s cubic-bezier(0.32,0.72,0,1), padding 0.52s;
-      font-size: 14px; color: var(--t2); line-height: 1.92; padding: 0 24px;
+      font-size: 14px; color: var(--t2); line-height: 2.1; padding: 0 24px;
     }
     .faq-outer.open .faq-a { max-height: 340px; padding: 0 24px 26px; }
 
@@ -875,7 +897,7 @@
       background: var(--black-2); border-top: 1px solid var(--border);
       padding: 64px 20px; text-align: center;
     }
-    .footer-mark { font-size: 28px; font-weight: 900; margin-bottom: 18px; }
+    .footer-mark { font-size: 26px; font-weight: 900; margin-bottom: 18px; line-height: 1.4; }
     .footer-mark em { font-style: normal; color: var(--violet); }
     .footer-links {
       display: flex; gap: 32px; justify-content: center; flex-wrap: wrap;
@@ -913,19 +935,42 @@
       .plan-outer.popular { transform: none; }
     }
     @media (max-width: 580px) {
-      section { padding: 80px 16px; }
-      .hero { padding: 120px 16px 80px; }
-      .stat-strip { flex-direction: column; gap: 32px; align-items: center; }
-      .stat-item::before { display: none; }
-      .steps-wrap { grid-template-columns: 1fr; }
+      section { padding: 72px 20px; }
+      .hero { padding: 108px 20px 72px; }
+
+      /* hero actions — full-width stacked buttons */
+      .hero-actions { flex-direction: column; align-items: stretch; gap: 12px; padding: 0 4px; }
+      .btn-filled, .btn-ghost { justify-content: center; width: 100%; }
+
+      /* stat strip — vertical, remove side padding */
+      .stat-strip { flex-direction: row; margin-top: 52px; }
+      .stat-item { padding: 0 20px; }
+      .stat-num { font-size: 24px; }
+      .stat-lbl { font-size: 11px; }
+
+      /* section body copy */
+      .section-p { max-width: 100%; font-size: 15px; }
+
+      /* bento & steps */
+      .bento-grid { margin-top: 44px; gap: 10px; }
+      .steps-wrap { grid-template-columns: 1fr; margin-top: 44px; }
       .plans-grid { grid-template-columns: 1fr; }
-      .trial-inner { padding: 56px 24px; }
-      .hero-actions { flex-direction: column; align-items: center; }
+
+      /* trial */
+      .trial-inner { padding: 52px 24px; }
+      .trial-chips { gap: 18px; margin-bottom: 36px; }
+      .trial-p { margin-bottom: 32px; }
+
+      /* compare section */
       .compare-row { grid-template-columns: 1fr; }
     }
 
-    /* ── BOTTOM NAV ─────────────────────────────── */
+    /* ── BOTTOM NAV — desktop only ──────────────── */
     body { padding-bottom: 100px; }
+    @media (max-width: 768px) {
+      #bottom-nav { display: none !important; }
+      body { padding-bottom: 0; }
+    }
 
     #bottom-nav {
       position: fixed;
@@ -959,10 +1004,10 @@
 
     .bnav-item {
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       align-items: center;
-      gap: 2px;
-      padding: 8px 9px 9px;
+      gap: 5px;
+      padding: 7px 13px;
       border-radius: 9999px;
       cursor: pointer;
       text-decoration: none;
@@ -970,10 +1015,9 @@
       background: transparent;
       color: var(--t3);
       transition:
-        background 0.28s cubic-bezier(0.32,0.72,0,1),
-        color 0.28s,
-        box-shadow 0.28s;
-      position: relative;
+        background 0.25s cubic-bezier(0.32,0.72,0,1),
+        color 0.25s,
+        box-shadow 0.25s;
       white-space: nowrap;
       user-select: none;
     }
@@ -985,30 +1029,148 @@
       background: linear-gradient(135deg, rgba(91,46,138,0.95), rgba(123,63,174,0.95));
       color: #fff;
       box-shadow:
-        0 0 16px rgba(168,85,247,0.35),
-        inset 0 1px 1px rgba(255,255,255,0.12);
+        0 0 14px rgba(168,85,247,0.30),
+        inset 0 1px 0 rgba(255,255,255,0.14);
     }
     .bnav-num {
-      font-size: 8px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      opacity: 0.55;
+      font-size: 9px;
+      font-weight: 500;
+      opacity: 0.48;
       line-height: 1;
       font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
     }
-    .bnav-item.active .bnav-num { opacity: 0.65; }
+    .bnav-item.active .bnav-num { opacity: 0.62; }
     .bnav-label {
-      font-size: 11px;
-      font-weight: 700;
+      font-size: 13px;
+      font-weight: 600;
       line-height: 1;
-      letter-spacing: 0.01em;
+      letter-spacing: 0;
     }
 
-    @media (max-width: 600px) {
-      #bottom-nav { gap: 1px; padding: 3px; bottom: 16px; }
-      .bnav-item  { padding: 5px 8px 6px; }
-      .bnav-label { font-size: 10px; }
+    @media (max-width: 640px) {
+      #bottom-nav { gap: 0; padding: 3px; bottom: 14px; max-width: calc(100% - 24px); }
+      .bnav-item  { padding: 7px 11px; gap: 4px; }
+      .bnav-label { font-size: 12px; }
       .bnav-num   { display: none; }
+    }
+
+    /* ── SMALL PHONE ≤ 430px ──────────────────────── */
+    @media (max-width: 430px) {
+      /* nav */
+      nav { gap: 10px; padding: 6px 14px 6px 6px; }
+      .nav-actions { gap: 8px; }
+      .nav-wordmark { font-size: 22px; }
+      .nav-cta { padding: 9px 14px 9px 8px; font-size: 13px; gap: 7px; }
+      .nav-cta-icon { width: 24px; height: 24px; }
+      .theme-toggle { width: 36px; height: 36px; }
+
+      /* hero */
+      .hero { padding: 92px 20px 60px; }
+      .eyebrow { font-size: 11px; padding: 7px 14px 7px 10px; margin-bottom: 24px; }
+      .hero-h1 { font-size: clamp(32px, 9.5vw, 52px); }
+      .hero-sub { font-size: 13px; margin-bottom: 36px; }
+
+      /* sections */
+      section { padding: 60px 20px; }
+      .section-h2 { font-size: clamp(22px, 7.5vw, 36px); }
+      .section-p { font-size: 14px; }
+
+      /* bento cards */
+      .bento-grid { gap: 8px; }
+      .bento-inner { padding: 22px 18px; }
+
+      /* how-to steps */
+      .step-inner { padding: 24px 16px; }
+      .step-num-outer { width: 60px; height: 60px; margin-bottom: 18px; }
+      .step-num-inner { width: 46px; height: 46px; font-size: 18px; }
+
+      /* plans */
+      .plan-inner { padding: 24px 18px; }
+
+      /* trial CTA */
+      .trial-inner { padding: 44px 20px; }
+      .trial-h2 { font-size: clamp(20px, 6.5vw, 32px); }
+      .trial-p { font-size: 14px; margin-bottom: 28px; }
+      .trial-chip { font-size: 13px; gap: 6px; }
+
+      /* faq */
+      .faq-q { font-size: 13px; padding: 16px 18px; }
+      .faq-list { margin-top: 48px; }
+
+      /* bottom nav — scrollable pill on tiny screens */
+      #bottom-nav {
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        justify-content: flex-start;
+      }
+      #bottom-nav::-webkit-scrollbar { display: none; }
+      .bnav-item  { padding: 6px 8px; }
+      .bnav-label { font-size: 11px; }
+
+      /* unique-grid gap */
+      .unique-grid { gap: 32px; margin-top: 44px; }
+
+      /* stat strip */
+      .stat-strip { margin-top: 36px; }
+      .stat-item { padding: 0 14px; }
+      .stat-num { font-size: 20px; }
+      .stat-lbl { font-size: 10px; }
+    }
+
+    /* ── SCROLL TO TOP — mobile only ─────────────── */
+    #scroll-top {
+      display: none;
+    }
+    @media (max-width: 768px) {
+      #scroll-top {
+        display: flex;
+        position: fixed;
+        bottom: 24px;
+        left: 20px;
+        z-index: 9999;
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: rgba(9,9,15,0.86);
+        border: 1px solid rgba(168,85,247,0.30);
+        color: var(--violet-l);
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        backdrop-filter: blur(28px) saturate(1.6);
+        -webkit-backdrop-filter: blur(28px) saturate(1.6);
+        box-shadow:
+          0 0 0 1px rgba(168,85,247,0.06),
+          0 8px 32px rgba(0,0,0,0.5),
+          0 0 24px rgba(168,85,247,0.12);
+        outline: none;
+        opacity: 0;
+        transform: translateY(16px) scale(0.88);
+        transition:
+          opacity 0.4s cubic-bezier(0.32,0.72,0,1),
+          transform 0.4s cubic-bezier(0.32,0.72,0,1),
+          box-shadow 0.3s,
+          background 0.3s;
+        pointer-events: none;
+      }
+      #scroll-top.visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+      }
+      #scroll-top:active {
+        transform: scale(0.92);
+        background: rgba(91,46,138,0.7);
+      }
+      html[data-theme="light"] #scroll-top {
+        background: rgba(255,255,255,0.88);
+        border-color: rgba(168,85,247,0.28);
+        box-shadow:
+          0 4px 24px rgba(91,46,138,0.18),
+          0 0 0 1px rgba(168,85,247,0.08);
+      }
     }
 
     /* ── THEME TOGGLE ─────────────────────────────── */
@@ -1031,40 +1193,28 @@
 
     /* ── LIGHT THEME ─────────────────────────────── */
     html[data-theme="light"] {
-      --black:    #F4F0FF;
-      --black-2:  #EDE8F8;
+      --black:    #F5F2FF;
+      --black-2:  #EBE6FA;
       --black-3:  #FFFFFF;
-      --black-4:  #E3DBF5;
-      --t1:       #150E2E;
-      --t2:       #3B2C65;
-      --t3:       #6F60A2;
-      --t4:       rgba(75,58,120,0.42);
-      --border:   rgba(123,58,237,0.14);
-      --border-s: rgba(123,58,237,0.28);
-      --border-m: rgba(123,58,237,0.48);
+      --black-4:  #DED6F5;
+      --t1:       #0D0820;
+      --t2:       #2A1D52;
+      --t3:       #5A4A8A;
+      --t4:       rgba(60,44,110,0.45);
+      --border:   rgba(100,50,200,0.16);
+      --border-s: rgba(100,50,200,0.30);
+      --border-m: rgba(100,50,200,0.52);
     }
+    html[data-theme="light"] .hero-h1 { color: #0D0820; }
+    html[data-theme="light"] .hero-sub { color: rgba(30,18,70,0.72); }
+    html[data-theme="light"] .hero-sub strong { color: rgba(13,8,32,0.92); }
 
     /* Scrollbar */
     html[data-theme="light"] ::-webkit-scrollbar-track { background: #EDE8F8; }
 
-    /* Hero */
-    html[data-theme="light"] .hero {
-      background: radial-gradient(ellipse 65% 55% at 50% -8%, rgba(168,85,247,0.14) 0%, transparent 72%);
-    }
-    html[data-theme="light"] .aurora-1 {
-      background: radial-gradient(ellipse, rgba(168,85,247,0.28) 0%, transparent 68%);
-    }
-    html[data-theme="light"] .aurora-2 {
-      background: radial-gradient(ellipse, rgba(91,46,138,0.20) 0%, transparent 65%);
-    }
-    html[data-theme="light"] .aurora-3 {
-      background: radial-gradient(ellipse, rgba(192,132,252,0.18) 0%, transparent 60%);
-    }
-    html[data-theme="light"] .aurora-4 {
-      background: radial-gradient(ellipse, rgba(123,58,237,0.14) 0%, transparent 60%);
-    }
+    /* Hero — shader handles bg; grid adapts to theme */
     html[data-theme="light"] .hero-grid {
-      background-image: radial-gradient(circle, rgba(123,58,237,0.15) 1px, transparent 1px);
+      background-image: radial-gradient(circle, rgba(123,58,237,0.12) 1px, transparent 1px);
     }
 
     /* Top nav */
@@ -1110,11 +1260,36 @@
                   0 0 60px rgba(168,85,247,0.10);
     }
 
-    /* inset white lines: flip for light surfaces */
+    /* Cards: white glass in light mode */
     html[data-theme="light"] .visual-inner,
     html[data-theme="light"] .bento-inner,
     html[data-theme="light"] .step-inner,
     html[data-theme="light"] .plan-inner,
+    html[data-theme="light"] .faq-body {
+      background: rgba(255,255,255,0.62);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.9),
+                  inset 0 0 0 1px rgba(123,58,237,0.04),
+                  0 1px 4px rgba(91,46,138,0.06);
+    }
+    html[data-theme="light"] .bento-card {
+      background: rgba(255,255,255,0.32);
+      border-color: rgba(123,58,237,0.16);
+    }
+    /* Buttons: same deep purple, slightly adjusted glow on light bg */
+    html[data-theme="light"] .btn-filled,
+    html[data-theme="light"] .nav-cta,
+    html[data-theme="light"] .plan-btn-filled {
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.28),
+                  inset 0 -1px 0 rgba(0,0,0,0.22),
+                  0 4px 18px rgba(91,46,138,0.38);
+    }
+    html[data-theme="light"] .btn-filled:hover,
+    html[data-theme="light"] .nav-cta:hover,
+    html[data-theme="light"] .plan-btn-filled:hover {
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.30),
+                  inset 0 -1px 0 rgba(0,0,0,0.22),
+                  0 10px 28px rgba(91,46,138,0.50);
+    }
     html[data-theme="light"] .faq-q {
       box-shadow: 0 1px 3px rgba(91,46,138,0.06);
     }
@@ -1183,16 +1358,15 @@
 <div class="nav-wrap">
   <nav>
     <a href="/" class="nav-logo">
-      <div class="logo-outer">
-        <div class="logo-inner">⚡</div>
-      </div>
       <span class="nav-wordmark">روبی<em>فو</em></span>
     </a>
     <div class="nav-actions">
-      <button class="theme-toggle" id="themeToggle" aria-label="تغییر تم">🌙</button>
+      <button class="theme-toggle" id="themeToggle" aria-label="تغییر تم">
+        <svg id="themeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
       <a href="https://rubika.ir/rubifo_bot" class="nav-cta" target="_blank" rel="noopener">
         <span class="nav-cta-text">شروع تریال</span>
-        <span class="nav-cta-icon">←</span>
+        <span class="nav-cta-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M7.5 2L3.5 6L7.5 10" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </a>
     </div>
   </nav>
@@ -1200,155 +1374,59 @@
 
 <!-- HERO -->
 <section class="hero" id="hero">
-  <div class="aurora-wrap" aria-hidden="true">
-    <div class="aurora-blob aurora-1"></div>
-    <div class="aurora-blob aurora-2"></div>
-    <div class="aurora-blob aurora-3"></div>
-    <div class="aurora-blob aurora-4"></div>
-  </div>
   <div class="hero-grid" aria-hidden="true"></div>
+  <div class="hero-glass" aria-hidden="true"></div>
 
   <div class="hero-content">
     <div class="eyebrow">
       <div class="eyebrow-dot"></div>
-      اولین ربات انتشار حرفه‌ای روبیکا
+      جایگزین ادمین بارگذاری — یک‌بار برای همیشه
     </div>
 
     <h1 class="hero-h1">
-      بدون <span class="grad-purple">بارگذاری دستی</span><br />
-      بدون <span class="grad-gold">واترمارک فوروارد</span>
+      ربات بارگذاری هوشمند<br />
+      <span class="grad-gold">همواره فعال</span>
     </h1>
 
     <p class="hero-sub">
-      محتوا رو به ربات بفرست — روبیفو اونو طبق زمانبندیت<br />
-      در کانال روبیکاییت منتشر می‌کنه. نه آپلود دستی، نه ردپای فوروارد.
+      صفر تا صد بارگذاری پست‌ها در کانال روبیکا رو بسپر به <span class="grad-purple">روبیفو</span>
     </p>
 
     <div class="hero-actions">
       <a href="https://rubika.ir/rubifo_bot" class="btn-filled magnetic-btn" target="_blank" rel="noopener">
-        شروع تریال رایگان
-        <span class="btn-icon">⚡</span>
+        <span class="btn-txt">شروع تریال رایگان</span>
+        <span class="btn-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M8 1L3 8h5l-2 5 6-7H7l1-5z" fill="#FCD34D" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/></svg></span>
       </a>
       <a href="#plans" class="btn-ghost magnetic-btn">
-        مشاهده پلن‌ها ↓
+        <span class="btn-txt">مشاهده پلن‌ها ↓</span>
       </a>
     </div>
 
     <div class="stat-strip">
       <div class="stat-item">
-        <div class="stat-num" data-count="2" data-suffix=" روز">۲ روز</div>
-        <div class="stat-lbl">تریال کاملاً رایگان</div>
-      </div>
-      <div class="stat-item">
         <div class="stat-num" data-count="0" data-suffix=" واترمارک">۰ واترمارک</div>
-        <div class="stat-lbl">محتوای کاملاً ارگانیک</div>
+        <div class="stat-lbl">برخلاف فوروارد معمولی</div>
       </div>
       <div class="stat-item">
         <div class="stat-num">۲۴/۷</div>
-        <div class="stat-lbl">آپتایم مطمئن</div>
+        <div class="stat-lbl">بدون مرخصی، بدون تأخیر</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" data-count="2" data-suffix=" دقیقه">۲ دقیقه</div>
+        <div class="stat-lbl">تا راه‌اندازی کامل</div>
       </div>
     </div>
   </div>
 </section>
 
 <!-- UNIQUE: NO WATERMARK -->
-<section class="unique-section" id="unique">
-  <div class="container">
-    <div class="section-eyebrow reveal">مزیت انحصاری</div>
-    <h2 class="section-h2 reveal reveal-d1">انتشار <em style="font-style:normal;color:var(--violet)">بدون</em> واترمارک فوروارد</h2>
-    <p class="section-p reveal reveal-d2">روبیفو محتوا رو فوروارد نمی‌کنه — آپلود می‌کنه. نتیجه؟ پست‌ها انگار مستقیم از کانال خودت ارسال شدن.</p>
-
-    <div class="unique-grid">
-      <div class="visual-outer c3d reveal reveal-d1">
-        <div class="card-shine"></div>
-        <div class="visual-inner">
-          <div class="visual-glow" aria-hidden="true"></div>
-          <div class="visual-top-bar">
-            <div class="vbar-dot"></div>
-            <div class="vbar-dot"></div>
-            <div class="vbar-dot"></div>
-            <span class="vbar-title">نحوه کار روبیفو</span>
-          </div>
-
-          <div class="flow-row">
-            <div class="flow-avatar">🧑‍💻</div>
-            <div class="flow-info">
-              <div class="flow-name">شما</div>
-              <div class="flow-text">🎬 فیلم جدید هفته — محتوا رو برای ربات می‌فرستید</div>
-            </div>
-          </div>
-
-          <div style="text-align:center;color:rgba(168,85,247,0.5);font-size:22px;margin:10px 0">↓</div>
-
-          <div class="flow-row">
-            <div class="flow-avatar" style="background:rgba(91,46,138,0.2);border-color:rgba(168,85,247,0.3)">⚡</div>
-            <div class="flow-info">
-              <div class="flow-name">روبیفو</div>
-              <div class="flow-text">دریافت، بازآپلود، و زمانبندی در صف</div>
-            </div>
-          </div>
-
-          <div class="flow-divider">
-            <div class="flow-divider-line"></div>
-            <div class="flow-divider-label">نتیجه در کانال مقصد</div>
-            <div class="flow-divider-line"></div>
-          </div>
-
-          <div class="compare-row">
-            <div class="compare-card bad">
-              <div class="compare-label">❌ روش معمولی فوروارد</div>
-              <div class="compare-msg">🎬 فیلم جدید هفته</div>
-              <div class="compare-watermark">── فوروارد از @source_channel ──</div>
-            </div>
-            <div class="compare-card good">
-              <div class="compare-label">✅ روبیفو</div>
-              <div class="compare-msg">🎬 فیلم جدید هفته</div>
-              <div style="font-size:11px;color:var(--emerald);margin-top:5px">بدون هیچ نشانه‌ای ✓</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="unique-points">
-        <div class="unique-point reveal reveal-d1">
-          <div class="point-icon-outer">
-            <div class="point-icon-inner">🏷️</div>
-          </div>
-          <div>
-            <div class="point-title">بدون برچسب فوروارد</div>
-            <div class="point-desc">پست‌ها انگار مستقیم از کانال خودت ارسال شدن. هیچ ردپایی از مبدأ باقی نمی‌مونه.</div>
-          </div>
-        </div>
-        <div class="unique-point reveal reveal-d2">
-          <div class="point-icon-outer">
-            <div class="point-icon-inner">📤</div>
-          </div>
-          <div>
-            <div class="point-title">هر محتوایی رو بفرست</div>
-            <div class="point-desc">عکس، ویدیو، فایل، متن، لینک — هر چیزی که برای ربات می‌فرستی رو در کانالت منتشر می‌کنیم.</div>
-          </div>
-        </div>
-        <div class="unique-point reveal reveal-d3">
-          <div class="point-icon-outer">
-            <div class="point-icon-inner">🤖</div>
-          </div>
-          <div>
-            <div class="point-title">کاملاً خودکار</div>
-            <div class="point-desc">بعد از تنظیم اولیه، ربات ۲۴/۷ کار می‌کنه. فقط محتوا بفرست، بقیه کار با ماست.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- BENTO FEATURES -->
 <section class="features-section" id="features">
   <div class="container">
     <div style="text-align:center">
-      <div class="section-eyebrow reveal">امکانات</div>
-      <h2 class="section-h2 reveal reveal-d1">همه چیزی که نیاز داری</h2>
-      <p class="section-p reveal reveal-d2" style="margin:0 auto">روبیفو جامع‌ترین پلتفرم مدیریت انتشار در روبیکاست.</p>
+      <div class="section-eyebrow reveal">امکانات روبیفو</div>
+      <h2 class="section-h2 reveal reveal-d1">انتشار <em style="font-style:normal;color:var(--violet)">هوشمند</em> — دقیق و بدون وقفه</h2>
+      <p class="section-p reveal reveal-d2" style="margin:0 auto">روبیفو مدیریت کامل انتشار کانالت رو به عهده می‌گیره — از زمانبندی دقیق تا آپلود مستقیم، همه‌چیز خودکار و بی‌دردسر.</p>
     </div>
 
     <div class="bento-grid">
@@ -1357,9 +1435,9 @@
         <div class="card-shine"></div>
         <div class="bento-inner">
           <div class="bento-glow" aria-hidden="true"></div>
-          <div class="bento-icon">⏰</div>
-          <div class="bento-title">زمانبندی پیشرفته</div>
-          <div class="bento-desc">ساعت دقیق انتشار رو تعیین کن. روزانه، هفتگی، یا بازه‌ای — انعطاف کامل. صف پست‌ها به صورت هوشمند مدیریت می‌شه.</div>
+          <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+          <div class="bento-title">۷ روش زمانبندی در یک ربات</div>
+          <div class="bento-desc">برنامه ثابت روزانه، بازه‌ای، کمپین هفتگی، انتشار فوری، صف هوشمند، پخش خودکار روزانه، و زمانبندی دستی — هر روشی که نیاز داری، روبیفو داره.</div>
           <div class="mini-schedule" aria-hidden="true">
             <div class="mini-bar" style="height:35%"></div>
             <div class="mini-bar" style="height:65%"></div>
@@ -1380,9 +1458,9 @@
         <div class="card-shine"></div>
         <div class="bento-inner">
           <div class="bento-glow" aria-hidden="true"></div>
-          <div class="bento-icon">📦</div>
-          <div class="bento-title">بدون بارگذاری دستی</div>
-          <div class="bento-desc">محتوا رو برای ربات بفرست؛ روبیفو همه چیز رو خودش در کانالت منتشر می‌کنه.</div>
+          <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg></div>
+          <div class="bento-title">اشتراک مقرون‌به‌صرفه، کنترل کامل</div>
+          <div class="bento-desc">با یک اشتراک ماهانه، تمام فرایند آپلود و انتشار کانالت خودکار می‌شه. هزینه کمتر، دقت بیشتر، و آرامش ذهنی بیشتر.</div>
           <div class="bento-badge">★ انحصاری</div>
         </div>
       </div>
@@ -1391,9 +1469,9 @@
         <div class="card-shine"></div>
         <div class="bento-inner">
           <div class="bento-glow" aria-hidden="true"></div>
-          <div class="bento-icon">📊</div>
-          <div class="bento-title">مدیریت صف پست</div>
-          <div class="bento-desc">لیست پست‌های در انتظار انتشار رو ببین، ترتیبشون رو تغییر بده یا حذف کن.</div>
+          <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></div>
+          <div class="bento-title">مدیریت کمپین — نه فقط صف</div>
+          <div class="bento-desc">کمپین‌هات رو برنامه‌ریزی کن، صف پست‌ها رو مدیریت کن، ترتیب بده، حذف کن — همه چیز دست خودته، بی‌واسطه.</div>
           <div class="mini-queue" aria-hidden="true">
             <div class="queue-row">
               <div class="queue-bar" style="width:30%"></div>
@@ -1415,9 +1493,9 @@
         <div class="card-shine"></div>
         <div class="bento-inner">
           <div class="bento-glow" aria-hidden="true"></div>
-          <div class="bento-icon">🎬</div>
-          <div class="bento-title">پشتیبانی همه محتواها</div>
-          <div class="bento-desc">عکس، ویدیو، فایل، متن، لینک، پول — هر نوع محتوایی که روبیکا داره رو قبول می‌کنیم.</div>
+          <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/><line x1="7" y1="2" x2="7" y2="7"/><line x1="17" y1="2" x2="17" y2="7"/><line x1="2" y1="12" x2="22" y2="12"/></svg></div>
+          <div class="bento-title">پشتیبانی از همه انواع محتوا</div>
+          <div class="bento-desc">عکس، ویدیو، فایل، متن، لینک — هر فرمتی که روبیکا پشتیبانی می‌کنه، روبیفو بدون هیچ خطایی ارسال می‌کنه.</div>
         </div>
       </div>
 
@@ -1425,9 +1503,9 @@
         <div class="card-shine"></div>
         <div class="bento-inner">
           <div class="bento-glow" aria-hidden="true"></div>
-          <div class="bento-icon">🔔</div>
-          <div class="bento-title">دریافت فوری</div>
-          <div class="bento-desc">به محض فرستادن محتوا، ربات آن رو در صف قرار می‌ده.</div>
+          <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+          <div class="bento-title">ارسال فوری، صف‌بندی هوشمند</div>
+          <div class="bento-desc">به محض اینکه محتوا رو برای ربات بفرستی، بلافاصله در صف قرار می‌گیره و طبق زمانبندی تنظیم‌شده منتشر می‌شه.</div>
         </div>
       </div>
 
@@ -1435,9 +1513,9 @@
         <div class="card-shine"></div>
         <div class="bento-inner">
           <div class="bento-glow" aria-hidden="true"></div>
-          <div class="bento-icon">🛡️</div>
-          <div class="bento-title">پایدار و مطمئن</div>
-          <div class="bento-desc">سرور ۲۴/۷ فعاله. پست‌ها از دست نمی‌رن.</div>
+          <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <div class="bento-title">آپتایم ۲۴/۷ — همیشه فعال</div>
+          <div class="bento-desc">سرورهای روبیفو به‌صورت شبانه‌روزی فعال‌اند. انتشار کانالت هرگز متوقف نمی‌شه و هیچ پستی از دست نمی‌ره.</div>
         </div>
       </div>
 
@@ -1445,12 +1523,102 @@
         <div class="card-shine"></div>
         <div class="bento-inner">
           <div class="bento-glow" aria-hidden="true"></div>
-          <div class="bento-icon">⚡</div>
-          <div class="bento-title">راه‌اندازی سریع</div>
-          <div class="bento-desc">در کمتر از ۲ دقیقه آماده‌ای.</div>
+          <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+          <div class="bento-title">راه‌اندازی در کمتر از ۲ دقیقه</div>
+          <div class="bento-desc">بدون نصب اپلیکیشن، بدون پیکربندی پیچیده. در کمتر از ۲ دقیقه ربات آماده‌ست و انتشار خودکار شروع می‌شه.</div>
         </div>
       </div>
 
+    </div>
+  </div>
+</section>
+
+<section class="unique-section" id="unique">
+  <div class="container">
+    <div class="section-eyebrow reveal">تفاوت اصلی روبیفو</div>
+    <h2 class="section-h2 reveal reveal-d1">محتوای <em style="font-style:normal;color:var(--violet)">اصیل</em> — هویت کامل کانال</h2>
+    <p class="section-p reveal reveal-d2">روبیفو به‌جای فوروارد، محتوا رو مستقیم آپلود می‌کنه. یعنی هیچ برچسب منبعی زیر پست‌هات دیده نمی‌شه — کانالت همیشه <strong>اصیل و حرفه‌ای</strong> باقی می‌مونه.</p>
+
+    <div class="unique-grid">
+      <div class="visual-outer c3d reveal reveal-d1">
+        <div class="card-shine"></div>
+        <div class="visual-inner">
+          <div class="visual-glow" aria-hidden="true"></div>
+          <div class="visual-top-bar">
+            <div class="vbar-dot"></div>
+            <div class="vbar-dot"></div>
+            <div class="vbar-dot"></div>
+            <span class="vbar-title">نحوه کار روبیفو</span>
+          </div>
+
+          <div class="flow-row">
+            <div class="flow-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+            <div class="flow-info">
+              <div class="flow-name">شما</div>
+              <div class="flow-text">🎬 فیلم جدید هفته — محتوا رو برای ربات می‌فرستید</div>
+            </div>
+          </div>
+
+          <div style="text-align:center;color:rgba(168,85,247,0.5);margin:10px 0;display:flex;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
+
+          <div class="flow-row">
+            <div class="flow-avatar" style="background:rgba(91,46,138,0.2);border-color:rgba(168,85,247,0.3)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+            <div class="flow-info">
+              <div class="flow-name">روبیفو</div>
+              <div class="flow-text">دریافت، بازآپلود، و زمانبندی در صف</div>
+            </div>
+          </div>
+
+          <div class="flow-divider">
+            <div class="flow-divider-line"></div>
+            <div class="flow-divider-label">نتیجه در کانال مقصد</div>
+            <div class="flow-divider-line"></div>
+          </div>
+
+          <div class="compare-row">
+            <div class="compare-card bad">
+              <div class="compare-label"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> روش معمولی فوروارد</div>
+              <div class="compare-msg">🎬 فیلم جدید هفته</div>
+              <div class="compare-watermark">── فوروارد از @source_channel ──</div>
+            </div>
+            <div class="compare-card good">
+              <div class="compare-label"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> روبیفو</div>
+              <div class="compare-msg">🎬 فیلم جدید هفته</div>
+              <div style="font-size:11px;color:var(--emerald);margin-top:5px;display:flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> بدون هیچ نشانه‌ای</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="unique-points">
+        <div class="unique-point reveal reveal-d1">
+          <div class="point-icon-outer">
+            <div class="point-icon-inner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
+          </div>
+          <div>
+            <div class="point-title">هویت کانالت حفظ می‌شه</div>
+            <div class="point-desc">پست‌ها بدون هیچ اثری از منبع اصلی منتشر می‌شن. کانالت کاملاً به اسم خودت باقی می‌مونه.</div>
+          </div>
+        </div>
+        <div class="unique-point reveal reveal-d2">
+          <div class="point-icon-outer">
+            <div class="point-icon-inner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+          </div>
+          <div>
+            <div class="point-title">فعال در هر ساعت از شبانه‌روز</div>
+            <div class="point-desc">روبیفو ۲۴ ساعته، ۷ روز هفته، دقیقاً طبق زمانبندی تنظیم‌شده عمل می‌کنه — بدون تأخیر، بدون خطا.</div>
+          </div>
+        </div>
+        <div class="unique-point reveal reveal-d3">
+          <div class="point-icon-outer">
+            <div class="point-icon-inner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V4"/><circle cx="12" cy="4" r="1"/><circle cx="8.5" cy="14" r="1.5"/><circle cx="15.5" cy="14" r="1.5"/><polyline points="8 18 12 16 16 18"/></svg></div>
+          </div>
+          <div>
+            <div class="point-title">یک‌بار تنظیم، همیشه خودکار</div>
+            <div class="point-desc">یک‌بار تنظیم کن و فراموش کن. فقط محتوا رو بفرست — روبیفو بقیه مسیر رو به‌تنهایی طی می‌کنه.</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -1460,7 +1628,7 @@
   <div class="container">
     <div style="text-align:center">
       <div class="section-eyebrow reveal">چطور کار می‌کنه؟</div>
-      <h2 class="section-h2 reveal reveal-d1">در ۴ قدم آماده‌ای</h2>
+      <h2 class="section-h2 reveal reveal-d1">در ۴ قدم <em style="font-style:normal;color:var(--violet)">راه‌اندازی</em> کن</h2>
     </div>
 
     <div class="steps-wrap">
@@ -1481,7 +1649,7 @@
         <div class="step-inner">
           <div class="step-num-outer"><div class="step-num-inner">۲</div></div>
           <div class="step-title">کانالت رو اضافه کن</div>
-          <div class="step-desc">آیدی کانال روبیکاییت رو بده. همین. ربات باید عضو کانال باشه.</div>
+          <div class="step-desc">آیدی کانال روبیکاییت رو وارد کن. فقط مطمئن شو ربات عضو کانال باشه — همین کافیه.</div>
         </div>
       </div>
 
@@ -1498,8 +1666,8 @@
         <div class="card-shine"></div>
         <div class="step-inner">
           <div class="step-num-outer"><div class="step-num-inner">۴</div></div>
-          <div class="step-title">محتوا بفرست و بشین</div>
-          <div class="step-desc">هر چیزی می‌خوای منتشر بشه رو برای ربات بفرست. روبیفو بقیه کار رو می‌کنه.</div>
+          <div class="step-title">محتوا بفرست — روبیفو منتشر می‌کنه</div>
+          <div class="step-desc">هر محتوایی رو که می‌خوای در کانالت باشه برای ربات بفرست. روبیفو صف‌بندی می‌کنه، زمانبندی می‌کنه، و منتشر می‌کنه.</div>
         </div>
       </div>
     </div>
@@ -1512,7 +1680,7 @@
     <div style="text-align:center">
       <div class="section-eyebrow reveal">پلن‌ها</div>
       <h2 class="section-h2 reveal reveal-d1">متناسب با نیازت انتخاب کن</h2>
-      <p class="section-p reveal reveal-d2" style="margin:0 auto">همه پلن‌های پولی همه امکانات را دارند؛ تفاوت فقط تعداد کانال مقصد است.</p>
+      <p class="section-p reveal reveal-d2" style="margin:0 auto">همه پلن‌های اشتراکی دسترسی کامل به تمام امکانات رو دارن. تنها تفاوت، تعداد کانال مقصد هست.</p>
     </div>
 
     <div class="plans-grid">
@@ -1521,19 +1689,19 @@
       <div class="plan-outer c3d reveal reveal-d1">
         <div class="card-shine"></div>
         <div class="plan-inner">
-          <div class="plan-name">🎁 تریال</div>
+          <div class="plan-name"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg> تریال</div>
           <div class="plan-target">برای آشنایی با ربات</div>
           <div class="plan-price" style="color:var(--violet)">رایگان</div>
           <div class="plan-period">۲ روز · بدون نیاز به پرداخت</div>
           <div class="plan-rule"></div>
           <ul class="plan-features">
-            <li><span class="chk">✓</span> ۱ کانال مقصد</li>
-            <li><span class="chk">✓</span> هر N دقیقه یک پست</li>
-            <li><span class="chk">✓</span> N پست در روز با پخش خودکار</li>
-            <li class="muted"><span class="xchk">✗</span> پلن‌های حرفه‌ای</li>
-            <li class="muted"><span class="xchk">✗</span> کانال‌های بیشتر</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> ۱ کانال مقصد</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> هر N دقیقه یک پست</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> N پست در روز با پخش خودکار</li>
+            <li class="muted"><span class="xchk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span> پلن‌های حرفه‌ای</li>
+            <li class="muted"><span class="xchk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span> کانال‌های بیشتر</li>
           </ul>
-          <a href="https://rubika.ir/rubifo_bot" class="plan-btn-outline" target="_blank" rel="noopener">شروع تریال</a>
+          <a href="https://rubika.ir/rubifo_bot" class="plan-btn-outline" target="_blank" rel="noopener"><span class="btn-txt">شروع تریال</span></a>
         </div>
       </div>
 
@@ -1541,19 +1709,19 @@
       <div class="plan-outer c3d reveal reveal-d2">
         <div class="card-shine"></div>
         <div class="plan-inner">
-          <div class="plan-name">📦 شروع حرفه‌ای</div>
+          <div class="plan-name"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> شروع حرفه‌ای</div>
           <div class="plan-target">برای یک جریان جدی</div>
           <div class="plan-price">۱.۹۹۸<span class="unit"> م.ت</span></div>
           <div class="plan-period">ماهیانه</div>
           <div class="plan-rule"></div>
           <ul class="plan-features">
-            <li><span class="chk">✓</span> ۱ کانال مقصد</li>
-            <li><span class="chk">✓</span> پشتیبانی همه محتواها</li>
-            <li><span class="chk">✓</span> همه پلن‌های حرفه‌ای</li>
-            <li><span class="chk">✓</span> صف و انتشار خودکار</li>
-            <li><span class="chk">✓</span> بدون واترمارک فوروارد</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> ۱ کانال مقصد</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> پشتیبانی همه محتواها</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> همه پلن‌های حرفه‌ای</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> صف و انتشار خودکار</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> بدون واترمارک فوروارد</li>
           </ul>
-          <a href="https://rubika.ir/rubifo_bot" class="plan-btn-outline" target="_blank" rel="noopener">خرید پلن</a>
+          <a href="https://rubika.ir/rubifo_bot" class="plan-btn-outline" target="_blank" rel="noopener"><span class="btn-txt">خرید پلن</span></a>
         </div>
       </div>
 
@@ -1562,7 +1730,7 @@
         <div class="card-shine"></div>
         <div class="plan-inner">
           <div class="popular-pill">محبوب‌ترین</div>
-          <div class="plan-name" style="margin-top:16px">⭐ رشد</div>
+          <div class="plan-name" style="margin-top:16px"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> رشد</div>
           <div class="plan-target">برای مدیران چندکاناله</div>
           <div class="plan-price">
             <span class="grad-gold">۳.۹۹۸</span><span class="unit"> م.ت</span>
@@ -1570,13 +1738,13 @@
           <div class="plan-period">ماهیانه</div>
           <div class="plan-rule"></div>
           <ul class="plan-features">
-            <li><span class="chk">✓</span> ۳ کانال مقصد</li>
-            <li><span class="chk">✓</span> پشتیبانی همه محتواها</li>
-            <li><span class="chk">✓</span> زمانبندی پیشرفته کامل</li>
-            <li><span class="chk">✓</span> صف هوشمند و کمپین حرفه‌ای</li>
-            <li><span class="chk">✓</span> بدون واترمارک فوروارد</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> ۳ کانال مقصد</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> پشتیبانی همه محتواها</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> زمانبندی پیشرفته کامل</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> صف هوشمند و کمپین حرفه‌ای</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> بدون واترمارک فوروارد</li>
           </ul>
-          <a href="https://rubika.ir/rubifo_bot" class="plan-btn-filled" target="_blank" rel="noopener">خرید پلن</a>
+          <a href="https://rubika.ir/rubifo_bot" class="plan-btn-filled" target="_blank" rel="noopener"><span class="btn-txt">خرید پلن</span></a>
         </div>
       </div>
 
@@ -1584,19 +1752,19 @@
       <div class="plan-outer c3d reveal reveal-d4">
         <div class="card-shine"></div>
         <div class="plan-inner">
-          <div class="plan-name">👑 مقیاس</div>
+          <div class="plan-name"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M2 14l4-8 6 4 6-4 4 8"/></svg> مقیاس</div>
           <div class="plan-target">برای شبکه‌های بزرگ</div>
           <div class="plan-price">۹.۹۹۸<span class="unit"> م.ت</span></div>
           <div class="plan-period">ماهیانه</div>
           <div class="plan-rule"></div>
           <ul class="plan-features">
-            <li><span class="chk">✓</span> ۱۰ کانال مقصد</li>
-            <li><span class="chk">✓</span> پشتیبانی همه محتواها</li>
-            <li><span class="chk">✓</span> زمانبندی پیشرفته کامل</li>
-            <li><span class="chk">✓</span> مناسب عملیات سنگین کانالی</li>
-            <li><span class="chk">✓</span> پشتیبانی ویژه</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> ۱۰ کانال مقصد</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> پشتیبانی همه محتواها</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> زمانبندی پیشرفته کامل</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> مناسب عملیات سنگین کانالی</li>
+            <li><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> پشتیبانی ویژه</li>
           </ul>
-          <a href="https://rubika.ir/rubifo_bot" class="plan-btn-outline" target="_blank" rel="noopener">خرید پلن</a>
+          <a href="https://rubika.ir/rubifo_bot" class="plan-btn-outline" target="_blank" rel="noopener"><span class="btn-txt">خرید پلن</span></a>
         </div>
       </div>
 
@@ -1616,16 +1784,16 @@
         <div class="tp tp4" aria-hidden="true"></div>
         <div class="tp tp5" aria-hidden="true"></div>
         <div class="trial-content">
-          <h2 class="trial-h2">امروز تریال رو شروع کن</h2>
-          <p class="trial-p">۲ روز برای تست ارزش اصلی — بدون نیاز به کارت بانکی</p>
+          <h2 class="trial-h2">انتشار هوشمند رو همین امروز تجربه کن</h2>
+          <p class="trial-p">۲ روز کاملاً رایگان — بدون نیاز به اطلاعات پرداخت</p>
           <div class="trial-chips">
-            <div class="trial-chip"><span class="dot">✓</span> نیازی به کارت بانکی نیست</div>
-            <div class="trial-chip"><span class="dot">✓</span> راه‌اندازی در ۲ دقیقه</div>
-            <div class="trial-chip"><span class="dot">✓</span> بدون واترمارک فوروارد</div>
+            <div class="trial-chip"><span class="dot"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> بدون نیاز به کارت بانکی</div>
+            <div class="trial-chip"><span class="dot"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> راه‌اندازی در ۲ دقیقه</div>
+            <div class="trial-chip"><span class="dot"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> انتشار اصیل — بدون واترمارک</div>
           </div>
-          <a href="https://rubika.ir/rubifo_bot" class="btn-filled magnetic-btn" style="display:inline-flex" target="_blank" rel="noopener">
-            شروع در روبیکا
-            <span class="btn-icon">⚡</span>
+          <a href="https://rubika.ir/rubifo_bot" class="btn-filled magnetic-btn" target="_blank" rel="noopener">
+            <span class="btn-txt">شروع رایگان در روبیکا</span>
+            <span class="btn-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M8 1L3 8h5l-2 5 6-7H7l1-5z" fill="#FCD34D" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/></svg></span>
           </a>
         </div>
       </div>
@@ -1638,10 +1806,20 @@
   <div class="container">
     <div style="text-align:center">
       <div class="section-eyebrow reveal">سوالات متداول</div>
-      <h2 class="section-h2 reveal reveal-d1">جواب سوالات رایج</h2>
+      <h2 class="section-h2 reveal reveal-d1">پرسش‌های متداول</h2>
     </div>
 
     <div class="faq-list">
+
+      <div class="faq-outer reveal reveal-d1">
+        <div class="faq-body">
+          <button class="faq-q" onclick="toggleFaq(this)">
+            روبیفو چه کارهایی رو به‌صورت خودکار انجام می‌ده؟
+            <span class="faq-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></span>
+          </button>
+          <div class="faq-a">روبیفو تمام فرایند آپلود، زمانبندی، و انتشار محتوا در کانالت رو خودکار می‌کنه. کافیه محتوا رو برای ربات بفرستی — مابقی رو روبیفو بدون دخالت تو مدیریت می‌کنه. بدون واترمارک، بدون تأخیر.</div>
+        </div>
+      </div>
 
       <div class="faq-outer reveal reveal-d1">
         <div class="faq-body">
@@ -1669,7 +1847,7 @@
             چه نوع محتوایی رو می‌تونم بفرستم؟
             <span class="faq-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></span>
           </button>
-          <div class="faq-a">هر چیزی که روبیکا پشتیبانی می‌کنه: عکس، ویدیو، فایل، متن، لینک، پول (sticker). فقط محتوا رو برای ربات بفرست — ما مابقی رو مدیریت می‌کنیم.</div>
+          <div class="faq-a">هر چیزی که روبیکا پشتیبانی می‌کنه: عکس، ویدیو، فایل، متن، و لینک. فقط محتوا رو برای ربات بفرست — روبیفو بقیه رو مدیریت می‌کنه.</div>
         </div>
       </div>
 
@@ -1726,13 +1904,13 @@
     <span class="bnav-num">01</span>
     <span class="bnav-label">معرفی</span>
   </a>
-  <a class="bnav-item" href="#unique"   data-section="unique">
-    <span class="bnav-num">02</span>
-    <span class="bnav-label">مزیت</span>
-  </a>
   <a class="bnav-item" href="#features" data-section="features">
-    <span class="bnav-num">03</span>
+    <span class="bnav-num">02</span>
     <span class="bnav-label">امکانات</span>
+  </a>
+  <a class="bnav-item" href="#unique"   data-section="unique">
+    <span class="bnav-num">03</span>
+    <span class="bnav-label">مزیت</span>
   </a>
   <a class="bnav-item" href="#how"      data-section="how">
     <span class="bnav-num">04</span>
@@ -1751,6 +1929,13 @@
     <span class="bnav-label">سوالات</span>
   </a>
 </nav>
+
+<button id="scroll-top" aria-label="بازگشت به بالا">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="19" x2="12" y2="5"/>
+    <polyline points="5 12 12 5 19 12"/>
+  </svg>
+</button>
 
 <script>
 /* ── PARTICLES ─────────────────────────────── */
@@ -1932,15 +2117,143 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 })();
 
+/* ── HERO SHADER (WebGL plasma) ─────────────── */
+(function() {
+  const hero = document.getElementById('hero');
+  if (!hero) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.id = 'hero-shader';
+  canvas.setAttribute('aria-hidden', 'true');
+  hero.insertBefore(canvas, hero.firstChild);
+
+  const gl = canvas.getContext('webgl');
+  if (!gl) return;
+
+  const VS = `attribute vec4 a;void main(){gl_Position=a;}`;
+
+  const FS = `
+    precision highp float;
+    uniform vec2 iResolution;
+    uniform float iTime;
+    uniform vec4 uBg1;
+    uniform vec4 uBg2;
+    uniform vec4 uLine;
+
+    const float OS=0.2,GSW=0.015,AW=0.05,MLW=0.025,mLW=0.0125;
+    const float MF=5.,mF=1.,SC=5.,mnW=0.01,mxW=0.2;
+    const float LS=1.*OS,LA=1.,LF=0.2,WS=0.2*OS,WF=0.5,WA=1.;
+    const float OF=0.5,OFS=1.33*OS,mnO=0.6,mxO=2.;
+    const int N=16;
+    #define circ(p,r,c) smoothstep(r+GSW,r,length(c-(p)))
+    #define sLine(p,w,t) smoothstep(w,0.,abs(p-(t)))
+    #define cLine(p,w,t) smoothstep(w+GSW,w,abs(p-(t)))
+    #define pLine(f,w,t) cLine(f/2.,w,abs(mod(t,f)-f/2.))
+    float rng(float t){return(cos(t)+cos(t*1.3+1.3)+cos(t*1.4+1.4))/3.;}
+    float py(float x,float hf,float o){return rng(x*LF+iTime*LS)*hf*LA+o;}
+    void main(){
+      vec2 uv=gl_FragCoord.xy/iResolution.xy;
+      vec2 sp=(gl_FragCoord.xy-iResolution.xy*.5)/iResolution.x*2.*SC;
+      float hf=1.-(cos(uv.x*6.28318)*.5+.5);
+      float vf=1.-(cos(uv.y*6.28318)*.5+.5);
+      sp.y+=rng(sp.x*WF+iTime*WS)*WA*(.5+hf);
+      sp.x+=rng(sp.y*WF+iTime*WS+2.)*WA*hf;
+      vec4 lines=vec4(0.);
+      for(int l=0;l<N;l++){
+        float ni=float(l)/float(N);
+        float ot=iTime*OFS,op=float(l)+sp.x*OF;
+        float r=rng(op+ot)*.5+.5;
+        float hw=mix(mnW,mxW,r*hf)*.5;
+        float off=rng(op+ot*(1.+ni))*mix(mnO,mxO,hf);
+        float lp=py(sp.x,hf,off);
+        float ln=sLine(lp,hw,sp.y)*.5+cLine(lp,hw*.15,sp.y);
+        float cx=mod(float(l)+iTime*LS,25.)-12.;
+        vec2 cp=vec2(cx,py(cx,hf,off));
+        ln+=circ(cp,.01,sp)*4.;
+        lines+=ln*uLine*r;
+      }
+      vec4 col=mix(uBg1,uBg2,uv.x);
+      col.rgb*=vf;
+      col.rgb+=lines.rgb;
+      col.rgb=clamp(col.rgb,0.,1.);
+      col.a=vf;
+      gl_FragColor=col;
+    }
+  `;
+
+  function mkSh(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { gl.deleteShader(s); return null; }
+    return s;
+  }
+  const prog = gl.createProgram();
+  const vsh = mkSh(gl.VERTEX_SHADER, VS);
+  const fsh = mkSh(gl.FRAGMENT_SHADER, FS);
+  if (!vsh || !fsh) return;
+  gl.attachShader(prog, vsh); gl.attachShader(prog, fsh); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return;
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+
+  const u = {
+    res:  gl.getUniformLocation(prog, 'iResolution'),
+    t:    gl.getUniformLocation(prog, 'iTime'),
+    bg1:  gl.getUniformLocation(prog, 'uBg1'),
+    bg2:  gl.getUniformLocation(prog, 'uBg2'),
+    line: gl.getUniformLocation(prog, 'uLine'),
+  };
+  const aPos = gl.getAttribLocation(prog, 'a');
+
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  const PAL = {
+    dark:  { bg1:[0.07,0.04,0.18,1], bg2:[0.22,0.07,0.38,1], line:[0.50,0.24,0.95,1] },
+    light: { bg1:[0.93,0.89,1.00,1], bg2:[0.83,0.73,0.98,1], line:[0.38,0.14,0.80,1] },
+  };
+  const pal = () => document.documentElement.getAttribute('data-theme') === 'light'
+    ? PAL.light : PAL.dark;
+
+  function resize() {
+    canvas.width  = hero.clientWidth;
+    canvas.height = hero.clientHeight;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  new ResizeObserver(resize).observe(hero);
+  resize();
+
+  const t0 = Date.now();
+  (function loop() {
+    const now = (Date.now() - t0) / 1000;
+    const p   = pal();
+    gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(prog);
+    gl.uniform2f(u.res, canvas.width, canvas.height);
+    gl.uniform1f(u.t, now);
+    gl.uniform4fv(u.bg1,  p.bg1);
+    gl.uniform4fv(u.bg2,  p.bg2);
+    gl.uniform4fv(u.line, p.line);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(aPos);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(loop);
+  })();
+})();
+
 /* ── THEME TOGGLE ───────────────────────────── */
 (function() {
   const html  = document.documentElement;
   const btn   = document.getElementById('themeToggle');
-  const ICONS = { dark: '🌙', light: '☀️' };
+  const SVG_MOON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+  const SVG_SUN  = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 
   function apply(theme) {
     html.setAttribute('data-theme', theme);
-    btn.textContent = theme === 'light' ? ICONS.light : ICONS.dark;
+    btn.innerHTML = theme === 'light' ? SVG_SUN : SVG_MOON;
     localStorage.setItem('rubifo-theme', theme);
   }
 
@@ -1958,7 +2271,7 @@ document.addEventListener('DOMContentLoaded', () => {
 (function() {
   const nav    = document.getElementById('bottom-nav');
   const items  = nav.querySelectorAll('.bnav-item');
-  const ids    = ['hero','unique','features','how','plans','trial','faq'];
+  const ids    = ['hero','features','unique','how','plans','trial','faq'];
 
   /* Show nav after brief delay */
   setTimeout(() => nav.classList.add('visible'), 600);
@@ -1987,7 +2300,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     items.forEach(a => {
-      a.classList.toggle('active', a.dataset.section === best);
+      const wasActive = a.classList.contains('active');
+      const isActive  = a.dataset.section === best;
+      a.classList.toggle('active', isActive);
+      if (isActive && !wasActive) {
+        a.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+      }
     });
   }, {
     threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
@@ -2005,6 +2323,28 @@ document.addEventListener('DOMContentLoaded', () => {
       const target = document.getElementById(a.dataset.section);
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  });
+})();
+
+/* ── SCROLL TO TOP — mobile ──────────────────── */
+(function() {
+  const btn = document.getElementById('scroll-top');
+  if (!btn) return;
+
+  const threshold = window.innerHeight * 0.6;
+
+  function onScroll() {
+    if (window.scrollY > threshold) {
+      btn.classList.add('visible');
+    } else {
+      btn.classList.remove('visible');
+    }
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  btn.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 })();
 </script>
