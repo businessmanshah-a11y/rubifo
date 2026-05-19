@@ -71,12 +71,19 @@ async def webhook(request):
 
 
 async def run_health_server():
+    import mimetypes
+    # Ensure woff2/woff have correct MIME types (not always in Python's defaults)
+    mimetypes.add_type("font/woff2", ".woff2")
+    mimetypes.add_type("font/woff", ".woff")
+
     app = web.Application()
     app.router.add_get("/", landing_page)
     app.router.add_get("/health", health)
     app.router.add_post("/webhook", webhook)
-    # Serve static assets so the landing page CSS/fonts load correctly
+    # /static/* for any explicit /static/... references
     app.router.add_static("/static", _STATIC_DIR, show_index=False)
+    # /fonts/* — index.html uses url('./fonts/...') which browsers resolve to /fonts/
+    app.router.add_static("/fonts", _STATIC_DIR / "fonts", show_index=False)
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.getenv("PORT", "8000"))
