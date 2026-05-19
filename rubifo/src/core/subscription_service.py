@@ -177,6 +177,63 @@ class SubscriptionService:
             "UPDATE subscriptions SET is_active = false WHERE user_id = $1", user_id
         )
 
+    async def get_subscription_status(self, user_id: str) -> dict:
+        """Return full subscription status for display in bot messages.
+
+        Returns dict with keys: status, tier, end_date, days_left, hours_left,
+        destinations_used, destinations_limit.
+        Status values: 'trial', 'active', 'expired'.
+        """
+        sub = await self.get_active_subscription(user_id)
+
+        destinations_used = await self.db.fetchval(
+            "SELECT COUNT(DISTINCT target_channel_id) FROM routes WHERE user_id = $1 AND is_active = true",
+            user_id,
+        ) or 0
+
+        if sub:
+            days_left = (sub.end_date - datetime.now().date()).days
+            return {
+                "status": "active",
+                "tier": sub.tier,
+                "end_date": sub.end_date,
+                "days_left": max(0, days_left),
+                "hours_left": 0,
+                "destinations_used": destinations_used,
+                "destinations_limit": self.TIER_LIMITS.get(sub.tier, 1),
+            }
+
+        user = await self.db.fetchrow(
+            "SELECT is_trial_active, trial_end_at FROM users WHERE user_id = $1",
+            user_id,
+        )
+        if user:
+            trial_end = user.get("trial_end_at") if hasattr(user, "get") else user["trial_end_at"]
+            is_trial_active = (
+                user.get("is_trial_active") if hasattr(user, "get") else user["is_trial_active"]
+            )
+            if is_trial_active and trial_end and trial_end > now_tehran():
+                hours_left = max(0.0, (trial_end - datetime.now()).total_seconds() / 3600)
+                return {
+                    "status": "trial",
+                    "tier": None,
+                    "end_date": trial_end,
+                    "days_left": int(hours_left / 24),
+                    "hours_left": hours_left,
+                    "destinations_used": destinations_used,
+                    "destinations_limit": 1,
+                }
+
+        return {
+            "status": "expired",
+            "tier": None,
+            "end_date": None,
+            "days_left": 0,
+            "hours_left": 0,
+            "destinations_used": 0,
+            "destinations_limit": 0,
+        }
+
     async def get_subscription_by_id(self, subscription_id: int) -> Optional[Subscription]:
         """Get subscription by ID.
 

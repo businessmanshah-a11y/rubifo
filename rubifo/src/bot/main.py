@@ -41,19 +41,16 @@ async def _save_offset_db(offset_id: str) -> None:
 
 MAIN_KEYPAD = Keypad(rows=[
     KeypadRow(buttons=[
-        Button(id="addsource", type=ButtonTypeEnum.SIMPLE, button_text="✏️ سورس جدید"),
         Button(id="mysources", type=ButtonTypeEnum.SIMPLE, button_text="📦 سورس‌های من"),
-    ]),
-    KeypadRow(buttons=[
-        Button(id="addroute", type=ButtonTypeEnum.SIMPLE, button_text="➕ مسیر جدید"),
+        Button(id="my_destinations", type=ButtonTypeEnum.SIMPLE, button_text="📍 کانال‌های من"),
         Button(id="listroutes", type=ButtonTypeEnum.SIMPLE, button_text="📋 مسیرهای من"),
     ]),
     KeypadRow(buttons=[
-        Button(id="buy", type=ButtonTypeEnum.SIMPLE, button_text="💳 خرید اشتراک"),
-        Button(id="listplans", type=ButtonTypeEnum.SIMPLE, button_text="📅 برنامه‌ریزی"),
+        Button(id="listplans", type=ButtonTypeEnum.SIMPLE, button_text="📅 پلن‌های من"),
+        Button(id="calendar", type=ButtonTypeEnum.SIMPLE, button_text="📊 تقویم محتوایی"),
+        Button(id="subscription_status", type=ButtonTypeEnum.SIMPLE, button_text="💳 اشتراک"),
     ]),
     KeypadRow(buttons=[
-        Button(id="logs", type=ButtonTypeEnum.SIMPLE, button_text="📊 گزارش‌ها"),
         Button(id="help", type=ButtonTypeEnum.SIMPLE, button_text="❓ راهنما"),
     ]),
 ])
@@ -87,10 +84,27 @@ class RubikaClient:
         if self.offset_id:
             logger.info(f"Resumed from saved offset: {self.offset_id}")
 
-    async def send_message(self, user_id: str, text: str, with_keypad: bool = False) -> bool:
+    async def send_message(
+        self,
+        user_id: str,
+        text: str,
+        with_keypad: bool = False,
+        keypad=None,
+    ) -> bool:
+        """Send a text message to a user.
+
+        Args:
+            user_id: Rubika user ID
+            text: Message text
+            with_keypad: If True, attach the main persistent keypad
+            keypad: Custom Keypad object to attach (overrides with_keypad)
+        """
         try:
             kwargs: Dict[str, Any] = {"chat_id": str(user_id), "text": text}
-            if with_keypad:
+            if keypad is not None:
+                kwargs["chat_keypad"] = keypad
+                kwargs["chat_keypad_type"] = ChatKeypadTypeEnum.NEW
+            elif with_keypad:
                 kwargs["chat_keypad"] = MAIN_KEYPAD
                 kwargs["chat_keypad_type"] = ChatKeypadTypeEnum.NEW
             await self._bot.send_message(**kwargs)

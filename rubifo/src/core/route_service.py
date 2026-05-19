@@ -205,3 +205,65 @@ class RouteService:
         )
 
         return result["count"] if result else 0
+
+    async def get_destinations_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all distinct active destination channels for a user.
+
+        Args:
+            user_id: Rubika user ID
+
+        Returns:
+            List of dicts with 'target_channel_id'
+        """
+        results = await self.db.fetch(
+            """
+            SELECT DISTINCT target_channel_id
+            FROM routes
+            WHERE user_id = $1 AND is_active = true
+            ORDER BY target_channel_id
+            """,
+            user_id,
+        )
+        return [dict(r) for r in results]
+
+    async def get_destination_stats(self, user_id: str, target_channel_id: str) -> Dict[str, Any]:
+        """Get aggregated stats for a destination channel: routes, plans, pending posts.
+
+        Args:
+            user_id: Rubika user ID
+            target_channel_id: Target channel identifier
+
+        Returns:
+            Dict with route_count, plan_count, pending_posts
+        """
+        routes = await self.db.fetch(
+            "SELECT id FROM routes WHERE user_id = $1 AND target_channel_id = $2 AND is_active = true",
+            user_id,
+            target_channel_id,
+        )
+        route_ids = [r["id"] for r in routes]
+
+        if not route_ids:
+            return {
+                "target_channel_id": target_channel_id,
+                "route_count": 0,
+                "plan_count": 0,
+                "pending_posts": 0,
+            }
+
+        plan_count = await self.db.fetchval(
+            "SELECT COUNT(*) FROM schedules WHERE route_id = ANY($1) AND is_active = true",
+            route_ids,
+        )
+
+        pending_posts = await self.db.fetchval(
+            "SELECT COUNT(*) FROM post_queue WHERE route_id = ANY($1) AND status = 'pending'",
+            route_ids,
+        )
+
+        return {
+            "target_channel_id": target_channel_id,
+            "route_count": len(route_ids),
+            "plan_count": plan_count or 0,
+            "pending_posts": pending_posts or 0,
+        }

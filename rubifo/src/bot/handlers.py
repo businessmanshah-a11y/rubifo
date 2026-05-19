@@ -3,14 +3,19 @@ from src.bot import commands
 
 
 BUTTON_COMMAND_MAP = {
-    "✏️ سورس جدید": "/addsource",
     "📦 سورس‌های من": "/mysources",
-    "➕ مسیر جدید": "/addroute",
+    "📍 کانال‌های من": "/my_destinations",
     "📋 مسیرهای من": "/listroutes",
+    "📅 پلن‌های من": "/listplans",
+    "📊 تقویم محتوایی": "/calendar",
+    "💳 اشتراک": "/subscription_status",
+    "❓ راهنما": "/help",
+    # Backward compatibility
+    "✏️ سورس جدید": "/addsource",
+    "➕ مسیر جدید": "/addroute",
     "💳 خرید اشتراک": "/buy",
     "📅 برنامه‌ریزی": "/listplans",
     "📊 گزارش‌ها": "/logs",
-    "❓ راهنما": "/help",
 }
 
 
@@ -62,6 +67,10 @@ async def route_message(client, user_id: str, message: dict) -> None:
             await commands.handle_savesource(client, user_id)
         elif cmd == "/mysources":
             await commands.handle_mysources(client, user_id)
+        elif cmd == "/my_destinations":
+            await commands.handle_my_destinations(client, user_id)
+        elif cmd == "/subscription_status":
+            await commands.handle_subscription_status(client, user_id)
         elif cmd == "/viewsource" and len(parts) > 1:
             await commands.handle_viewsource(client, user_id, int(parts[1]))
         elif cmd == "/addpost" and len(parts) > 1:
@@ -102,6 +111,34 @@ async def route_message(client, user_id: str, message: dict) -> None:
             await commands.handle_calendar(client, user_id)
         elif cmd == "/help":
             await commands.handle_help(client, user_id)
+        # ── inline button routing (encoded action_channel pattern) ─────────
+        elif cmd.startswith("/dst_routes_"):
+            channel = text[len("/dst_routes_"):]
+            await commands.handle_destination_routes(client, user_id, channel)
+        elif cmd.startswith("/dst_plans_"):
+            channel = text[len("/dst_plans_"):]
+            await commands.handle_destination_plans(client, user_id, channel)
+        elif cmd.startswith("/dst_cal_"):
+            channel = text[len("/dst_cal_"):]
+            await commands.handle_calendar_display(client, user_id, channel)
+        elif cmd.startswith("/dst_addroute_"):
+            channel = text[len("/dst_addroute_"):]
+            await commands.handle_addroute_for_channel(client, user_id, channel)
+        elif cmd.startswith("/cal_"):
+            channel = text[len("/cal_"):]
+            await commands.handle_calendar_display(client, user_id, channel)
+        elif cmd.startswith("/addpost_"):
+            try:
+                source_id = int(cmd[len("/addpost_"):])
+                await commands.handle_addpost(client, user_id, source_id)
+            except ValueError:
+                await client.send_message(user_id, "دستور نامشخص. /help را بفرستید.")
+        elif cmd.startswith("/viewsource_"):
+            try:
+                source_id = int(cmd[len("/viewsource_"):])
+                await commands.handle_viewsource(client, user_id, source_id)
+            except ValueError:
+                await client.send_message(user_id, "دستور نامشخص. /help را بفرستید.")
         else:
             await client.send_message(user_id, "دستور نامشخص. /help را بفرستید.")
 
