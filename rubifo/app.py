@@ -1,13 +1,26 @@
 """
-Parspack entry point — runs the bot alongside a minimal health/webhook server.
+Parspack entry point — runs the bot alongside a web server.
 Parspack Python buildpack requires a process bound to 0.0.0.0 on port > 1000.
+
+Routes:
+  GET  /          → landing page (index.html)
+  GET  /static/*  → static assets (CSS, fonts, JS)
+  GET  /health    → "ok" (Parsback health check)
+  POST /webhook   → Rubika webhook updates
 """
 import asyncio
-import json
 import os
+from pathlib import Path
 from aiohttp import web
 
 _bot_ref = None  # set after bot starts
+
+_STATIC_DIR = Path(__file__).parent / "src" / "admin" / "static"
+
+
+async def landing_page(request):
+    """Serve the public landing page."""
+    return web.FileResponse(_STATIC_DIR / "index.html")
 
 
 async def health(request):
@@ -59,9 +72,11 @@ async def webhook(request):
 
 async def run_health_server():
     app = web.Application()
-    app.router.add_get("/", health)
+    app.router.add_get("/", landing_page)
     app.router.add_get("/health", health)
     app.router.add_post("/webhook", webhook)
+    # Serve static assets so the landing page CSS/fonts load correctly
+    app.router.add_static("/static", _STATIC_DIR, show_index=False)
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.getenv("PORT", "8000"))

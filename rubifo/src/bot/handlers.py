@@ -1,3 +1,4 @@
+import re
 from src.logger import logger
 from src.bot import commands
 
@@ -18,6 +19,59 @@ BUTTON_COMMAND_MAP = {
     "📊 گزارش‌ها": "/logs",
 }
 
+# Rubika SIMPLE buttons send their label text as the message (not button_id).
+# These patterns match the dynamic inline button labels and extract the channel.
+_INLINE_BTN_PATTERNS = [
+    (re.compile(r"^📋 مسیرها \((.+)\)$"), "routes"),
+    (re.compile(r"^📅 پلن‌ها \((.+)\)$"), "plans"),
+    (re.compile(r"^📊 تقویم \((.+)\)$"), "cal"),
+    (re.compile(r"^➕ مسیر جدید \((.+)\)$"), "addroute"),
+]
+
+# Pattern for mysources inline buttons: "📝 #5 پست‌ها" and "➕ #5 افزودن"
+_VIEWSOURCE_BTN = re.compile(r"^📝 #(\d+) پست‌ها$")
+_ADDPOST_BTN = re.compile(r"^➕ #(\d+) افزودن$")
+
+# Pattern for calendar channel selection: "1️⃣ @channel", "2️⃣ @channel", etc.
+_CAL_SELECT_BTN = re.compile(r"^[1-9️⃣️]+\s+(@\S+)$")
+
+
+async def _route_inline_button(client, user_id: str, text: str) -> bool:
+    """Try to route dynamic inline button text. Returns True if matched."""
+    # Per-destination hub buttons
+    for pattern, action in _INLINE_BTN_PATTERNS:
+        m = pattern.match(text)
+        if m:
+            channel = m.group(1)
+            if action == "routes":
+                await commands.handle_destination_routes(client, user_id, channel)
+            elif action == "plans":
+                await commands.handle_destination_plans(client, user_id, channel)
+            elif action == "cal":
+                await commands.handle_calendar_display(client, user_id, channel)
+            elif action == "addroute":
+                await commands.handle_addroute_for_channel(client, user_id, channel)
+            return True
+
+    # Mysources inline buttons
+    m = _VIEWSOURCE_BTN.match(text)
+    if m:
+        await commands.handle_viewsource(client, user_id, int(m.group(1)))
+        return True
+
+    m = _ADDPOST_BTN.match(text)
+    if m:
+        await commands.handle_addpost(client, user_id, int(m.group(1)))
+        return True
+
+    # Calendar channel selection buttons
+    m = _CAL_SELECT_BTN.match(text)
+    if m:
+        await commands.handle_calendar_display(client, user_id, m.group(1))
+        return True
+
+    return False
+
 
 async def route_message(client, user_id: str, message: dict) -> None:
     """Route incoming messages to appropriate command handlers."""
@@ -37,6 +91,13 @@ async def route_message(client, user_id: str, message: dict) -> None:
             else:
                 # Any non-command message (text, media, forwarded) → add to source
                 await commands.handle_source_collecting_message(client, user_id, message)
+                return
+
+        # ── dynamic inline button routing (button label text patterns) ─────
+        # Must run BEFORE BUTTON_COMMAND_MAP so dynamic labels aren't lost
+        if not text.startswith("/") and text not in BUTTON_COMMAND_MAP:
+            handled = await _route_inline_button(client, user_id, text)
+            if handled:
                 return
 
         # ── map keyboard button text → command ─────────────────────────────
@@ -111,34 +172,6 @@ async def route_message(client, user_id: str, message: dict) -> None:
             await commands.handle_calendar(client, user_id)
         elif cmd == "/help":
             await commands.handle_help(client, user_id)
-        # ── inline button routing (encoded action_channel pattern) ─────────
-        elif cmd.startswith("/dst_routes_"):
-            channel = text[len("/dst_routes_"):]
-            await commands.handle_destination_routes(client, user_id, channel)
-        elif cmd.startswith("/dst_plans_"):
-            channel = text[len("/dst_plans_"):]
-            await commands.handle_destination_plans(client, user_id, channel)
-        elif cmd.startswith("/dst_cal_"):
-            channel = text[len("/dst_cal_"):]
-            await commands.handle_calendar_display(client, user_id, channel)
-        elif cmd.startswith("/dst_addroute_"):
-            channel = text[len("/dst_addroute_"):]
-            await commands.handle_addroute_for_channel(client, user_id, channel)
-        elif cmd.startswith("/cal_"):
-            channel = text[len("/cal_"):]
-            await commands.handle_calendar_display(client, user_id, channel)
-        elif cmd.startswith("/addpost_"):
-            try:
-                source_id = int(cmd[len("/addpost_"):])
-                await commands.handle_addpost(client, user_id, source_id)
-            except ValueError:
-                await client.send_message(user_id, "دستور نامشخص. /help را بفرستید.")
-        elif cmd.startswith("/viewsource_"):
-            try:
-                source_id = int(cmd[len("/viewsource_"):])
-                await commands.handle_viewsource(client, user_id, source_id)
-            except ValueError:
-                await client.send_message(user_id, "دستور نامشخص. /help را بفرستید.")
         else:
             await client.send_message(user_id, "دستور نامشخص. /help را بفرستید.")
 

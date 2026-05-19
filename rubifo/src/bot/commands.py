@@ -824,8 +824,7 @@ async def handle_my_destinations(client, user_id: int) -> None:
         rs = RouteService(pool)
         destinations = await rs.get_destinations_by_user(user_id)
 
-        sub_status = await SubscriptionService(pool).get_subscription_status(user_id)
-        dest_limit = sub_status["destinations_limit"]
+        dest_limit = await SubscriptionService(pool).get_destination_limit(user_id)
         dest_used = len(destinations)
 
         if not destinations:
