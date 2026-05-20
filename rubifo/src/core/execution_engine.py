@@ -54,7 +54,8 @@ class ExecutionEngine:
             )
             for sched_row in schedules:
                 from src.models.schedule import Schedule
-                schedule = Schedule(**dict(sched_row))
+                from src.core.schedule_service import ScheduleService
+                schedule = Schedule(**ScheduleService._row_dict(sched_row))
                 try:
                     executed = await self._execute_schedule(schedule, schedule_service, queue_service)
                     if executed:
