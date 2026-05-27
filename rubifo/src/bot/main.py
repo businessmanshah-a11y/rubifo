@@ -436,28 +436,51 @@ class RufifoBot:
         return await self.client.send_message(user_id, text, with_keypad=with_keypad)
 
     async def _trial_reminder_loop(self) -> None:
+        """Send trial expiry reminders only at 48h, 24h, 10h, and 1h thresholds.
+
+        Uses an in-memory dict to ensure each threshold notification is sent
+        exactly once per user, preventing spam from the hourly loop.
+        """
         from src.database import fetch
         from datetime import datetime
         logger.info("Trial reminder loop started")
 
+        REMINDER_THRESHOLDS = [48, 24, 10, 1]
+        sent_reminders: dict[str, set] = {}  # user_id -> set of threshold hours already sent
+
         while self.running:
             try:
-                await asyncio.sleep(3600)
+                await asyncio.sleep(1800)  # check every 30 minutes
                 users = await fetch(
                     "SELECT user_id, trial_end_at FROM users "
-                    "WHERE trial_end_at <= NOW() + interval '24 hours' "
+                    "WHERE trial_end_at <= NOW() + interval '49 hours' "
                     "AND trial_end_at > NOW() "
                     "AND is_trial_active = true"
                 )
                 for user in users:
                     try:
+                        user_id = user["user_id"]
                         hours_left = (
                             (user["trial_end_at"] - datetime.now()).total_seconds() / 3600
                         )
-                        await self.send_message(
-                            user["user_id"],
-                            f"⏰ تریال شما {hours_left:.0f} ساعت دیگر تمام می‌شود.\n💳 /buy برای خرید اشتراک"
-                        )
+                        if user_id not in sent_reminders:
+                            sent_reminders[user_id] = set()
+
+                        for threshold in REMINDER_THRESHOLDS:
+                            if (
+                                threshold not in sent_reminders[user_id]
+                                and threshold - 1 < hours_left <= threshold + 1
+                            ):
+                                await self.send_message(
+                                    user_id,
+                                    f"⏰ تریال شما {threshold} ساعت دیگر تمام می‌شود.\n"
+                                    f"💳 /buy برای خرید اشتراک"
+                                )
+                                sent_reminders[user_id].add(threshold)
+                                logger.info(
+                                    f"Sent {threshold}h trial reminder to {user_id} "
+                                    f"(hours_left={hours_left:.1f})"
+                                )
                     except Exception as e:
                         logger.error(f"Reminder error for {user['user_id']}: {e}")
             except asyncio.CancelledError:
