@@ -58,3 +58,24 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# IDE & AI tool configs (local only)
+.cursor/skills/
+skills-lock.json
+.agents/
+.claude/
+.codex/
+
+# Logs
+*.log
+bot.log*
+rubifo.log*
+logs/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
