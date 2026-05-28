@@ -1,41 +1,139 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rubifo — Admin</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .login-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .login-brand-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--accent-subtle);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .login-brand-icon svg {
+            width: 18px;
+            height: 18px;
+            stroke: var(--accent);
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+        }
+
+        .login-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 24px 0 20px;
+        }
+
+        .login-divider::before,
+        .login-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-soft);
+        }
+
+        .login-divider span {
+            font-size: var(--f-xs);
+            color: var(--text-3);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+        }
+
+        .login-footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: var(--f-xs);
+            color: var(--text-3);
+        }
+
+        .field-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .field-label span {
+            font-size: var(--f-xs);
+            color: var(--text-3);
+        }
+    </style>
 </head>
 <body class="login-page">
     <div class="login-container">
         <div class="login-box">
-            <h1>Rubifo Admin</h1>
-            <p class="subtitle">Rubika Auto-Forward Management</p>
+            <div class="login-brand">
+                <div class="login-brand-icon">
+                    <!-- bolt / forward icon -->
+                    <svg viewBox="0 0 24 24">
+                        <polyline points="13 17 18 12 13 7"/>
+                        <polyline points="6 17 11 12 6 7"/>
+                    </svg>
+                </div>
+                <h1>Rubifo</h1>
+            </div>
+            <p class="subtitle">پنل مدیریت عملیات</p>
+
+            <div class="login-divider"><span>ورود</span></div>
 
             <form id="loginForm">
                 <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" name="username" required placeholder="Enter your username">
+                    <div class="field-label">
+                        <label for="username">نام کاربری</label>
+                    </div>
+                    <input type="text" id="username" name="username" required
+                           placeholder="username" autocomplete="username">
                 </div>
 
                 <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required placeholder="Enter your password">
+                    <div class="field-label">
+                        <label for="password">رمز عبور</label>
+                    </div>
+                    <input type="password" id="password" name="password" required
+                           placeholder="••••••••" autocomplete="current-password">
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-full">Login</button>
+                <button type="submit" id="submitBtn" class="btn btn-primary btn-full"
+                        style="margin-top:8px;">
+                    ورود به پنل
+                </button>
 
-                <div id="errorMessage" class="error-message" style="display: none;"></div>
+                <div id="errorMessage" class="error-message" style="display:none;"></div>
             </form>
+
+            <p class="login-footer">Rubifo Admin v2 · Obsidian Dark</p>
         </div>
     </div>
 
     <script>
-        const loginForm = document.getElementById('loginForm');
-        const errorMessage = document.getElementById('errorMessage');
+        const loginForm   = document.getElementById('loginForm');
+        const errorDiv    = document.getElementById('errorMessage');
+        const submitBtn   = document.getElementById('submitBtn');
 
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'در حال ورود…';
+            errorDiv.style.display = 'none';
 
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -43,26 +141,26 @@
             try {
                 const response = await fetch('/admin/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password }),
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Store token
                     localStorage.setItem('token', data.access_token);
-                    // Redirect to dashboard
                     window.location.href = '/admin/dashboard.html';
                 } else {
-                    errorMessage.textContent = data.detail || 'Login failed';
-                    errorMessage.style.display = 'block';
+                    errorDiv.textContent = data.detail || 'ورود ناموفق بود.';
+                    errorDiv.style.display = 'block';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'ورود به پنل';
                 }
-            } catch (error) {
-                errorMessage.textContent = 'Connection error. Please try again.';
-                errorMessage.style.display = 'block';
+            } catch {
+                errorDiv.textContent = 'خطا در اتصال. دوباره تلاش کنید.';
+                errorDiv.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'ورود به پنل';
             }
         });
     </script>

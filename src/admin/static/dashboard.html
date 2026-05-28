@@ -1,20 +1,155 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rubifo — Dashboard</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        /* ── Dashboard-specific ── */
+
+        .dash-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 1px;
+            background: var(--border-soft);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--r-lg);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        .dash-kpi {
+            background: var(--surface);
+            padding: 22px 20px 18px;
+            transition: background 140ms ease;
+        }
+
+        .dash-kpi:hover { background: var(--surface-2); }
+
+        .dash-kpi-label {
+            font-size: var(--f-xs);
+            font-weight: 600;
+            color: var(--text-3);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 10px;
+        }
+
+        .dash-kpi-value {
+            font-family: var(--font-mono);
+            font-size: 26px;
+            font-weight: 500;
+            color: var(--text);
+            letter-spacing: -0.02em;
+            line-height: 1;
+        }
+
+        .dash-kpi-value.accent { color: var(--accent); }
+
+        .dash-kpi-sub {
+            font-size: var(--f-xs);
+            color: var(--text-3);
+            margin-top: 6px;
+        }
+
+        /* Two-column layout */
+        .dash-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
+
+        .dash-panel {
+            background: var(--surface);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--r-lg);
+            padding: 20px 22px;
+        }
+
+        .dash-panel-title {
+            font-size: var(--f-xs);
+            font-weight: 600;
+            color: var(--text-3);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-soft);
+        }
+
+        .tier-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-soft);
+        }
+        .tier-row:last-child { border-bottom: none; }
+
+        .tier-name {
+            font-size: var(--f-sm);
+            color: var(--text-2);
+            font-weight: 500;
+        }
+
+        .tier-count {
+            font-family: var(--font-mono);
+            font-size: var(--f-sm);
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        .txn-table { width: 100%; border-collapse: collapse; }
+
+        .txn-table th {
+            font-size: var(--f-2xs);
+            font-weight: 600;
+            color: var(--text-3);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0 0 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-soft);
+        }
+
+        .txn-table td {
+            padding: 10px 0;
+            font-size: var(--f-sm);
+            color: var(--text-2);
+            border-bottom: 1px solid var(--border-soft);
+            vertical-align: middle;
+        }
+
+        .txn-table tr:last-child td { border-bottom: none; }
+
+        .txn-table td.mono {
+            font-family: var(--font-mono);
+            font-size: var(--f-xs);
+            color: var(--text-3);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        .dot-ok   { background: var(--ok-fg); }
+        .dot-warn { background: var(--warn-fg); }
+        .dot-err  { background: var(--err-fg); }
+        .dot-info { background: var(--inf-fg); }
+    </style>
 </head>
 <body>
     <div class="app-container">
-        <!-- Sidebar Navigation -->
         <nav class="sidebar">
-            <div class="logo">
-                <h2>Rubifo</h2>
-                <p>Admin</p>
-            </div>
-
+            <div class="logo"><h2>Rubifo</h2><p>Admin</p></div>
             <ul class="nav-menu">
                 <li><a href="/admin/dashboard.html" class="active">Dashboard</a></li>
                 <li><a href="/admin/users.html">Users</a></li>
@@ -24,86 +159,78 @@
                 <li><a href="/admin/performance.html">Performance</a></li>
                 <li><a href="/admin/settings.html">Settings</a></li>
             </ul>
-
             <div class="user-info">
-                <p id="currentUser">User</p>
-                <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
+                <p id="currentUser">—</p>
+                <button id="logoutBtn" class="btn btn-small btn-danger">خروج</button>
             </div>
         </nav>
 
-        <!-- Main Content -->
         <main class="content">
             <div class="header">
-                <h1>Dashboard</h1>
-                <p id="lastUpdate">Loading...</p>
+                <div>
+                    <h1>داشبورد</h1>
+                    <p id="lastUpdate" style="margin-top:4px;">در حال بارگذاری…</p>
+                </div>
+                <button class="btn btn-secondary btn-small" onclick="loadDashboard()">↻ بروزرسانی</button>
             </div>
 
-            <!-- Metrics Grid -->
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <h3>Total Users</h3>
-                    <p class="metric-value" id="totalUsers">0</p>
+            <!-- KPI Strip — no hero metric template -->
+            <div class="dash-kpi-grid">
+                <div class="dash-kpi">
+                    <div class="dash-kpi-label">کل کاربران</div>
+                    <div class="dash-kpi-value" id="totalUsers">—</div>
                 </div>
-
-                <div class="metric-card">
-                    <h3>Active Subscriptions</h3>
-                    <p class="metric-value" id="activeSubscriptions">0</p>
+                <div class="dash-kpi">
+                    <div class="dash-kpi-label">اشتراک فعال</div>
+                    <div class="dash-kpi-value accent" id="activeSubscriptions">—</div>
                 </div>
-
-                <div class="metric-card">
-                    <h3>Active Routes</h3>
-                    <p class="metric-value" id="activeRoutes">0</p>
+                <div class="dash-kpi">
+                    <div class="dash-kpi-label">مسیر فعال</div>
+                    <div class="dash-kpi-value" id="activeRoutes">—</div>
                 </div>
-
-                <div class="metric-card">
-                    <h3>Queue Depth</h3>
-                    <p class="metric-value" id="pendingPosts">0</p>
+                <div class="dash-kpi">
+                    <div class="dash-kpi-label">صف انتظار</div>
+                    <div class="dash-kpi-value" id="pendingPosts">—</div>
                 </div>
-
-                <div class="metric-card">
-                    <h3>Total Revenue</h3>
-                    <p class="metric-value" id="totalRevenue">0 تومان</p>
+                <div class="dash-kpi">
+                    <div class="dash-kpi-label">درآمد کل</div>
+                    <div class="dash-kpi-value" id="totalRevenue">—</div>
+                    <div class="dash-kpi-sub">تومان</div>
                 </div>
-
-                <div class="metric-card">
-                    <h3>Trial Users</h3>
-                    <p class="metric-value" id="trialUsers">0</p>
-                </div>
-            </div>
-
-            <!-- Statistics Section -->
-            <div class="stats-section">
-                <div class="stat-box">
-                    <h3>Transaction Status</h3>
-                    <ul id="transactionStats">
-                        <li>Loading...</li>
-                    </ul>
-                </div>
-
-                <div class="stat-box">
-                    <h3>Subscription Tiers</h3>
-                    <ul id="subscriptionTiers">
-                        <li>Loading...</li>
-                    </ul>
+                <div class="dash-kpi">
+                    <div class="dash-kpi-label">کاربران تریال</div>
+                    <div class="dash-kpi-value" id="trialUsers">—</div>
                 </div>
             </div>
 
-            <!-- Recent Activity -->
-            <div class="activity-section">
-                <h3>Recent Transactions</h3>
-                <table class="data-table">
+            <!-- Two-column panels -->
+            <div class="dash-grid">
+                <div class="dash-panel">
+                    <div class="dash-panel-title">پلن‌های اشتراک</div>
+                    <div id="subscriptionTiers"><div style="color:var(--text-3);font-size:var(--f-sm);">در حال بارگذاری…</div></div>
+                </div>
+                <div class="dash-panel">
+                    <div class="dash-panel-title">وضعیت تراکنش‌ها</div>
+                    <div id="transactionStats"><div style="color:var(--text-3);font-size:var(--f-sm);">در حال بارگذاری…</div></div>
+                </div>
+            </div>
+
+            <!-- Recent Transactions -->
+            <div class="dash-panel">
+                <div class="dash-panel-title">آخرین تراکنش‌ها</div>
+                <table class="txn-table">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>User</th>
-                            <th>Amount</th>
-                            <th>Tier</th>
-                            <th>Status</th>
-                            <th>Date</th>
+                            <th>#</th>
+                            <th>کاربر</th>
+                            <th>مبلغ</th>
+                            <th>پلن</th>
+                            <th>وضعیت</th>
+                            <th>تاریخ</th>
                         </tr>
                     </thead>
                     <tbody id="recentTransactions">
-                        <tr><td colspan="6">Loading...</td></tr>
+                        <tr><td colspan="6" style="color:var(--text-3);padding:16px 0;">در حال بارگذاری…</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -112,67 +239,71 @@
 
     <script>
         const token = localStorage.getItem('token');
-        if (!token) {
-            window.location.href = '/admin/login.html';
-        }
+        if (!token) window.location.href = '/admin/login.html';
 
         async function fetchAPI(endpoint) {
-            const response = await fetch(endpoint, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
+            const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.status === 401) { localStorage.removeItem('token'); window.location.href = '/admin/login.html'; }
+            return res.json();
+        }
 
-            if (response.status === 401) {
-                localStorage.removeItem('token');
-                window.location.href = '/admin/login.html';
-            }
-
-            return response.json();
+        function statusDot(status) {
+            const map = { completed: 'dot-ok', pending: 'dot-warn', failed: 'dot-err' };
+            return `<span class="status-dot ${map[status] || 'dot-info'}"></span>${status}`;
         }
 
         async function loadDashboard() {
             try {
-                const summary = await fetchAPI('/admin/dashboard-summary');
-                document.getElementById('totalUsers').textContent = summary.total_users;
-                document.getElementById('activeSubscriptions').textContent = summary.active_subscriptions;
-                document.getElementById('activeRoutes').textContent = summary.active_routes;
-                document.getElementById('pendingPosts').textContent = summary.pending_posts;
-                document.getElementById('totalRevenue').textContent = (summary.total_revenue.total_amount / 1000).toFixed(0) + 'K تومان';
-                document.getElementById('trialUsers').textContent = summary.active_trial_users;
+                const [summary, stats, txns] = await Promise.all([
+                    fetchAPI('/admin/dashboard-summary'),
+                    fetchAPI('/admin/stats'),
+                    fetchAPI('/admin/transactions?limit=10'),
+                ]);
 
-                const stats = await fetchAPI('/admin/stats');
-                const statusList = document.getElementById('transactionStats');
-                statusList.innerHTML = '';
-                for (const [status, count] of Object.entries(stats.by_status || {})) {
-                    statusList.innerHTML += `<li>${status}: ${count}</li>`;
-                }
+                document.getElementById('totalUsers').textContent        = summary.total_users ?? '—';
+                document.getElementById('activeSubscriptions').textContent = summary.active_subscriptions ?? '—';
+                document.getElementById('activeRoutes').textContent      = summary.active_routes ?? '—';
+                document.getElementById('pendingPosts').textContent      = summary.pending_posts ?? '—';
+                document.getElementById('trialUsers').textContent        = summary.active_trial_users ?? '—';
+                const rev = summary.total_revenue?.total_amount;
+                document.getElementById('totalRevenue').textContent      = rev ? (rev / 1000).toFixed(0) + 'K' : '—';
 
-                const tierList = document.getElementById('subscriptionTiers');
-                tierList.innerHTML = '';
-                for (const [tier, count] of Object.entries(stats.by_tier || {})) {
-                    tierList.innerHTML += `<li>${tier}: ${count}</li>`;
-                }
+                // Tiers
+                const tierEl = document.getElementById('subscriptionTiers');
+                const tierLabels = { silver: '🥈 Silver', gold: '🥇 Gold', platinum: '💎 Platinum' };
+                tierEl.innerHTML = Object.entries(stats.by_tier || {}).map(([tier, count]) =>
+                    `<div class="tier-row">
+                        <span class="tier-name">${tierLabels[tier] || tier}</span>
+                        <span class="tier-count">${count}</span>
+                    </div>`
+                ).join('') || '<div style="color:var(--text-3);font-size:var(--f-sm);">داده‌ای نیست</div>';
 
-                const transactions = await fetchAPI('/admin/transactions?limit=10');
+                // Transaction statuses
+                const statEl = document.getElementById('transactionStats');
+                statEl.innerHTML = Object.entries(stats.by_status || {}).map(([st, count]) =>
+                    `<div class="tier-row">
+                        <span class="tier-name">${statusDot(st)}</span>
+                        <span class="tier-count">${count}</span>
+                    </div>`
+                ).join('') || '<div style="color:var(--text-3);font-size:var(--f-sm);">داده‌ای نیست</div>';
+
+                // Transactions table
                 const tbody = document.getElementById('recentTransactions');
-                tbody.innerHTML = '';
-                (transactions.transactions || []).forEach(t => {
-                    tbody.innerHTML += `
-                        <tr>
-                            <td>${t.id}</td>
-                            <td>${t.user_id}</td>
-                            <td>${t.amount}</td>
-                            <td>${t.tier}</td>
-                            <td><span class="badge badge-${t.status}">${t.status}</span></td>
-                            <td>${new Date(t.created_at).toLocaleDateString()}</td>
-                        </tr>
-                    `;
-                });
+                tbody.innerHTML = (txns.transactions || []).map(t => `
+                    <tr>
+                        <td class="mono">${t.id}</td>
+                        <td class="mono">${t.user_id}</td>
+                        <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${t.amount}</td>
+                        <td>${t.tier || '—'}</td>
+                        <td>${statusDot(t.status)}</td>
+                        <td class="mono">${new Date(t.created_at).toLocaleDateString('fa-IR')}</td>
+                    </tr>`
+                ).join('') || '<tr><td colspan="6" style="color:var(--text-3);padding:14px 0;">تراکنشی نیست</td></tr>';
 
-                document.getElementById('lastUpdate').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
-            } catch (error) {
-                console.error('Error loading dashboard:', error);
+                document.getElementById('lastUpdate').textContent =
+                    'آخرین بروزرسانی: ' + new Date().toLocaleTimeString('fa-IR');
+            } catch (e) {
+                console.error('Dashboard load error:', e);
             }
         }
 
@@ -181,12 +312,11 @@
             window.location.href = '/admin/login.html';
         });
 
-        // Get username from token (jwt payload)
         const payload = JSON.parse(atob(token.split('.')[1]));
         document.getElementById('currentUser').textContent = payload.sub || 'Admin';
 
         loadDashboard();
-        setInterval(loadDashboard, 30000); // Refresh every 30s
+        setInterval(loadDashboard, 30000);
     </script>
 </body>
 </html>

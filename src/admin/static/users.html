@@ -1,19 +1,110 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rubifo — Users</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <style>
-        .grant-btn { background: #10b981; color: #fff; border: none; padding: 4px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; margin-left: 4px; }
-        .grant-btn:hover { background: #059669; }
-        .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
-        .form-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 13px; color: #94a3b8; }
-        .form-group select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f1f5f9; font-size: 14px; }
-        .success-msg { background: #064e3b; color: #6ee7b7; padding: 10px 14px; border-radius: 8px; margin-top: 12px; display: none; }
-        .error-msg   { background: #7f1d1d; color: #fca5a5; padding: 10px 14px; border-radius: 8px; margin-top: 12px; display: none; }
+        .grant-btn {
+            background: var(--ok-bg);
+            color: var(--ok-fg);
+            border: 1px solid var(--ok-bd);
+            padding: 4px 10px;
+            border-radius: var(--r-sm);
+            cursor: pointer;
+            font-size: var(--f-xs);
+            font-family: var(--font);
+            font-weight: 600;
+            margin-left: 4px;
+            transition: background 140ms ease, border-color 140ms ease;
+        }
+        .grant-btn:hover {
+            background: oklch(20% 0.08 145);
+            border-color: var(--ok-fg);
+        }
+
+        .modal-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: var(--f-xs);
+            color: var(--text-3);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: var(--r);
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+            font-size: var(--f-sm);
+        }
+
+        .success-msg {
+            background: var(--ok-bg);
+            color: var(--ok-fg);
+            border: 1px solid var(--ok-bd);
+            padding: 10px 14px;
+            border-radius: var(--r);
+            margin-top: 12px;
+            display: none;
+            font-size: var(--f-sm);
+        }
+
+        .error-msg {
+            background: var(--err-bg);
+            color: var(--err-fg);
+            border: 1px solid var(--err-bd);
+            padding: 10px 14px;
+            border-radius: var(--r);
+            margin-top: 12px;
+            display: none;
+            font-size: var(--f-sm);
+        }
+
         #grantModal .modal-content { max-width: 480px; }
+
+        .grant-user-label {
+            color: var(--text-3);
+            font-size: var(--f-sm);
+            margin-bottom: 16px;
+        }
+
+        .grant-user-label strong {
+            color: var(--accent);
+            font-family: var(--font-mono);
+        }
+
+        /* header row with search inline */
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+
+        .search-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .search-row input {
+            min-width: 240px;
+        }
     </style>
 </head>
 <body>
@@ -30,70 +121,70 @@
                 <li><a href="/admin/settings.html">Settings</a></li>
             </ul>
             <div class="user-info">
-                <p id="currentUser">User</p>
-                <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
+                <p id="currentUser">—</p>
+                <button id="logoutBtn" class="btn btn-small btn-danger">خروج</button>
             </div>
         </nav>
 
         <main class="content">
-            <div class="header">
-                <h1>Users Management</h1>
-                <div class="search-bar">
-                    <input type="text" id="userIdFilter" placeholder="Filter by user ID or username">
-                    <button class="btn btn-primary" onclick="loadUsers()">Search</button>
+            <div class="page-header">
+                <h1>کاربران</h1>
+                <div class="search-row">
+                    <input type="text" id="userIdFilter" placeholder="جستجو با ID یا نام کاربری…">
+                    <button class="btn btn-primary" onclick="currentPage=1;loadUsers()">جستجو</button>
                 </div>
             </div>
 
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th>#</th>
                         <th>User ID</th>
-                        <th>Username</th>
-                        <th>Trial</th>
-                        <th>Tier</th>
-                        <th>Sub Until</th>
-                        <th>Joined</th>
-                        <th>Actions</th>
+                        <th>نام کاربری</th>
+                        <th>تریال</th>
+                        <th>پلن</th>
+                        <th>اشتراک تا</th>
+                        <th>عضو از</th>
+                        <th>عملیات</th>
                     </tr>
                 </thead>
                 <tbody id="usersTable">
-                    <tr><td colspan="8">Loading...</td></tr>
+                    <tr><td colspan="8" style="color:var(--text-3);padding:20px 16px;">در حال بارگذاری…</td></tr>
                 </tbody>
             </table>
 
             <div class="pagination">
-                <button class="btn btn-small" onclick="previousPage()">← Previous</button>
-                <span id="pageInfo">Page 1</span>
-                <button class="btn btn-small" onclick="nextPage()">Next →</button>
+                <button class="btn btn-secondary btn-small" onclick="previousPage()">← قبلی</button>
+                <span id="pageInfo">صفحه ۱</span>
+                <button class="btn btn-secondary btn-small" onclick="nextPage()">بعدی →</button>
             </div>
 
             <!-- User Detail Modal -->
             <div id="userModal" class="modal" style="display:none;">
                 <div class="modal-content">
                     <span class="close" onclick="closeUserModal()">&times;</span>
-                    <h2>User Details</h2>
+                    <h2>جزئیات کاربر</h2>
                     <div class="user-detail-section">
-                        <h3>User Information</h3>
-                        <p><strong>ID:</strong> <span id="detailId"></span></p>
-                        <p><strong>User ID:</strong> <span id="detailUserId"></span></p>
-                        <p><strong>Username:</strong> <span id="detailUsername"></span></p>
-                        <p><strong>Joined:</strong> <span id="detailCreatedAt"></span></p>
-                        <p><strong>Trial Status:</strong> <span id="detailTrialStatus"></span></p>
+                        <h3>اطلاعات</h3>
+                        <p><strong>ID:</strong> <span id="detailId" style="font-family:var(--font-mono);"></span></p>
+                        <p><strong>User ID:</strong> <span id="detailUserId" style="font-family:var(--font-mono);font-size:var(--f-xs);color:var(--text-3);"></span></p>
+                        <p><strong>نام کاربری:</strong> <span id="detailUsername"></span></p>
+                        <p><strong>عضو از:</strong> <span id="detailCreatedAt"></span></p>
+                        <p><strong>تریال:</strong> <span id="detailTrialStatus"></span></p>
                     </div>
                     <div class="user-detail-section">
-                        <h3>Active Subscriptions</h3>
-                        <ul id="detailSubscriptions"><li>None</li></ul>
+                        <h3>اشتراک‌های فعال</h3>
+                        <ul id="detailSubscriptions"><li>ندارد</li></ul>
                     </div>
                     <div class="user-detail-section">
-                        <h3>Routes</h3>
-                        <ul id="detailRoutes"><li>None</li></ul>
+                        <h3>مسیرها</h3>
+                        <ul id="detailRoutes"><li>ندارد</li></ul>
                     </div>
                     <div class="user-detail-section">
-                        <h3>Recent Transactions</h3>
-                        <ul id="detailTransactions"><li>None</li></ul>
+                        <h3>آخرین تراکنش‌ها</h3>
+                        <ul id="detailTransactions"><li>ندارد</li></ul>
                     </div>
-                    <button class="btn btn-primary" onclick="closeUserModal()">Close</button>
+                    <button class="btn btn-secondary" onclick="closeUserModal()">بستن</button>
                 </div>
             </div>
 
@@ -101,14 +192,12 @@
             <div id="grantModal" class="modal" style="display:none;">
                 <div class="modal-content">
                     <span class="close" onclick="closeGrantModal()">&times;</span>
-                    <h2>🎁 Grant Manual Subscription</h2>
-                    <p style="color:#94a3b8; margin-bottom:16px;">
-                        User: <strong id="grantUserLabel" style="color:#f1f5f9;"></strong>
-                    </p>
+                    <h2>اعطای اشتراک دستی</h2>
+                    <p class="grant-user-label">کاربر: <strong id="grantUserLabel"></strong></p>
 
                     <div class="modal-grid">
                         <div class="form-group">
-                            <label>Plan (Tier)</label>
+                            <label>پلن</label>
                             <select id="grantTier">
                                 <option value="silver">🥈 Silver</option>
                                 <option value="gold" selected>🥇 Gold</option>
@@ -116,21 +205,21 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Duration</label>
+                            <label>مدت</label>
                             <select id="grantMonths">
-                                <option value="1">1 Month</option>
-                                <option value="3" selected>3 Months</option>
-                                <option value="6">6 Months</option>
-                                <option value="12">12 Months</option>
+                                <option value="1">۱ ماه</option>
+                                <option value="3" selected>۳ ماه</option>
+                                <option value="6">۶ ماه</option>
+                                <option value="12">۱۲ ماه</option>
                             </select>
                         </div>
                     </div>
 
                     <button class="btn btn-primary" onclick="confirmGrant()" id="grantConfirmBtn">
-                        ✅ Activate Subscription
+                        فعال‌سازی اشتراک
                     </button>
                     <div class="success-msg" id="grantSuccess"></div>
-                    <div class="error-msg" id="grantError"></div>
+                    <div class="error-msg"   id="grantError"></div>
                 </div>
             </div>
         </main>
@@ -141,7 +230,7 @@
         if (!token) window.location.href = '/admin/login.html';
 
         let currentPage = 1;
-        const pageSize = 20;
+        const pageSize  = 20;
         let grantUserId = null;
 
         async function fetchAPI(endpoint, options = {}) {
@@ -154,84 +243,96 @@
         }
 
         async function loadUsers() {
-            try {
-                const filter = document.getElementById('userIdFilter').value.trim();
-                let endpoint = `/admin/users?limit=${pageSize}&offset=${(currentPage - 1) * pageSize}`;
-                if (filter) endpoint += `&user_id=${encodeURIComponent(filter)}`;
+            const filter = document.getElementById('userIdFilter').value.trim();
+            let endpoint = `/admin/users?limit=${pageSize}&offset=${(currentPage - 1) * pageSize}`;
+            if (filter) endpoint += `&user_id=${encodeURIComponent(filter)}`;
 
+            const tbody = document.getElementById('usersTable');
+            tbody.innerHTML = `<tr><td colspan="8" style="color:var(--text-3);padding:20px 16px;">در حال بارگذاری…</td></tr>`;
+
+            try {
                 const data = await fetchAPI(endpoint);
-                const tbody = document.getElementById('usersTable');
                 tbody.innerHTML = '';
+
+                if (!data.users || data.users.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--text-3);padding:20px 16px;">کاربری یافت نشد</td></tr>`;
+                    return;
+                }
 
                 (data.users || []).forEach(user => {
                     const trialBadge = user.is_trial_active
-                        ? '<span class="badge badge-info">Trial</span>'
-                        : '<span class="badge badge-danger">Expired</span>';
+                        ? '<span class="badge badge-info">تریال</span>'
+                        : '<span class="badge badge-danger">منقضی</span>';
+                    const tierLabel  = { silver: '🥈 Silver', gold: '🥇 Gold', platinum: '💎 Platinum' };
                     const tier = user.current_tier
-                        ? `<span class="badge badge-warning">${user.current_tier}</span>`
-                        : '<span style="color:#64748b">None</span>';
+                        ? `<span class="badge badge-warning">${tierLabel[user.current_tier] || user.current_tier}</span>`
+                        : `<span style="color:var(--text-3)">—</span>`;
                     const subEnd = user.subscription_end
-                        ? new Date(user.subscription_end).toLocaleDateString()
-                        : '-';
+                        ? new Date(user.subscription_end).toLocaleDateString('fa-IR')
+                        : '—';
 
                     tbody.innerHTML += `
                         <tr>
-                            <td>${user.id}</td>
-                            <td style="font-size:11px;color:#94a3b8">${user.user_id}</td>
-                            <td>${user.username || '<em style="color:#64748b">N/A</em>'}</td>
+                            <td class="mono">${user.id}</td>
+                            <td class="mono" style="font-size:var(--f-xs);color:var(--text-3);">${user.user_id}</td>
+                            <td>${user.username || '<em style="color:var(--text-3)">—</em>'}</td>
                             <td>${trialBadge}</td>
                             <td>${tier}</td>
-                            <td>${subEnd}</td>
-                            <td>${new Date(user.created_at).toLocaleDateString()}</td>
-                            <td>
-                                <button class="btn btn-small" onclick="viewUserDetail(${user.id})">View</button>
-                                <button class="grant-btn" onclick="openGrant(${user.id}, '${user.user_id}', '${user.username || ''}')">🎁 Grant Sub</button>
+                            <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${subEnd}</td>
+                            <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${new Date(user.created_at).toLocaleDateString('fa-IR')}</td>
+                            <td style="white-space:nowrap;">
+                                <button class="btn btn-secondary btn-small" onclick="viewUserDetail(${user.id})">جزئیات</button>
+                                <button class="grant-btn" onclick="openGrant(${user.id}, '${user.user_id}', '${user.username || ''}')">🎁 اشتراک</button>
                             </td>
                         </tr>`;
                 });
 
-                document.getElementById('pageInfo').textContent = `Page ${currentPage} (${data.total} users)`;
-            } catch (e) { console.error(e); }
+                document.getElementById('pageInfo').textContent =
+                    `صفحه ${currentPage}  ·  ${data.total} کاربر`;
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="8" style="color:var(--err-fg);padding:20px 16px;">خطا در بارگذاری: ${e.message}</td></tr>`;
+            }
         }
 
         async function viewUserDetail(userId) {
             const data = await fetchAPI(`/admin/users/${userId}`);
             const user = data.user;
-            document.getElementById('detailId').textContent = user.id;
-            document.getElementById('detailUserId').textContent = user.user_id;
-            document.getElementById('detailUsername').textContent = user.username || 'N/A';
-            document.getElementById('detailCreatedAt').textContent = new Date(user.created_at).toLocaleDateString();
-            document.getElementById('detailTrialStatus').textContent = user.is_trial_active ? 'Active' : 'Expired';
+            document.getElementById('detailId').textContent          = user.id;
+            document.getElementById('detailUserId').textContent      = user.user_id;
+            document.getElementById('detailUsername').textContent     = user.username || '—';
+            document.getElementById('detailCreatedAt').textContent    = new Date(user.created_at).toLocaleDateString('fa-IR');
+            document.getElementById('detailTrialStatus').textContent  = user.is_trial_active ? '✅ فعال' : '❌ منقضی';
 
             const subList = document.getElementById('detailSubscriptions');
             subList.innerHTML = (data.subscriptions || []).length === 0
-                ? '<li>None</li>'
+                ? '<li>ندارد</li>'
                 : data.subscriptions.map(s =>
-                    `<li><strong>${s.tier}</strong> — until ${new Date(s.end_date).toLocaleDateString()} ${s.is_active ? '✅' : '❌'}</li>`
-                  ).join('');
+                    `<li><strong>${s.tier}</strong> — تا ${new Date(s.end_date).toLocaleDateString('fa-IR')} ${s.is_active ? '✅' : '❌'}</li>`
+                ).join('');
 
             const routeList = document.getElementById('detailRoutes');
             routeList.innerHTML = (data.routes || []).length === 0
-                ? '<li>None</li>'
-                : data.routes.map(r => `<li>Route #${r.id}</li>`).join('');
+                ? '<li>ندارد</li>'
+                : data.routes.map(r => `<li>مسیر #${r.id}</li>`).join('');
 
             const txnList = document.getElementById('detailTransactions');
             txnList.innerHTML = (data.recent_transactions || []).length === 0
-                ? '<li>None</li>'
+                ? '<li>ندارد</li>'
                 : data.recent_transactions.map(t =>
-                    `<li>${t.amount} — ${t.status} — ${new Date(t.created_at).toLocaleDateString()}</li>`
-                  ).join('');
+                    `<li>${t.amount} — ${t.status} — ${new Date(t.created_at).toLocaleDateString('fa-IR')}</li>`
+                ).join('');
 
-            document.getElementById('userModal').style.display = 'block';
+            document.getElementById('userModal').style.display = 'flex';
         }
 
         function openGrant(userId, rubikaId, username) {
             grantUserId = userId;
-            document.getElementById('grantUserLabel').textContent = username || rubikaId;
-            document.getElementById('grantSuccess').style.display = 'none';
-            document.getElementById('grantError').style.display = 'none';
-            document.getElementById('grantConfirmBtn').disabled = false;
-            document.getElementById('grantModal').style.display = 'block';
+            document.getElementById('grantUserLabel').textContent     = username || rubikaId;
+            document.getElementById('grantSuccess').style.display     = 'none';
+            document.getElementById('grantError').style.display       = 'none';
+            document.getElementById('grantConfirmBtn').disabled       = false;
+            document.getElementById('grantConfirmBtn').textContent    = 'فعال‌سازی اشتراک';
+            document.getElementById('grantModal').style.display       = 'flex';
         }
 
         async function confirmGrant() {
@@ -239,7 +340,7 @@
             const months = parseInt(document.getElementById('grantMonths').value);
             const btn    = document.getElementById('grantConfirmBtn');
             btn.disabled = true;
-            btn.textContent = 'Processing...';
+            btn.textContent = 'در حال پردازش…';
 
             try {
                 const res = await fetchAPI(`/admin/users/${grantUserId}/grant-subscription`, {
@@ -248,19 +349,19 @@
                 });
                 if (res.success) {
                     const ok = document.getElementById('grantSuccess');
-                    ok.textContent = `✅ ${tier} subscription activated until ${res.end_date}. User notified.`;
+                    ok.textContent = `✅ اشتراک ${tier} تا ${res.end_date} فعال شد. کاربر مطلع شد.`;
                     ok.style.display = 'block';
-                    btn.textContent = '✅ Done';
+                    btn.textContent  = '✅ انجام شد';
                     loadUsers();
                 } else {
-                    throw new Error(res.detail || 'Unknown error');
+                    throw new Error(res.detail || 'خطای ناشناخته');
                 }
             } catch (e) {
                 const err = document.getElementById('grantError');
-                err.textContent = '❌ ' + e.message;
+                err.textContent  = '❌ ' + e.message;
                 err.style.display = 'block';
                 btn.disabled = false;
-                btn.textContent = '✅ Activate Subscription';
+                btn.textContent = 'فعال‌سازی اشتراک';
             }
         }
 

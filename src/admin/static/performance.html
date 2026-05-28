@@ -1,20 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rubifo — Performance</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .perf-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1px;
+            background: var(--border-soft);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--r-lg);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+        .perf-kpi {
+            background: var(--surface);
+            padding: 20px;
+            transition: background 140ms ease;
+        }
+        .perf-kpi:hover { background: var(--surface-2); }
+        .perf-kpi-label { font-size: var(--f-xs); font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+        .perf-kpi-value { font-family: var(--font-mono); font-size: 26px; font-weight: 500; color: var(--text); letter-spacing: -0.02em; line-height: 1; }
+    </style>
 </head>
 <body>
     <div class="app-container">
-        <!-- Sidebar Navigation -->
         <nav class="sidebar">
-            <div class="logo">
-                <h2>Rubifo</h2>
-                <p>Admin</p>
-            </div>
-
+            <div class="logo"><h2>Rubifo</h2><p>Admin</p></div>
             <ul class="nav-menu">
                 <li><a href="/admin/dashboard.html">Dashboard</a></li>
                 <li><a href="/admin/users.html">Users</a></li>
@@ -24,74 +39,69 @@
                 <li><a href="/admin/performance.html" class="active">Performance</a></li>
                 <li><a href="/admin/settings.html">Settings</a></li>
             </ul>
-
             <div class="user-info">
-                <p id="currentUser">User</p>
-                <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
+                <p id="currentUser">—</p>
+                <button id="logoutBtn" class="btn btn-small btn-danger">خروج</button>
             </div>
         </nav>
 
-        <!-- Main Content -->
         <main class="content">
             <div class="header">
-                <h1>Performance Metrics</h1>
-                <p id="lastUpdate">Loading...</p>
+                <div>
+                    <h1>عملکرد سیستم</h1>
+                    <p id="lastUpdate" style="margin-top:4px;">در حال بارگذاری…</p>
+                </div>
+                <button class="btn btn-secondary btn-small" onclick="loadPerformanceMetrics()">↻ بروزرسانی</button>
             </div>
 
-            <!-- Metrics Grid -->
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <h3>Messages / Hour</h3>
-                    <p class="metric-value" id="messagesPerHour">0</p>
+            <div class="perf-kpi-grid">
+                <div class="perf-kpi">
+                    <div class="perf-kpi-label">پیام / ساعت</div>
+                    <div class="perf-kpi-value" id="messagesPerHour">—</div>
                 </div>
-
-                <div class="metric-card">
-                    <h3>Messages / 24h</h3>
-                    <p class="metric-value" id="messagesPerDay">0</p>
+                <div class="perf-kpi">
+                    <div class="perf-kpi-label">پیام / ۲۴ ساعت</div>
+                    <div class="perf-kpi-value" id="messagesPerDay">—</div>
                 </div>
-
-                <div class="metric-card">
-                    <h3>Failed Messages</h3>
-                    <p class="metric-value" id="failedMessages">0</p>
+                <div class="perf-kpi">
+                    <div class="perf-kpi-label">پیام‌های ناموفق</div>
+                    <div class="perf-kpi-value" id="failedMessages">—</div>
                 </div>
-
-                <div class="metric-card">
-                    <h3>Avg Retries</h3>
-                    <p class="metric-value" id="avgRetries">0</p>
+                <div class="perf-kpi">
+                    <div class="perf-kpi-label">میانگین تلاش مجدد</div>
+                    <div class="perf-kpi-value" id="avgRetries">—</div>
                 </div>
             </div>
 
-            <!-- Queue Status -->
-            <div class="section">
-                <h2>Queue Status — Top 10 Routes</h2>
+            <div class="section" style="margin-bottom:16px;">
+                <h2>صف انتظار — ۱۰ مسیر برتر</h2>
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Route ID</th>
-                            <th>Pending Count</th>
-                            <th>Avg Age (seconds)</th>
+                            <th>مسیر ID</th>
+                            <th>تعداد در صف</th>
+                            <th>میانگین سن (ثانیه)</th>
                         </tr>
                     </thead>
                     <tbody id="queueTable">
-                        <tr><td colspan="3">Loading...</td></tr>
+                        <tr><td colspan="3" style="color:var(--text-3);padding:20px 16px;">در حال بارگذاری…</td></tr>
                     </tbody>
                 </table>
             </div>
 
-            <!-- Subscription Distribution -->
             <div class="section">
-                <h2>Subscription Distribution</h2>
-                <div id="subscriptionChart" class="chart">
-                    <ul id="subscriptionList">
-                        <li>Loading...</li>
+                <h2>توزیع اشتراک‌ها</h2>
+                <div class="chart">
+                    <ul id="subscriptionList" style="list-style:none;">
+                        <li style="color:var(--text-3);font-size:var(--f-sm);">در حال بارگذاری…</li>
                     </ul>
                 </div>
             </div>
 
-            <!-- Auto-refresh -->
-            <div class="action-bar">
+            <div class="action-bar" style="margin-top:16px;">
                 <label>
-                    <input type="checkbox" id="autoRefresh" checked> Auto-refresh every 10s
+                    <input type="checkbox" id="autoRefresh" checked>
+                    بروزرسانی خودکار هر ۱۰ ثانیه
                 </label>
             </div>
         </main>
@@ -99,81 +109,63 @@
 
     <script>
         const token = localStorage.getItem('token');
-        if (!token) {
-            window.location.href = '/admin/login.html';
-        }
+        if (!token) window.location.href = '/admin/login.html';
 
         async function fetchAPI(endpoint) {
-            const response = await fetch(endpoint, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('token');
-                window.location.href = '/admin/login.html';
-            }
-
-            return response.json();
+            const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.status === 401) { localStorage.removeItem('token'); window.location.href = '/admin/login.html'; }
+            return res.json();
         }
 
         async function loadPerformanceMetrics() {
             try {
                 const data = await fetchAPI('/admin/performance');
 
-                document.getElementById('messagesPerHour').textContent = data.messages_processed.last_hour || 0;
-                document.getElementById('messagesPerDay').textContent = data.messages_processed.last_24h || 0;
-                document.getElementById('failedMessages').textContent = data.failed_messages || 0;
-                document.getElementById('avgRetries').textContent = (data.average_retry_count || 0).toFixed(2);
+                document.getElementById('messagesPerHour').textContent = data.messages_processed?.last_hour ?? '—';
+                document.getElementById('messagesPerDay').textContent  = data.messages_processed?.last_24h ?? '—';
+                document.getElementById('failedMessages').textContent  = data.failed_messages ?? '—';
+                document.getElementById('avgRetries').textContent      = (data.average_retry_count ?? 0).toFixed(2);
 
-                // Queue table
                 const queueTable = document.getElementById('queueTable');
-                queueTable.innerHTML = '';
-                (data.largest_queues || []).forEach(queue => {
-                    queueTable.innerHTML += `
+                const queues = data.largest_queues || [];
+                queueTable.innerHTML = queues.length === 0
+                    ? '<tr><td colspan="3" style="color:var(--text-3);padding:16px;">صف خالی است</td></tr>'
+                    : queues.map(q => `
                         <tr>
-                            <td>${queue.route_id}</td>
-                            <td>${queue.count}</td>
-                            <td>${queue.avg_age_seconds || '-'}</td>
-                        </tr>
-                    `;
-                });
-                if (data.largest_queues.length === 0) {
-                    queueTable.innerHTML = '<tr><td colspan="3">No queues</td></tr>';
-                }
+                            <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${q.route_id}</td>
+                            <td style="font-family:var(--font-mono);">${q.count}</td>
+                            <td style="font-family:var(--font-mono);color:var(--text-3);">${q.avg_age_seconds ?? '—'}</td>
+                        </tr>`
+                    ).join('');
 
-                // Subscription distribution
                 const subList = document.getElementById('subscriptionList');
-                subList.innerHTML = '';
-                (data.subscription_distribution || []).forEach(sub => {
-                    const percentage = Math.round((sub.count / (data.subscription_distribution.reduce((a, b) => a + b.count, 0) || 1)) * 100);
-                    const barWidth = percentage + '%';
-                    subList.innerHTML += `
-                        <li>
+                const dist = data.subscription_distribution || [];
+                const total = dist.reduce((a, b) => a + b.count, 0) || 1;
+                subList.innerHTML = dist.length === 0
+                    ? '<li style="color:var(--text-3);font-size:var(--f-sm);">داده‌ای نیست</li>'
+                    : dist.map(sub => {
+                        const pct = Math.round((sub.count / total) * 100);
+                        return `<li>
                             <div class="bar-container">
                                 <span class="bar-label">${sub.tier}</span>
-                                <div class="bar" style="width: ${barWidth};">
-                                    <span>${sub.count} (${percentage}%)</span>
+                                <div class="bar" style="width:${pct}%;">
+                                    <span>${sub.count} (${pct}%)</span>
                                 </div>
                             </div>
-                        </li>
-                    `;
-                });
-                if (data.subscription_distribution.length === 0) {
-                    subList.innerHTML = '<li>No data</li>';
-                }
+                        </li>`;
+                    }).join('');
 
-                document.getElementById('lastUpdate').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
-            } catch (error) {
-                console.error('Error loading performance metrics:', error);
+                document.getElementById('lastUpdate').textContent =
+                    'آخرین بروزرسانی: ' + new Date().toLocaleTimeString('fa-IR');
+            } catch (e) {
+                console.error('Performance load error:', e);
             }
         }
 
+        let autoInterval = setInterval(loadPerformanceMetrics, 10000);
         document.getElementById('autoRefresh').addEventListener('change', (e) => {
-            if (e.target.checked) {
-                setInterval(loadPerformanceMetrics, 10000);
-            }
+            clearInterval(autoInterval);
+            if (e.target.checked) autoInterval = setInterval(loadPerformanceMetrics, 10000);
         });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -183,7 +175,6 @@
 
         const payload = JSON.parse(atob(token.split('.')[1]));
         document.getElementById('currentUser').textContent = payload.sub || 'Admin';
-
         loadPerformanceMetrics();
     </script>
 </body>

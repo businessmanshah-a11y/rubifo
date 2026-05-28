@@ -1,63 +1,102 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rubifo — Activity & Errors</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <style>
-        .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
-        .tab-btn { padding: 8px 20px; border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #94a3b8; cursor: pointer; font-size: 14px; transition: all .2s; }
-        .tab-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
-        .tab-btn:hover:not(.active) { background: #273549; color: #f1f5f9; }
+        /* ── Tabs ── */
+        .tabs { display: flex; gap: 2px; margin-bottom: 24px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--r-lg); padding: 4px; width: fit-content; }
+        .tab-btn { padding: 7px 18px; border: none; border-radius: var(--r); background: transparent; color: var(--text-3); cursor: pointer; font-size: var(--f-sm); font-family: var(--font); font-weight: 500; transition: background 140ms ease, color 140ms ease; }
+        .tab-btn.active { background: var(--surface-3); color: var(--text); font-weight: 600; }
+        .tab-btn:hover:not(.active) { color: var(--text-2); }
 
-        .filters { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; align-items: flex-end; }
-        .filter-group { display: flex; flex-direction: column; gap: 4px; }
-        .filter-group label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
-        .filter-group input,
-        .filter-group select { background: #1e293b; border: 1px solid #334155; color: #f1f5f9; border-radius: 8px; padding: 8px 12px; font-size: 13px; min-width: 140px; }
-        .filter-group input::placeholder { color: #475569; }
+        /* ── Filters bar ── */
+        .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: flex-end; }
+        .filter-group { display: flex; flex-direction: column; gap: 5px; }
+        .filter-group label { font-size: var(--f-xs); color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+        .filter-group input, .filter-group select { min-width: 150px; }
 
-        .auto-refresh { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-        .toggle { position: relative; width: 40px; height: 22px; }
+        /* ── Auto-refresh toggle ── */
+        .refresh-bar { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+        .toggle { position: relative; width: 36px; height: 20px; }
         .toggle input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; inset: 0; background: #334155; border-radius: 22px; cursor: pointer; transition: .3s; }
-        .slider:before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s; }
-        input:checked + .slider { background: #3b82f6; }
-        input:checked + .slider:before { transform: translateX(18px); }
+        .slider { position: absolute; inset: 0; background: var(--surface-3); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; transition: background .25s; }
+        .slider:before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; background: var(--text-3); border-radius: 50%; transition: transform .25s, background .25s; }
+        input:checked + .slider { background: var(--accent-subtle); border-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(16px); background: var(--accent); }
 
-        /* Timeline log entries */
-        .log-feed { display: flex; flex-direction: column; gap: 6px; }
-        .log-entry { background: #1e293b; border: 1px solid #1e293b; border-radius: 10px; padding: 12px 16px; display: grid; grid-template-columns: 90px 120px 150px 1fr; gap: 12px; align-items: start; font-size: 13px; transition: border-color .15s; }
-        .log-entry:hover { border-color: #334155; }
+        /* ── Log Feed ── */
+        .log-feed { display: flex; flex-direction: column; gap: 2px; }
 
-        /* level badges */
-        .lvl { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-        .lvl-info    { background: #1e3a5f; color: #60a5fa; }
-        .lvl-warning { background: #3f2c00; color: #fbbf24; }
-        .lvl-error   { background: #3b0f0f; color: #f87171; }
-        .lvl-debug   { background: #1e293b; color: #64748b; border: 1px solid #334155; }
+        .log-entry {
+            display: grid;
+            grid-template-columns: 100px 140px 160px 1fr;
+            gap: 0;
+            font-size: var(--f-sm);
+            border-radius: var(--r);
+            overflow: hidden;
+            transition: background 100ms ease;
+        }
+        .log-entry:hover { background: var(--surface-2); }
 
-        .log-time  { color: #64748b; font-size: 11px; padding-top: 2px; }
-        .log-uid   { color: #94a3b8; font-size: 11px; padding-top: 2px; font-family: monospace; }
-        .log-action { color: #c084fc; font-size: 12px; font-weight: 600; padding-top: 2px; word-break: break-all; }
-        .log-msg   { color: #e2e8f0; line-height: 1.5; word-break: break-word; }
+        .log-entry > * {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-soft);
+        }
 
-        /* Error card variant */
-        .log-entry.is-error { border-left: 3px solid #ef4444; border-radius: 0 10px 10px 0; background: #1a1010; }
-        .log-entry.is-warning { border-left: 3px solid #f59e0b; border-radius: 0 10px 10px 0; }
+        .log-time  { color: var(--text-3); font-family: var(--font-mono); font-size: var(--f-xs); line-height: 1.5; }
+        .log-uid   { color: var(--text-3); font-family: var(--font-mono); font-size: var(--f-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .log-action { font-family: var(--font-mono); font-size: var(--f-xs); color: var(--accent); font-weight: 500; display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; }
+        .log-msg   { color: var(--text-2); line-height: 1.5; word-break: break-word; }
 
-        /* User summary chips */
-        .user-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-        .user-chip { background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 4px 12px; font-size: 12px; color: #94a3b8; cursor: pointer; transition: all .15s; }
-        .user-chip:hover, .user-chip.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
-        .user-chip .cnt { background: #334155; border-radius: 20px; padding: 1px 6px; margin-left: 4px; font-size: 10px; }
-        .user-chip.active .cnt { background: rgba(255,255,255,.2); }
+        /* Error / warning highlight */
+        .log-entry.is-error { border-left: 2px solid var(--err-fg); }
+        .log-entry.is-error .log-msg { color: var(--err-fg); }
+        .log-entry.is-warning { border-left: 2px solid var(--warn-fg); }
+        .log-entry.is-warning .log-msg { color: var(--warn-fg); }
 
-        .empty-state { text-align: center; padding: 48px; color: #475569; }
-        .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+        /* Level badges */
+        .lvl { display: inline-block; padding: 1px 7px; border-radius: 100px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border: 1px solid transparent; }
+        .lvl-info    { background: var(--inf-bg);  color: var(--inf-fg);  border-color: var(--inf-bd); }
+        .lvl-warning { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-bd); }
+        .lvl-error   { background: var(--err-bg);  color: var(--err-fg);  border-color: var(--err-bd); }
+        .lvl-debug   { background: var(--surface-3); color: var(--text-3); border-color: var(--border); }
 
-        .section-label { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; padding: 8px 0 4px; border-bottom: 1px solid #1e293b; margin-bottom: 8px; }
+        /* ── User chips ── */
+        .user-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+        .user-chip {
+            background: var(--surface-2);
+            border: 1px solid var(--border-soft);
+            border-radius: 100px;
+            padding: 3px 12px;
+            font-size: var(--f-xs);
+            color: var(--text-3);
+            cursor: pointer;
+            font-family: var(--font-mono);
+            transition: all .15s ease;
+        }
+        .user-chip:hover { border-color: var(--border); color: var(--text-2); }
+        .user-chip.active { background: var(--accent-subtle); color: var(--accent); border-color: var(--accent); }
+        .user-chip .cnt { opacity: .6; margin-left: 4px; }
+
+        /* ── Section label ── */
+        .section-label {
+            font-size: var(--f-xs);
+            font-weight: 600;
+            color: var(--text-3);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            padding: 14px 0 8px;
+            border-bottom: 1px solid var(--border-soft);
+            margin-bottom: 8px;
+        }
+
+        /* ── Empty state ── */
+        .empty-state { text-align: center; padding: 48px; color: var(--text-3); }
+        .empty-state .icon { font-size: 32px; margin-bottom: 10px; }
+        .empty-state p { font-size: var(--f-sm); }
     </style>
 </head>
 <body>
@@ -74,86 +113,83 @@
                 <li><a href="/admin/settings.html">Settings</a></li>
             </ul>
             <div class="user-info">
-                <p id="currentUser">User</p>
-                <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
+                <p id="currentUser">—</p>
+                <button id="logoutBtn" class="btn btn-small btn-danger">خروج</button>
             </div>
         </nav>
 
         <main class="content">
             <div class="header">
                 <h1>Activity & Errors</h1>
-                <div class="auto-refresh">
-                    <span style="font-size:12px;color:#64748b;">Auto-refresh</span>
+                <div class="refresh-bar">
+                    <span style="font-size:var(--f-xs);color:var(--text-3);">auto-refresh</span>
                     <label class="toggle">
                         <input type="checkbox" id="autoRefreshToggle" checked>
                         <span class="slider"></span>
                     </label>
-                    <button class="btn btn-small" onclick="loadData()">↻ Refresh</button>
+                    <button class="btn btn-secondary btn-small" onclick="loadData()">↻</button>
                 </div>
             </div>
 
-            <!-- Tabs -->
             <div class="tabs">
-                <button class="tab-btn active" onclick="switchTab('activity', this)">📊 User Activity</button>
-                <button class="tab-btn" onclick="switchTab('errors', this)">🚨 Errors & Warnings</button>
+                <button class="tab-btn active" onclick="switchTab('activity', this)">رفتار کاربران</button>
+                <button class="tab-btn" onclick="switchTab('errors', this)">خطاها و هشدارها</button>
             </div>
 
-            <!-- ──────────── ACTIVITY TAB ──────────── -->
+            <!-- ── Activity Tab ── -->
             <div id="tab-activity">
-                <!-- User chips for quick filtering -->
                 <div id="userChips" class="user-chips"></div>
 
-                <!-- Filters -->
                 <div class="filters">
                     <div class="filter-group">
-                        <label>User ID / Username</label>
-                        <input type="text" id="actUserFilter" placeholder="filter by user…" oninput="debouncedLoad()">
+                        <label>کاربر</label>
+                        <input type="text" id="actUserFilter" placeholder="user id…" oninput="debouncedLoad()">
                     </div>
                     <div class="filter-group">
                         <label>Action</label>
                         <input type="text" id="actActionFilter" placeholder="/start, /buy…" oninput="debouncedLoad()">
                     </div>
                     <div class="filter-group">
-                        <label>Level</label>
+                        <label>سطح</label>
                         <select id="actLevelFilter" onchange="loadActivity()">
-                            <option value="">All</option>
+                            <option value="">همه</option>
                             <option value="info">Info</option>
                             <option value="warning">Warning</option>
                             <option value="error">Error</option>
-                            <option value="debug">Debug</option>
                         </select>
                     </div>
-                    <button class="btn btn-small" style="align-self:flex-end" onclick="clearActivityFilters()">Clear</button>
+                    <button class="btn btn-secondary btn-small" style="align-self:flex-end" onclick="clearActivityFilters()">پاک</button>
                 </div>
 
                 <div class="log-feed" id="activityFeed">
-                    <div class="empty-state"><div class="icon">⏳</div>Loading…</div>
+                    <div class="empty-state"><div class="icon">⏳</div><p>در حال بارگذاری…</p></div>
                 </div>
-                <div class="pagination" style="margin-top:16px">
-                    <button class="btn btn-small" onclick="actPrevPage()">← Previous</button>
-                    <span id="actPageInfo" style="font-size:13px;color:#94a3b8">Page 1</span>
-                    <button class="btn btn-small" onclick="actNextPage()">Next →</button>
+
+                <div class="pagination" style="margin-top:16px;">
+                    <button class="btn btn-secondary btn-small" onclick="actPrevPage()">← قبلی</button>
+                    <span id="actPageInfo">صفحه ۱</span>
+                    <button class="btn btn-secondary btn-small" onclick="actNextPage()">بعدی →</button>
                 </div>
             </div>
 
-            <!-- ──────────── ERRORS TAB ──────────── -->
-            <div id="tab-errors" style="display:none">
+            <!-- ── Errors Tab ── -->
+            <div id="tab-errors" style="display:none;">
                 <div class="filters">
                     <div class="filter-group">
-                        <label>User ID</label>
-                        <input type="text" id="errUserFilter" placeholder="filter by user…" oninput="debouncedLoadErr()">
+                        <label>کاربر</label>
+                        <input type="text" id="errUserFilter" placeholder="user id…" oninput="debouncedLoadErr()">
                     </div>
-                    <button class="btn btn-small" style="align-self:flex-end" onclick="clearErrorFilters()">Clear</button>
+                    <button class="btn btn-secondary btn-small" style="align-self:flex-end" onclick="clearErrorFilters()">پاک</button>
                 </div>
 
-                <div class="section-label">Errors</div>
+                <div class="section-label">خطاها</div>
                 <div class="log-feed" id="errorFeed">
-                    <div class="empty-state"><div class="icon">⏳</div>Loading…</div>
+                    <div class="empty-state"><div class="icon">⏳</div><p>در حال بارگذاری…</p></div>
                 </div>
 
-                <div class="section-label" style="margin-top:20px">Warnings</div>
+                <div class="section-label" style="margin-top:24px;">هشدارها</div>
                 <div class="log-feed" id="warningFeed">
-                    <div class="empty-state"><div class="icon">⏳</div>Loading…</div>
+                    <div class="empty-state"><div class="icon">⏳</div><p>در حال بارگذاری…</p></div>
                 </div>
             </div>
         </main>
@@ -164,12 +200,11 @@
         if (!token) window.location.href = '/admin/login.html';
 
         let activeTab = 'activity';
-        let actPage = 1;
+        let actPage   = 1;
         const PAGE_SIZE = 50;
         let refreshInterval = null;
-        let debounceTimer = null;
+        let debounceTimer   = null;
 
-        // ── Auth ──────────────────────────────────────────────────────────
         async function fetchAPI(endpoint, options = {}) {
             const res = await fetch(endpoint, {
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -179,7 +214,6 @@
             return res.json();
         }
 
-        // ── Tab switching ─────────────────────────────────────────────────
         function switchTab(tab, btn) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
@@ -189,17 +223,14 @@
             loadData();
         }
 
-        // ── Debounce ──────────────────────────────────────────────────────
-        function debouncedLoad()    { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadActivity, 400); }
-        function debouncedLoadErr() { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadErrors, 400); }
+        function debouncedLoad()    { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadActivity, 350); }
+        function debouncedLoadErr() { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadErrors, 350); }
 
-        // ── Main dispatcher ───────────────────────────────────────────────
         function loadData() {
             if (activeTab === 'activity') { loadActivity(); loadUserChips(); }
             else                          { loadErrors(); }
         }
 
-        // ── Render helper ─────────────────────────────────────────────────
         function levelBadge(level) {
             const cls = { info: 'lvl-info', warning: 'lvl-warning', error: 'lvl-error', debug: 'lvl-debug' }[level] || 'lvl-debug';
             return `<span class="lvl ${cls}">${level}</span>`;
@@ -207,24 +238,24 @@
 
         function fmtTime(iso) {
             const d = new Date(iso);
-            return d.toLocaleDateString() + '<br>' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+            return d.toLocaleDateString('fa-IR') + '<br>' +
+                   d.toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
         }
 
         function renderEntry(log, extraClass = '') {
             return `
                 <div class="log-entry ${extraClass}">
                     <div class="log-time">${fmtTime(log.created_at)}</div>
-                    <div class="log-uid">${log.user_id || '—'}</div>
-                    <div class="log-action">${escHtml(log.action || '')} ${levelBadge(log.level)}</div>
-                    <div class="log-msg">${escHtml(log.message || '')}</div>
+                    <div class="log-uid">${esc(log.user_id || '—')}</div>
+                    <div class="log-action">${esc(log.action || '')} ${levelBadge(log.level)}</div>
+                    <div class="log-msg">${esc(log.message || '')}</div>
                 </div>`;
         }
 
-        function escHtml(s) {
+        function esc(s) {
             return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
 
-        // ── Activity Tab ──────────────────────────────────────────────────
         async function loadActivity() {
             const userFilter   = document.getElementById('actUserFilter').value.trim();
             const actionFilter = document.getElementById('actActionFilter').value.trim();
@@ -240,7 +271,7 @@
                 const data = await fetchAPI(url);
                 const logs = data.logs || [];
                 if (logs.length === 0) {
-                    feed.innerHTML = '<div class="empty-state"><div class="icon">🔍</div>No activity found</div>';
+                    feed.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>فعالیتی یافت نشد</p></div>';
                 } else {
                     feed.innerHTML = logs.map(l => {
                         const cls = l.level === 'error' ? 'is-error' : l.level === 'warning' ? 'is-warning' : '';
@@ -248,9 +279,9 @@
                     }).join('');
                 }
                 document.getElementById('actPageInfo').textContent =
-                    `Page ${actPage}  ·  ${data.total ?? logs.length} total`;
+                    `صفحه ${actPage}  ·  ${data.total ?? logs.length} رویداد`;
             } catch (e) {
-                feed.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Failed to load: ${e.message}</div>`;
+                feed.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
             }
         }
 
@@ -261,7 +292,7 @@
                 if (!data.users || data.users.length === 0) { chips.innerHTML = ''; return; }
                 chips.innerHTML = data.users.map(u => `
                     <span class="user-chip" onclick="filterByUser('${u.user_id}')">
-                        ${u.user_id} <span class="cnt">${u.event_count ?? u.count ?? 0}</span>
+                        ${u.user_id}<span class="cnt">${u.event_count ?? u.count ?? ''}</span>
                     </span>`).join('');
             } catch (_) {}
         }
@@ -287,26 +318,24 @@
         function actPrevPage() { if (actPage > 1) { actPage--; loadActivity(); } }
         function actNextPage() { actPage++; loadActivity(); }
 
-        // ── Errors Tab ────────────────────────────────────────────────────
         async function loadErrors() {
             const userFilter = document.getElementById('errUserFilter').value.trim();
 
-            for (const [level, feedId] of [['error', 'errorFeed'], ['warning', 'warningFeed']]) {
+            for (const [level, feedId, emptyIcon] of [['error','errorFeed','✅'],['warning','warningFeed','👍']]) {
                 let url = `/admin/activity?limit=100&offset=0&level=${level}`;
                 if (userFilter) url += `&user_id=${encodeURIComponent(userFilter)}`;
-
                 const feed = document.getElementById(feedId);
                 try {
                     const data = await fetchAPI(url);
                     const logs = data.logs || [];
                     if (logs.length === 0) {
-                        feed.innerHTML = `<div class="empty-state"><div class="icon">${level === 'error' ? '✅' : '👍'}</div>No ${level}s</div>`;
+                        feed.innerHTML = `<div class="empty-state"><div class="icon">${emptyIcon}</div><p>${level === 'error' ? 'خطایی نیست' : 'هشداری نیست'}</p></div>`;
                     } else {
                         const cls = level === 'error' ? 'is-error' : 'is-warning';
                         feed.innerHTML = logs.map(l => renderEntry(l, cls)).join('');
                     }
-                } catch (e) {
-                    feed.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Failed to load</div>`;
+                } catch {
+                    feed.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>خطا در بارگذاری</p></div>';
                 }
             }
         }
@@ -316,7 +345,6 @@
             loadErrors();
         }
 
-        // ── Auto-refresh ──────────────────────────────────────────────────
         function setupAutoRefresh() {
             const toggle = document.getElementById('autoRefreshToggle');
             function apply() {
@@ -327,13 +355,11 @@
             apply();
         }
 
-        // ── Logout ────────────────────────────────────────────────────────
         document.getElementById('logoutBtn').addEventListener('click', () => {
             localStorage.removeItem('token');
             window.location.href = '/admin/login.html';
         });
 
-        // ── Boot ──────────────────────────────────────────────────────────
         const payload = JSON.parse(atob(token.split('.')[1]));
         document.getElementById('currentUser').textContent = payload.sub || 'Admin';
         loadData();
