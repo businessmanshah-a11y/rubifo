@@ -899,3 +899,46 @@ select option { background: var(--surface-2); }
 
   .header { flex-direction: column; }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   RTL OVERRIDES — [dir="rtl"] pages
+   ───────────────────────────────────────────────────────────── */
+
+/* Flip sidebar to right side */
+[dir="rtl"] .sidebar {
+  border-right: none;
+  border-left: 1px solid var(--sidebar-border);
+  inset: 0 0 0 auto;   /* right: 0 */
+}
+
+/* Content pushes from right instead of left */
+[dir="rtl"] .content {
+  margin-left: 0;
+  margin-right: var(--nav-w);
+}
+
+/* Table text alignment */
+[dir="rtl"] .data-table th,
+[dir="rtl"] .data-table td { text-align: right; }
+
+/* Pagination arrows */
+[dir="rtl"] .pagination { direction: rtl; }
+
+/* Active bar on sidebar items: left side in LTR = right side in RTL */
+[dir="rtl"] .sidebar .nav-menu a.active {
+  border-right: 2px solid var(--accent);
+  border-left: none;
+  padding-right: 8px;
+}
+
+/* Modal content RTL */
+[dir="rtl"] .modal-content { text-align: right; }
+[dir="rtl"] .modal-content .close {
+  float: left;
+}
+
+/* Responsive override */
+@media (max-width: 720px) {
+  [dir="rtl"] .content { margin-right: 0; }
+  [dir="rtl"] .sidebar { inset: auto 0 0 0; border-left: none; border-top: 1px solid var(--sidebar-border); }
+}

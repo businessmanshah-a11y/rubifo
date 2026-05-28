@@ -714,7 +714,7 @@ async def get_performance_metrics(username: str = Depends(verify_token)) -> dict
 # ─────────────────────────────────────────────────────────────
 
 class GrantSubscriptionRequest(BaseModel):
-    tier: str          # silver / gold / platinum
+    tier: str          # basic / pro / enterprise
     months: int        # 1, 3, 6, 12
 
 
@@ -729,7 +729,7 @@ async def grant_subscription(
     Deactivates any existing active subscription then creates a new one.
     Sends a Rubika notification to the user.
     """
-    valid_tiers = {"silver", "gold", "platinum"}
+    valid_tiers = {"basic", "pro", "enterprise"}
     if body.tier not in valid_tiers:
         raise HTTPException(status_code=400, detail=f"Invalid tier. Use: {valid_tiers}")
     if body.months not in {1, 3, 6, 12}:
@@ -766,7 +766,7 @@ async def grant_subscription(
     try:
         from src.bot.main import _get_bot_client
         client = _get_bot_client()
-        tier_fa = {"silver": "نقره‌ای 🥈", "gold": "طلایی 🥇", "platinum": "پلاتین 💎"}
+        tier_fa = {"basic": "شروع حرفه‌ای 🥈", "pro": "رشد 🥇", "enterprise": "مقیاس 💎"}
         if client:
             await client.send_message(
                 rubika_user_id,
@@ -861,6 +861,49 @@ async def get_active_users(
         """
     )
     return {"users": [dict(r) for r in rows]}
+
+
+@router.get("/users/{user_id}/activity")
+async def get_user_activity(
+    user_id: int,
+    username: str = Depends(verify_token),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """Get all bot interactions (commands & events) for a specific user.
+
+    Reads from the logs table filtered by the user's internal DB id.
+    Returns rows ordered newest-first so the admin sees recent activity at top.
+    """
+    # Resolve rubika user_id string from internal id first
+    user_row = await _db().fetchrow("SELECT user_id FROM users WHERE id = $1", user_id)
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found")
+    rubika_uid = user_row["user_id"]
+
+    total_row = await _db().fetchrow(
+        "SELECT COUNT(*) as count FROM logs WHERE user_id = $1", rubika_uid
+    )
+    total = total_row["count"] if total_row else 0
+
+    rows = await _db().fetch(
+        """
+        SELECT id, level, action, message, created_at
+        FROM logs
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+        """,
+        rubika_uid, limit, offset,
+    )
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "rubika_user_id": rubika_uid,
+        "logs": [dict(r) for r in rows],
+    }
 
 
 # ─────────────────────────────────────────────────────────────

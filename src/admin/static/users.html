@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rubifo — Users</title>
+    <title>روبیفو — کاربران</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <style>
+        /* ── Grant button ── */
         .grant-btn {
             background: var(--ok-bg);
             color: var(--ok-fg);
@@ -16,21 +17,32 @@
             font-size: var(--f-xs);
             font-family: var(--font);
             font-weight: 600;
-            margin-left: 4px;
             transition: background 140ms ease, border-color 140ms ease;
         }
-        .grant-btn:hover {
-            background: oklch(20% 0.08 145);
-            border-color: var(--ok-fg);
-        }
+        .grant-btn:hover { background: oklch(20% 0.08 145); border-color: var(--ok-fg); }
 
+        /* ── Activity button ── */
+        .activity-btn {
+            background: var(--inf-bg);
+            color: var(--inf-fg);
+            border: 1px solid var(--inf-bd);
+            padding: 4px 10px;
+            border-radius: var(--r-sm);
+            cursor: pointer;
+            font-size: var(--f-xs);
+            font-family: var(--font);
+            font-weight: 600;
+            transition: background 140ms ease;
+        }
+        .activity-btn:hover { background: oklch(18% 0.05 248); }
+
+        /* ── Modal internals ── */
         .modal-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 16px;
             margin: 16px 0;
         }
-
         .form-group label {
             display: block;
             font-weight: 600;
@@ -40,85 +52,64 @@
             text-transform: uppercase;
             letter-spacing: 0.06em;
         }
-
-        .form-group select {
-            width: 100%;
-            padding: 10px 12px;
-            border-radius: var(--r);
-            border: 1px solid var(--border);
-            background: var(--surface-2);
-            color: var(--text);
-            font-size: var(--f-sm);
-        }
-
-        .success-msg {
-            background: var(--ok-bg);
-            color: var(--ok-fg);
-            border: 1px solid var(--ok-bd);
-            padding: 10px 14px;
-            border-radius: var(--r);
-            margin-top: 12px;
-            display: none;
-            font-size: var(--f-sm);
-        }
-
-        .error-msg {
-            background: var(--err-bg);
-            color: var(--err-fg);
-            border: 1px solid var(--err-bd);
-            padding: 10px 14px;
-            border-radius: var(--r);
-            margin-top: 12px;
-            display: none;
-            font-size: var(--f-sm);
-        }
+        .form-group select { width: 100%; }
 
         #grantModal .modal-content { max-width: 480px; }
+        #activityModal .modal-content { max-width: 700px; width: 95vw; }
 
-        .grant-user-label {
-            color: var(--text-3);
-            font-size: var(--f-sm);
-            margin-bottom: 16px;
-        }
+        .grant-user-label { color: var(--text-3); font-size: var(--f-sm); margin-bottom: 16px; }
+        .grant-user-label strong { color: var(--accent); font-family: var(--font-mono); }
 
-        .grant-user-label strong {
-            color: var(--accent);
-            font-family: var(--font-mono);
-        }
-
-        /* header row with search inline */
+        /* ── Page header ── */
         .page-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; flex-wrap: wrap; margin-bottom: 24px;
+        }
+        .search-row { display: flex; gap: 8px; align-items: center; }
+        .search-row input { min-width: 240px; }
+
+        /* ── Activity log inside modal ── */
+        .act-log-row {
+            display: grid;
+            grid-template-columns: 100px 110px 1fr;
             gap: 12px;
-            flex-wrap: wrap;
-            margin-bottom: 24px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-soft);
+            align-items: start;
+            font-size: var(--f-xs);
         }
+        .act-log-row:last-child { border-bottom: none; }
+        .act-time { font-family: var(--font-mono); color: var(--text-3); }
+        .act-action { font-family: var(--font-mono); color: var(--accent); }
+        .act-msg { color: var(--text-2); word-break: break-word; }
 
-        .search-row {
-            display: flex;
-            gap: 8px;
-            align-items: center;
+        .act-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
         }
+        .act-header h3 { margin: 0; font-size: var(--f-base); }
+        .act-meta { font-family: var(--font-mono); font-size: var(--f-xs); color: var(--text-3); }
 
-        .search-row input {
-            min-width: 240px;
-        }
+        .act-pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+        .act-empty { color: var(--text-3); font-size: var(--f-sm); padding: 24px 0; text-align: center; }
+
+        /* ── Action column tighter ── */
+        td:last-child { white-space: nowrap; }
+        td:last-child button + button { margin-right: 4px; }
     </style>
 </head>
 <body>
     <div class="app-container">
         <nav class="sidebar">
-            <div class="logo"><h2>Rubifo</h2><p>Admin</p></div>
+            <div class="logo"><h2>روبیفو</h2><p>پنل مدیریت</p></div>
             <ul class="nav-menu">
-                <li><a href="/admin/dashboard.html">Dashboard</a></li>
-                <li><a href="/admin/users.html" class="active">Users</a></li>
-                <li><a href="/admin/activity.html">Activity & Errors</a></li>
-                <li><a href="/admin/channels.html">Channels</a></li>
-                <li><a href="/admin/logs.html">Logs</a></li>
-                <li><a href="/admin/performance.html">Performance</a></li>
-                <li><a href="/admin/settings.html">Settings</a></li>
+                <li><a href="/admin/dashboard.html">داشبورد</a></li>
+                <li><a href="/admin/users.html" class="active">کاربران</a></li>
+                <li><a href="/admin/activity.html">فعالیت و خطاها</a></li>
+                <li><a href="/admin/channels.html">کانال‌ها</a></li>
+                <li><a href="/admin/logs.html">لاگ‌ها</a></li>
+                <li><a href="/admin/performance.html">عملکرد</a></li>
+                <li><a href="/admin/settings.html">تنظیمات</a></li>
             </ul>
             <div class="user-info">
                 <p id="currentUser">—</p>
@@ -139,7 +130,7 @@
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>User ID</th>
+                        <th>شناسه روبیکا</th>
                         <th>نام کاربری</th>
                         <th>تریال</th>
                         <th>پلن</th>
@@ -154,23 +145,23 @@
             </table>
 
             <div class="pagination">
-                <button class="btn btn-secondary btn-small" onclick="previousPage()">← قبلی</button>
+                <button class="btn btn-secondary btn-small" onclick="previousPage()">قبلی ←</button>
                 <span id="pageInfo">صفحه ۱</span>
-                <button class="btn btn-secondary btn-small" onclick="nextPage()">بعدی →</button>
+                <button class="btn btn-secondary btn-small" onclick="nextPage()">→ بعدی</button>
             </div>
 
-            <!-- User Detail Modal -->
+            <!-- ─── User Detail Modal ─── -->
             <div id="userModal" class="modal" style="display:none;">
                 <div class="modal-content">
                     <span class="close" onclick="closeUserModal()">&times;</span>
                     <h2>جزئیات کاربر</h2>
                     <div class="user-detail-section">
-                        <h3>اطلاعات</h3>
-                        <p><strong>ID:</strong> <span id="detailId" style="font-family:var(--font-mono);"></span></p>
-                        <p><strong>User ID:</strong> <span id="detailUserId" style="font-family:var(--font-mono);font-size:var(--f-xs);color:var(--text-3);"></span></p>
+                        <h3>اطلاعات پایه</h3>
+                        <p><strong>شماره ردیف:</strong> <span id="detailId" style="font-family:var(--font-mono);"></span></p>
+                        <p><strong>شناسه روبیکا:</strong> <span id="detailUserId" style="font-family:var(--font-mono);font-size:var(--f-xs);color:var(--text-3);"></span></p>
                         <p><strong>نام کاربری:</strong> <span id="detailUsername"></span></p>
                         <p><strong>عضو از:</strong> <span id="detailCreatedAt"></span></p>
-                        <p><strong>تریال:</strong> <span id="detailTrialStatus"></span></p>
+                        <p><strong>وضعیت تریال:</strong> <span id="detailTrialStatus"></span></p>
                     </div>
                     <div class="user-detail-section">
                         <h3>اشتراک‌های فعال</h3>
@@ -188,7 +179,7 @@
                 </div>
             </div>
 
-            <!-- Grant Subscription Modal -->
+            <!-- ─── Grant Subscription Modal ─── -->
             <div id="grantModal" class="modal" style="display:none;">
                 <div class="modal-content">
                     <span class="close" onclick="closeGrantModal()">&times;</span>
@@ -199,9 +190,9 @@
                         <div class="form-group">
                             <label>پلن</label>
                             <select id="grantTier">
-                                <option value="silver">🥈 Silver</option>
-                                <option value="gold" selected>🥇 Gold</option>
-                                <option value="platinum">💎 Platinum</option>
+                                <option value="basic">🥈 شروع حرفه‌ای</option>
+                                <option value="pro" selected>🥇 رشد</option>
+                                <option value="enterprise">💎 مقیاس</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -218,8 +209,28 @@
                     <button class="btn btn-primary" onclick="confirmGrant()" id="grantConfirmBtn">
                         فعال‌سازی اشتراک
                     </button>
-                    <div class="success-msg" id="grantSuccess"></div>
-                    <div class="error-msg"   id="grantError"></div>
+                    <div class="message message-success" id="grantSuccess" style="display:none;margin-top:12px;"></div>
+                    <div class="message message-error"   id="grantError"   style="display:none;margin-top:12px;"></div>
+                </div>
+            </div>
+
+            <!-- ─── Per-user Activity Modal ─── -->
+            <div id="activityModal" class="modal" style="display:none;">
+                <div class="modal-content">
+                    <span class="close" onclick="closeActivityModal()">&times;</span>
+                    <div class="act-header">
+                        <h2>تاریخچه فعالیت کاربر</h2>
+                        <span class="act-meta" id="actMeta">در حال بارگذاری…</span>
+                    </div>
+                    <div id="actLogContainer">
+                        <p class="act-empty">در حال بارگذاری…</p>
+                    </div>
+                    <div class="act-pagination">
+                        <button class="btn btn-secondary btn-small" onclick="actPrev()">قبلی ←</button>
+                        <span id="actPageInfo" style="font-size:var(--f-xs);color:var(--text-3);font-family:var(--font-mono);">صفحه ۱</span>
+                        <button class="btn btn-secondary btn-small" onclick="actNext()">→ بعدی</button>
+                        <button class="btn btn-secondary btn-small" style="margin-right:auto;" onclick="closeActivityModal()">بستن</button>
+                    </div>
                 </div>
             </div>
         </main>
@@ -233,6 +244,11 @@
         const pageSize  = 20;
         let grantUserId = null;
 
+        // per-user activity state
+        let actUserId   = null;
+        let actPage     = 1;
+        const actSize   = 50;
+
         async function fetchAPI(endpoint, options = {}) {
             const res = await fetch(endpoint, {
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -241,6 +257,12 @@
             if (res.status === 401) { localStorage.removeItem('token'); window.location.href = '/admin/login.html'; }
             return res.json();
         }
+
+        const tierLabel = {
+            basic:      '🥈 شروع حرفه‌ای',
+            pro:        '🥇 رشد',
+            enterprise: '💎 مقیاس',
+        };
 
         async function loadUsers() {
             const filter = document.getElementById('userIdFilter').value.trim();
@@ -263,25 +285,26 @@
                     const trialBadge = user.is_trial_active
                         ? '<span class="badge badge-info">تریال</span>'
                         : '<span class="badge badge-danger">منقضی</span>';
-                    const tierLabel  = { silver: '🥈 Silver', gold: '🥇 Gold', platinum: '💎 Platinum' };
                     const tier = user.current_tier
                         ? `<span class="badge badge-warning">${tierLabel[user.current_tier] || user.current_tier}</span>`
                         : `<span style="color:var(--text-3)">—</span>`;
                     const subEnd = user.subscription_end
                         ? new Date(user.subscription_end).toLocaleDateString('fa-IR')
                         : '—';
+                    const uname = user.username || `<em style="color:var(--text-3)">—</em>`;
 
                     tbody.innerHTML += `
                         <tr>
-                            <td class="mono">${user.id}</td>
-                            <td class="mono" style="font-size:var(--f-xs);color:var(--text-3);">${user.user_id}</td>
-                            <td>${user.username || '<em style="color:var(--text-3)">—</em>'}</td>
+                            <td style="font-family:var(--font-mono);">${user.id}</td>
+                            <td style="font-family:var(--font-mono);font-size:var(--f-xs);color:var(--text-3);">${user.user_id}</td>
+                            <td>${uname}</td>
                             <td>${trialBadge}</td>
                             <td>${tier}</td>
                             <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${subEnd}</td>
                             <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${new Date(user.created_at).toLocaleDateString('fa-IR')}</td>
-                            <td style="white-space:nowrap;">
+                            <td>
                                 <button class="btn btn-secondary btn-small" onclick="viewUserDetail(${user.id})">جزئیات</button>
+                                <button class="activity-btn" onclick="openActivity(${user.id}, '${user.username || user.user_id}')">📋 تاریخچه</button>
                                 <button class="grant-btn" onclick="openGrant(${user.id}, '${user.user_id}', '${user.username || ''}')">🎁 اشتراک</button>
                             </td>
                         </tr>`;
@@ -290,49 +313,51 @@
                 document.getElementById('pageInfo').textContent =
                     `صفحه ${currentPage}  ·  ${data.total} کاربر`;
             } catch (e) {
-                tbody.innerHTML = `<tr><td colspan="8" style="color:var(--err-fg);padding:20px 16px;">خطا در بارگذاری: ${e.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="color:var(--err-fg);padding:20px 16px;">خطا: ${e.message}</td></tr>`;
             }
         }
 
+        /* ── User Detail ── */
         async function viewUserDetail(userId) {
             const data = await fetchAPI(`/admin/users/${userId}`);
             const user = data.user;
-            document.getElementById('detailId').textContent          = user.id;
-            document.getElementById('detailUserId').textContent      = user.user_id;
-            document.getElementById('detailUsername').textContent     = user.username || '—';
-            document.getElementById('detailCreatedAt').textContent    = new Date(user.created_at).toLocaleDateString('fa-IR');
-            document.getElementById('detailTrialStatus').textContent  = user.is_trial_active ? '✅ فعال' : '❌ منقضی';
+            document.getElementById('detailId').textContent         = user.id;
+            document.getElementById('detailUserId').textContent     = user.user_id;
+            document.getElementById('detailUsername').textContent    = user.username || '—';
+            document.getElementById('detailCreatedAt').textContent   = new Date(user.created_at).toLocaleDateString('fa-IR');
+            document.getElementById('detailTrialStatus').textContent = user.is_trial_active ? '✅ فعال' : '❌ منقضی';
 
             const subList = document.getElementById('detailSubscriptions');
             subList.innerHTML = (data.subscriptions || []).length === 0
                 ? '<li>ندارد</li>'
                 : data.subscriptions.map(s =>
-                    `<li><strong>${s.tier}</strong> — تا ${new Date(s.end_date).toLocaleDateString('fa-IR')} ${s.is_active ? '✅' : '❌'}</li>`
+                    `<li><strong>${tierLabel[s.tier] || s.tier}</strong> — تا ${new Date(s.end_date).toLocaleDateString('fa-IR')} ${s.is_active ? '✅' : '❌'}</li>`
                 ).join('');
 
             const routeList = document.getElementById('detailRoutes');
             routeList.innerHTML = (data.routes || []).length === 0
                 ? '<li>ندارد</li>'
-                : data.routes.map(r => `<li>مسیر #${r.id}</li>`).join('');
+                : data.routes.map(r => `<li>مسیر #${r.id} ${r.is_active ? '✅' : '❌'}</li>`).join('');
 
             const txnList = document.getElementById('detailTransactions');
             txnList.innerHTML = (data.recent_transactions || []).length === 0
                 ? '<li>ندارد</li>'
                 : data.recent_transactions.map(t =>
-                    `<li>${t.amount} — ${t.status} — ${new Date(t.created_at).toLocaleDateString('fa-IR')}</li>`
+                    `<li>${Number(t.amount).toLocaleString('fa-IR')} تومان — ${t.status} — ${new Date(t.created_at).toLocaleDateString('fa-IR')}</li>`
                 ).join('');
 
             document.getElementById('userModal').style.display = 'flex';
         }
 
+        /* ── Grant Subscription ── */
         function openGrant(userId, rubikaId, username) {
             grantUserId = userId;
-            document.getElementById('grantUserLabel').textContent     = username || rubikaId;
-            document.getElementById('grantSuccess').style.display     = 'none';
-            document.getElementById('grantError').style.display       = 'none';
-            document.getElementById('grantConfirmBtn').disabled       = false;
-            document.getElementById('grantConfirmBtn').textContent    = 'فعال‌سازی اشتراک';
-            document.getElementById('grantModal').style.display       = 'flex';
+            document.getElementById('grantUserLabel').textContent  = username || rubikaId;
+            document.getElementById('grantSuccess').style.display  = 'none';
+            document.getElementById('grantError').style.display    = 'none';
+            document.getElementById('grantConfirmBtn').disabled    = false;
+            document.getElementById('grantConfirmBtn').textContent = 'فعال‌سازی اشتراک';
+            document.getElementById('grantModal').style.display    = 'flex';
         }
 
         async function confirmGrant() {
@@ -349,7 +374,7 @@
                 });
                 if (res.success) {
                     const ok = document.getElementById('grantSuccess');
-                    ok.textContent = `✅ اشتراک ${tier} تا ${res.end_date} فعال شد. کاربر مطلع شد.`;
+                    ok.textContent = `✅ اشتراک ${tierLabel[tier] || tier} تا ${res.end_date} فعال شد. کاربر مطلع شد.`;
                     ok.style.display = 'block';
                     btn.textContent  = '✅ انجام شد';
                     loadUsers();
@@ -358,17 +383,69 @@
                 }
             } catch (e) {
                 const err = document.getElementById('grantError');
-                err.textContent  = '❌ ' + e.message;
+                err.textContent   = '❌ ' + e.message;
                 err.style.display = 'block';
-                btn.disabled = false;
-                btn.textContent = 'فعال‌سازی اشتراک';
+                btn.disabled      = false;
+                btn.textContent   = 'فعال‌سازی اشتراک';
             }
         }
 
-        function closeUserModal()  { document.getElementById('userModal').style.display = 'none'; }
-        function closeGrantModal() { document.getElementById('grantModal').style.display = 'none'; }
+        /* ── Per-user Activity Log ── */
+        function openActivity(userId, label) {
+            actUserId = userId;
+            actPage   = 1;
+            document.getElementById('actMeta').textContent = label;
+            document.getElementById('actLogContainer').innerHTML = '<p class="act-empty">در حال بارگذاری…</p>';
+            document.getElementById('activityModal').style.display = 'flex';
+            loadActivityPage();
+        }
+
+        async function loadActivityPage() {
+            const offset = (actPage - 1) * actSize;
+            try {
+                const data = await fetchAPI(`/admin/users/${actUserId}/activity?limit=${actSize}&offset=${offset}`);
+                const logs = data.logs || [];
+                const total = data.total ?? 0;
+
+                document.getElementById('actPageInfo').textContent =
+                    `صفحه ${actPage} · ${total} رویداد`;
+
+                const container = document.getElementById('actLogContainer');
+                if (logs.length === 0) {
+                    container.innerHTML = '<p class="act-empty">هیچ فعالیتی ثبت نشده</p>';
+                    return;
+                }
+
+                const levelBadge = { info: 'badge-info', warning: 'badge-warning', error: 'badge-danger' };
+                container.innerHTML = logs.map(log => `
+                    <div class="act-log-row">
+                        <span class="act-time">${new Date(log.created_at).toLocaleString('fa-IR')}</span>
+                        <span class="act-action">${log.action || '—'}</span>
+                        <span class="act-msg">${log.message || '—'}</span>
+                    </div>`).join('');
+            } catch (e) {
+                document.getElementById('actLogContainer').innerHTML =
+                    `<p style="color:var(--err-fg);font-size:var(--f-sm);">خطا: ${e.message}</p>`;
+            }
+        }
+
+        function actPrev() { if (actPage > 1) { actPage--; loadActivityPage(); } }
+        function actNext() { actPage++; loadActivityPage(); }
+
+        /* ── Close modals ── */
+        function closeUserModal()     { document.getElementById('userModal').style.display = 'none'; }
+        function closeGrantModal()    { document.getElementById('grantModal').style.display = 'none'; }
+        function closeActivityModal() { document.getElementById('activityModal').style.display = 'none'; }
+
         function previousPage() { if (currentPage > 1) { currentPage--; loadUsers(); } }
         function nextPage()     { currentPage++; loadUsers(); }
+
+        // Close modal on backdrop click
+        ['userModal','grantModal','activityModal'].forEach(id => {
+            document.getElementById(id).addEventListener('click', e => {
+                if (e.target.id === id) document.getElementById(id).style.display = 'none';
+            });
+        });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
             localStorage.removeItem('token');
