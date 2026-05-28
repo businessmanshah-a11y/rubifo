@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.bot import publishing_flow
+from src.bot import handlers
 
 
 @pytest.mark.asyncio
@@ -21,6 +22,32 @@ async def test_begin_program_asks_for_tutorial_or_real_before_channel(mock_bot_c
     assert mock_bot_client.send_message.await_args.kwargs["inline_keypad"] is not None
     assert "keypad" not in mock_bot_client.send_message.await_args.kwargs
     assert "with_keypad" not in mock_bot_client.send_message.await_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_start_program_button_opens_publishing_wizard(mock_bot_client):
+    with patch("src.bot.handlers.publishing_flow.begin_program", new_callable=AsyncMock) as begin:
+        await handlers.route_message(
+            mock_bot_client,
+            "u1",
+            {"text": "➕ ساخت برنامه جدید", "new_message": {"text": "➕ ساخت برنامه جدید"}},
+        )
+
+    begin.assert_awaited_once_with(mock_bot_client, "u1")
+
+
+@pytest.mark.asyncio
+async def test_inline_button_click_continues_publishing_wizard(mock_bot_client):
+    publishing_flow.active_flows["u1"] = {"step": "choose_kind"}
+
+    with patch("src.bot.handlers.publishing_flow.handle_text", new_callable=AsyncMock, return_value=True) as handle:
+        await handlers.route_message(
+            mock_bot_client,
+            "u1",
+            {"text": "🧪 برنامه آزمایشی و آموزشی", "new_message": {}},
+        )
+
+    handle.assert_awaited_once_with(mock_bot_client, "u1", "🧪 برنامه آزمایشی و آموزشی")
 
 
 @pytest.mark.asyncio

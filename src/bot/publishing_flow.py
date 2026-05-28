@@ -548,9 +548,12 @@ async def handle_message(client, user_id: str, message: Dict[str, Any]) -> bool:
                 ),
             )
     else:
+        activated = await PublishingProgramService(pool).activate_waiting_programs(source_id)
+        suffix = "\nبرنامه‌های در انتظار محتوا فعال شدند." if activated else ""
         await client.send_message(
             user_id,
-            f"{state['post_count']} پست در دسته ذخیره شد. برای ادامه «{SAVE_CATEGORY}» را بفرستید.",
+            f"{state['post_count']} پست در دسته ذخیره شد.{suffix}\n"
+            f"برای ادامه «{SAVE_CATEGORY}» را بفرستید.",
             inline_keypad=_inline_choices(SAVE_CATEGORY),
         )
     return True

@@ -1,6 +1,7 @@
 import re
 from src.logger import logger
 from src.bot import commands
+from src.bot import publishing_flow
 
 
 async def _log_action(user_id: str, action: str, message: str, level: str = "info") -> None:
@@ -19,16 +20,22 @@ async def _log_action(user_id: str, action: str, message: str, level: str = "inf
 
 
 BUTTON_COMMAND_MAP = {
+    "new_program": "/new_program",
+    "➕ ساخت برنامه جدید": "/new_program",
+    "➕ ایجاد برنامه جدید انتشار محتوا": "/new_program",
+    "📅 برنامه‌های انتشار": "/listplans",
+    "📊 تقویم انتشار": "/calendar",
+    "📁 دسته‌های محتوا": "/mysources",
+    # Backward compatibility for keypads already open on users' devices.
     "📦 سورس‌های من": "/mysources",
     "📍 کانال‌های من": "/my_destinations",
-    "📋 مسیرهای من": "/listroutes",
+    "📋 مسیرهای من": "/listplans",
     "📅 پلن‌های من": "/listplans",
     "📊 تقویم محتوایی": "/calendar",
     "💳 اشتراک": "/subscription_status",
     "❓ راهنما": "/help",
-    # Backward compatibility
-    "✏️ سورس جدید": "/addsource",
-    "➕ مسیر جدید": "/addroute",
+    "✏️ سورس جدید": "/new_program",
+    "➕ مسیر جدید": "/new_program",
     "💳 خرید اشتراک": "/buy",
     "📅 برنامه‌ریزی": "/listplans",
     "📊 گزارش‌ها": "/logs",
@@ -39,8 +46,10 @@ BUTTON_COMMAND_MAP = {
 _INLINE_BTN_PATTERNS = [
     (re.compile(r"^📋 مسیرها \((.+)\)$"), "routes"),
     (re.compile(r"^📅 پلن‌ها \((.+)\)$"), "plans"),
+    (re.compile(r"^📅 برنامه‌ها \((.+)\)$"), "plans"),
     (re.compile(r"^📊 تقویم \((.+)\)$"), "cal"),
-    (re.compile(r"^➕ مسیر جدید \((.+)\)$"), "addroute"),
+    (re.compile(r"^➕ مسیر جدید \((.+)\)$"), "new_program"),
+    (re.compile(r"^➕ برنامه جدید \((.+)\)$"), "new_program"),
 ]
 
 # Pattern for mysources inline buttons: "📝 #5 پست‌ها" and "➕ #5 افزودن"
@@ -66,6 +75,8 @@ async def _route_inline_button(client, user_id: str, text: str) -> bool:
                 await commands.handle_calendar_display(client, user_id, channel)
             elif action == "addroute":
                 await commands.handle_addroute_for_channel(client, user_id, channel)
+            elif action == "new_program":
+                await publishing_flow.begin_program(client, user_id)
             return True
 
     # Mysources inline buttons
@@ -98,6 +109,19 @@ async def route_message(client, user_id: str, message: dict) -> None:
             action = text if text.startswith("/") else "message"
             await _log_action(user_id, action, text)
 
+        if text in BUTTON_COMMAND_MAP:
+            text = BUTTON_COMMAND_MAP[text]
+
+        if text == "/new_program":
+            await publishing_flow.begin_program(client, user_id)
+            return
+
+        if await publishing_flow.handle_message(client, user_id, message):
+            return
+
+        if text and not text.startswith("/") and await publishing_flow.handle_text(client, user_id, text):
+            return
+
         # ── collecting_source: handle ALL messages (media + text) ──────────
         state = commands.conversation_states.get(user_id, {})
         if state.get("command") == "collecting_source":
@@ -120,10 +144,6 @@ async def route_message(client, user_id: str, message: dict) -> None:
             if handled:
                 return
 
-        # ── map keyboard button text → command ─────────────────────────────
-        if text in BUTTON_COMMAND_MAP:
-            text = BUTTON_COMMAND_MAP[text]
-
         # ── active text-based conversation ─────────────────────────────────
         if user_id in commands.conversation_states:
             if not text.startswith("/"):
@@ -142,8 +162,10 @@ async def route_message(client, user_id: str, message: dict) -> None:
 
         if cmd == "/start":
             await commands.handle_start(client, user_id)
-        elif cmd == "/addsource":
-            await commands.handle_addsource(client, user_id)
+        elif cmd == "/new_program":
+            await publishing_flow.begin_program(client, user_id)
+        elif cmd in ("/addsource", "/addroute", "/addplan"):
+            await publishing_flow.begin_program(client, user_id)
         elif cmd == "/savesource":
             await commands.handle_savesource(client, user_id)
         elif cmd == "/mysources":
@@ -160,10 +182,8 @@ async def route_message(client, user_id: str, message: dict) -> None:
             await commands.handle_removepost(client, user_id, int(parts[1]))
         elif cmd == "/deletesource" and len(parts) > 1:
             await commands.handle_deletesource(client, user_id, int(parts[1]))
-        elif cmd == "/addroute":
-            await commands.handle_addroute(client, user_id)
         elif cmd == "/listroutes":
-            await commands.handle_listroutes(client, user_id)
+            await commands.handle_listplans(client, user_id)
         elif cmd == "/removeroute" and len(parts) > 1:
             await commands.handle_removeroute(client, user_id, int(parts[1]))
         elif cmd == "/buy":
@@ -176,8 +196,6 @@ async def route_message(client, user_id: str, message: dict) -> None:
             await commands.handle_buy_enterprise(client, user_id)
         elif cmd == "/renew":
             await commands.handle_renew(client, user_id)
-        elif cmd == "/addplan":
-            await commands.handle_addplan(client, user_id)
         elif cmd == "/listplans":
             await commands.handle_listplans(client, user_id)
         elif cmd == "/editplan" and len(parts) > 1:

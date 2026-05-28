@@ -104,15 +104,8 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
     try:
         from src.database import pool
         from src.core.user_service import UserService
-        from src.core.source_service import SourceService
-        from src.core.route_service import RouteService
-        from src.core.subscription_service import SubscriptionService
 
         user = await UserService(pool).get_or_create_user(user_id, username)
-        db_uid = user.id  # integer PK — only for sources (sources.user_id = FK to users.id)
-        sources = await SourceService(pool).get_user_sources(db_uid)
-        routes = await RouteService(pool).get_user_routes(user_id)  # routes.user_id = TEXT (GUID)
-        active_routes = [r for r in routes if r["is_active"]]
 
         def _sub_line(u) -> str:
             if u.is_trial_active:
@@ -120,68 +113,19 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
                 return f"⏳ تریال: {hours_left:.0f} ساعت باقیمانده"
             return "⚠️ تریال تمام شده — /buy برای اشتراک"
 
-        if not sources:
-            sub_line = _sub_line(user)
-            msg = (
-                "👋 خوش آمدید به Rubifo!\n\n"
-                "Rubifo کار تکراری ادمین بارگذاری را حذف می‌کند و طبق برنامه به کانال‌هایتان می‌فرستد.\n"
-                "مثل پنل‌های مدیریت محتوا نیاز به آپلود دستی ندارید؛ محتوا را در سورس آماده یا فوروارد کنید.\n\n"
-                "✨ ۳ قدم تا ارسال اول:\n"
-                "1️⃣ سورس بساز — محتواهایت را آماده یا فوروارد کن\n"
-                "2️⃣ مسیر وصل کن — سورس ← کانال مقصد\n"
-                "3️⃣ زمان‌بندی تنظیم کن — هر N دقیقه یا N بار در روز\n\n"
-                f"{sub_line}\n\n"
-                "▶️ شروع کنید: دکمه «📦 سورس‌های من» ← سورس جدید"
-            )
-        elif not active_routes:
-            sub_line = _sub_line(user)
-            src_count = len(sources)
-            msg = (
-                "👋 سلام!\n\n"
-                f"📦 {src_count} سورس دارید اما هیچ مسیری تنظیم نشده.\n"
-                "محتوا ارسال نخواهد شد تا مسیر بسازید.\n"
-                "Rubifo برای حذف ادمین بارگذاری، صف و انتشار منظم را خودش انجام می‌دهد.\n\n"
-                f"{sub_line}\n\n"
-                "⚡ قدم بعدی: دکمه «📍 کانال‌های من» یا /addroute"
-            )
-        else:
-            total_posts = 0
-            for s in sources:
-                total_posts += await SourceService(pool).count_posts(s.id)
-
-            sent_row = await pool.fetchrow(
-                "SELECT COUNT(*) as c FROM post_queue pq "
-                "JOIN routes r ON pq.route_id = r.id "
-                "WHERE r.user_id = $1 AND pq.status = 'sent'",
-                user_id,  # routes.user_id = TEXT (GUID)
-            )
-            total_sent = sent_row["c"] if sent_row else 0
-
-            pending_row = await pool.fetchrow(
-                "SELECT COUNT(*) as c FROM post_queue pq "
-                "JOIN routes r ON pq.route_id = r.id "
-                "WHERE r.user_id = $1 AND pq.status = 'pending'",
-                user_id,  # routes.user_id = TEXT (GUID)
-            )
-            total_pending = pending_row["c"] if pending_row else 0
-
-            sub = await SubscriptionService(pool).get_active_subscription(user_id)  # subscriptions.user_id = TEXT
-            if sub:
-                days_left = (sub.end_date - datetime.now().date()).days
-                tier_fa = _tier_name(sub.tier)
-                sub_line = f"💳 اشتراک {tier_fa}: {days_left} روز باقیمانده"
-            else:
-                sub_line = _sub_line(user)
-
-            msg = (
-                "📊 وضعیت شما\n\n"
-                f"📦 سورس‌ها: {len(sources)} | {total_posts} پست ذخیره شده\n"
-                f"📋 مسیرها: {len(active_routes)} فعال\n"
-                f"📤 در صف: {total_pending} | کل ارسال شده: {total_sent}\n"
-                f"{sub_line}"
-            )
-
-        await client.send_message(user_id, msg, with_keypad=True)
+        msg = (
+            "👋 خوش آمدید به Rubifo!\n\n"
+            "Rubifo کمک می‌کند پست‌های کانالتان به‌صورت خودکار و طبق زمان‌بندی منتشر شوند.\n\n"
+            "برای شروع، یک «برنامه انتشار» می‌سازید:\n"
+            "1️⃣ کانال مقصد را معرفی می‌کنید و Rubifo را در آن کانال ادمین می‌کنید.\n"
+            "2️⃣ پست‌های هم‌موضوع را داخل یک «دسته محتوا» می‌فرستید؛ مثل آموزشی، معرفی محصول یا رضایت مشتری.\n"
+            "3️⃣ مشخص می‌کنید این دسته چه زمانی در کانال منتشر شود.\n\n"
+            "اگر اولین‌بار است، می‌توانید قبل از برنامه واقعی یک آزمایش سه‌پستی انجام دهید.\n"
+            f"{_sub_line(user)}\n\n"
+            "برای شروع دکمه «➕ ایجاد برنامه جدید انتشار محتوا» را بزنید:"
+        )
+        keypad = _make_inline_keypad([("➕ ایجاد برنامه جدید انتشار محتوا", "➕ ساخت برنامه جدید")], cols=1)
+        await client.send_message(user_id, msg, with_keypad=True, inline_keypad=keypad)
     except Exception as e:
         logger.error(f"/start error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
@@ -341,7 +285,7 @@ async def handle_savesource(client, user_id: int) -> None:
 
 
 async def handle_mysources(client, user_id: int) -> None:
-    """List all sources for user with inline action buttons per source."""
+    """List all content categories for user with inline action buttons."""
     logger.info(f"/mysources for user {user_id}")
     try:
         from src.database import pool
@@ -354,12 +298,14 @@ async def handle_mysources(client, user_id: int) -> None:
         if not sources:
             await client.send_message(
                 user_id,
-                "📦 هیچ سورسی ندارید.\n✏️ /addsource برای ساختن سورس جدید.",
+                "📁 هنوز دسته محتوایی ندارید.\n\n"
+                "برای ساخت دسته جدید، از «➕ ساخت برنامه جدید» شروع کنید "
+                "یا هنگام ساخت برنامه، گزینه «ساخت دسته محتوای جدید» را بزنید.",
                 with_keypad=True,
             )
             return
 
-        msg = "📦 سورس‌های شما:\n\n"
+        msg = "📁 دسته‌های محتوای شما:\n\n"
         inline_buttons: List[Tuple[str, str]] = []
 
         for s in sources:
@@ -370,13 +316,13 @@ async def handle_mysources(client, user_id: int) -> None:
                 s.id,
             )
             connected = ", ".join(r["target_channel_id"] for r in routes) if routes else "—"
-            msg += f"#{s.id} — {s.name}\n   📝 {count} پست | متصل: {connected}\n\n"
+            msg += f"#{s.id} — {s.name}\n   📝 {count} پست | کانال‌ها: {connected}\n\n"
             inline_buttons.append((f"📝 #{s.id} پست‌ها", f"viewsource_{s.id}"))
             inline_buttons.append((f"➕ #{s.id} افزودن", f"addpost_{s.id}"))
 
-        inline_buttons.append(("✏️ سورس جدید", "addsource"))
+        inline_buttons.append(("➕ ساخت برنامه جدید", "new_program"))
         keypad = _make_inline_keypad(inline_buttons, cols=2)
-        await client.send_message(user_id, msg, keypad=keypad)
+        await client.send_message(user_id, msg, inline_keypad=keypad)
     except Exception as e:
         logger.error(f"/mysources error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
@@ -814,16 +760,14 @@ async def handle_conversation_response(client, user_id: int, text: str) -> None:
 # ─────────────────────────────────────────────
 
 async def handle_my_destinations(client, user_id: int) -> None:
-    """Show unique destination channels with stats and inline action buttons."""
+    """Show verified destination channels in publishing-program language."""
     logger.info(f"/my_destinations for user {user_id}")
     try:
         from src.database import pool
-        from src.core.route_service import RouteService
+        from src.core.destination_service import DestinationService
         from src.core.subscription_service import SubscriptionService
 
-        rs = RouteService(pool)
-        destinations = await rs.get_destinations_by_user(user_id)
-
+        destinations = await DestinationService(pool).list_verified(user_id)
         dest_limit = await SubscriptionService(pool).get_destination_limit(user_id)
         dest_used = len(destinations)
 
@@ -831,8 +775,8 @@ async def handle_my_destinations(client, user_id: int) -> None:
             await client.send_message(
                 user_id,
                 "📍 هیچ کانال مقصدی ندارید.\n\n"
-                "برای ساخت اولین مسیر (سورس → کانال مقصد):\n"
-                "/addroute",
+                "برای افزودن کانال، از «➕ ساخت برنامه جدید» شروع کنید. "
+                "در همان مسیر، Rubifo مرحله‌به‌مرحله به شما می‌گوید چطور ربات را ادمین کنید.",
                 with_keypad=True,
             )
             return
@@ -841,28 +785,42 @@ async def handle_my_destinations(client, user_id: int) -> None:
         inline_buttons: List[Tuple[str, str]] = []
 
         for dest in destinations:
-            ch = dest["target_channel_id"]
-            stats = await rs.get_destination_stats(user_id, ch)
+            ch = dest.channel_id
+            stats = await pool.fetchrow(
+                """
+                SELECT
+                  COUNT(s.id) FILTER (WHERE s.program_purpose = 'real') AS program_count,
+                  COUNT(s.id) FILTER (
+                    WHERE s.program_purpose = 'real' AND s.is_active = true
+                  ) AS active_program_count,
+                  COUNT(s.id) FILTER (
+                    WHERE s.program_purpose = 'real' AND s.paused_reason = 'در انتظار محتوا'
+                  ) AS waiting_program_count
+                FROM routes r
+                LEFT JOIN schedules s ON s.route_id = r.id
+                WHERE r.user_id = $1 AND r.destination_id = $2 AND r.is_active = true
+                """,
+                user_id,
+                dest.id,
+            )
             msg += (
                 f"📍 {ch}\n"
-                f"   📋 {stats['route_count']} مسیر | "
-                f"📅 {stats['plan_count']} پلن | "
-                f"⏳ {stats['pending_posts']} پست در صف\n\n"
+                f"   ✅ دسترسی انتشار تایید شده\n"
+                f"   📅 {stats['program_count'] or 0} برنامه انتشار | "
+                f"{stats['active_program_count'] or 0} فعال | "
+                f"{stats['waiting_program_count'] or 0} در انتظار محتوا\n\n"
             )
-            # Encode channel into button_id — safe for Rubika button IDs
-            ch_safe = ch  # e.g. "@channel_name"
             inline_buttons.extend([
-                (f"📋 مسیرها ({ch})", f"dst_routes_{ch_safe}"),
-                (f"📅 پلن‌ها ({ch})", f"dst_plans_{ch_safe}"),
-                (f"📊 تقویم ({ch})", f"dst_cal_{ch_safe}"),
-                (f"➕ مسیر جدید ({ch})", f"dst_addroute_{ch_safe}"),
+                (f"📅 برنامه‌ها ({ch})", f"dst_plans_{ch}"),
+                (f"📊 تقویم ({ch})", f"dst_cal_{ch}"),
+                (f"➕ برنامه جدید ({ch})", "new_program"),
             ])
 
         if dest_used < dest_limit:
-            msg += f"➕ می‌توانید {dest_limit - dest_used} کانال دیگر اضافه کنید.\n/addroute"
+            msg += f"➕ می‌توانید {dest_limit - dest_used} کانال دیگر اضافه کنید؛ از «➕ ساخت برنامه جدید» شروع کنید."
 
         keypad = _make_inline_keypad(inline_buttons, cols=2)
-        await client.send_message(user_id, msg, keypad=keypad)
+        await client.send_message(user_id, msg, inline_keypad=keypad)
     except Exception as e:
         logger.error(f"/my_destinations error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
@@ -905,55 +863,49 @@ async def handle_destination_routes(client, user_id: int, target_channel_id: str
 
 
 async def handle_destination_plans(client, user_id: int, target_channel_id: str) -> None:
-    """List plans for all routes going to a specific destination channel."""
+    """List publishing programs for a destination channel."""
     try:
         from src.database import pool
         from src.core.professional_schedule import describe_plan
 
-        routes = await pool.fetch(
-            "SELECT id FROM routes WHERE user_id = $1 AND target_channel_id = $2 AND is_active = true",
-            user_id, target_channel_id,
-        )
-        if not routes:
-            await client.send_message(
-                user_id,
-                f"📅 هیچ مسیری برای {target_channel_id} وجود ندارد.",
-                with_keypad=True,
-            )
-            return
-
-        route_ids = [r["id"] for r in routes]
         plans = await pool.fetch(
-            "SELECT * FROM schedules WHERE route_id = ANY($1) AND is_active = true ORDER BY id",
-            route_ids,
+            """
+            SELECT s.*, src.name AS source_name
+            FROM schedules s
+            JOIN routes r ON s.route_id = r.id
+            LEFT JOIN sources src ON r.source_id = src.id
+            WHERE r.user_id = $1 AND r.target_channel_id = $2
+              AND r.is_active = true AND s.program_purpose = 'real'
+            ORDER BY s.created_at DESC
+            """,
+            user_id, target_channel_id,
         )
 
         if not plans:
             await client.send_message(
                 user_id,
-                f"📅 هیچ برنامه‌ای برای {target_channel_id} وجود ندارد.\n/addplan برای ایجاد.",
+                f"📅 هنوز برنامه انتشاری برای {target_channel_id} ندارید.\n"
+                "برای ساخت، «➕ ساخت برنامه جدید» را بزنید.",
                 with_keypad=True,
             )
             return
 
         msg = f"📅 برنامه‌های {target_channel_id}:\n\n"
         for p in plans:
-            active_icon = "✅" if p["is_active"] else "⛔"
+            active_icon = "✅" if p["is_active"] else "⏳"
             pk = p.get("plan_kind") or p["schedule_type"]
-            if pk in ("interval", "daily_count"):
-                type_info = (
-                    f"هر {p['interval_minutes']} دقیقه"
-                    if p["schedule_type"] == "interval"
-                    else f"{p['daily_count']} پیام/روز"
-                )
-            else:
-                import json
-                cfg = p["config"] if isinstance(p["config"], dict) else json.loads(p["config"] or "{}")
-                type_info = describe_plan(pk, cfg)
+            import json
+            cfg = p["config"] if isinstance(p["config"], dict) else json.loads(p["config"] or "{}")
+            type_info = describe_plan(pk, cfg)
             next_run = fmt_tehran(p["next_run"], "%d/%m %H:%M") if p["next_run"] else "—"
-            msg += f"{active_icon} #{p['id']} (مسیر #{p['route_id']})\n   {type_info}\n   بعدی: {next_run}\n\n"
+            paused = f"\n   وضعیت: {p['paused_reason']}" if p.get("paused_reason") else ""
+            msg += (
+                f"{active_icon} {p['source_name'] or 'دسته محتوا'}\n"
+                f"   {type_info}\n"
+                f"   اجرای بعدی: {next_run}{paused}\n\n"
+            )
 
-        msg += "/toggleplan [شناسه] — فعال/غیرفعال\n/removeplan [شناسه] — حذف"
+        msg += "برای ساخت برنامه تازه، «➕ ساخت برنامه جدید» را بزنید."
         await client.send_message(user_id, msg, with_keypad=True)
     except Exception as e:
         logger.error(f"handle_destination_plans error: {e}")
@@ -999,10 +951,11 @@ async def handle_addroute_for_channel(client, user_id: int, target_channel_id: s
 
 
 async def handle_calendar_display(client, user_id: int, target_channel_id: str) -> None:
-    """Show scheduled content calendar for a specific destination channel (7 days)."""
+    """Show scheduled publishing calendar for a destination channel (7 days)."""
     logger.info(f"/calendar display for {target_channel_id} by user {user_id}")
     try:
         from src.database import pool
+        import json
 
         routes = await pool.fetch(
             "SELECT id FROM routes WHERE user_id = $1 AND target_channel_id = $2 AND is_active = true",
@@ -1011,7 +964,8 @@ async def handle_calendar_display(client, user_id: int, target_channel_id: str) 
         if not routes:
             await client.send_message(
                 user_id,
-                f"📊 هیچ مسیری برای {target_channel_id} تنظیم نشده.\n/addroute برای ساخت مسیر.",
+                f"📊 هنوز برنامه انتشاری برای {target_channel_id} ساخته نشده.\n"
+                "برای شروع، «➕ ساخت برنامه جدید» را بزنید.",
                 with_keypad=True,
             )
             return
@@ -1019,13 +973,14 @@ async def handle_calendar_display(client, user_id: int, target_channel_id: str) 
         route_ids = [r["id"] for r in routes]
         plans = await pool.fetch(
             """
-            SELECT s.id, s.route_id, s.schedule_type, s.plan_kind,
+            SELECT s.id, s.route_id, s.schedule_type, s.plan_kind, s.config,
                    s.interval_minutes, s.daily_count, s.next_run, s.is_active,
+                   s.paused_reason, s.program_purpose,
                    src.name AS source_name
             FROM schedules s
             JOIN routes r ON s.route_id = r.id
             LEFT JOIN sources src ON r.source_id = src.id
-            WHERE s.route_id = ANY($1) AND s.is_active = true
+            WHERE s.route_id = ANY($1) AND s.program_purpose = 'real'
             ORDER BY s.next_run NULLS LAST
             """,
             route_ids,
@@ -1043,9 +998,9 @@ async def handle_calendar_display(client, user_id: int, target_channel_id: str) 
             await client.send_message(
                 user_id,
                 f"📊 تقویم {target_channel_id}\n\n"
-                f"هیچ برنامه‌ای فعال نیست.\n"
+                f"هیچ برنامه انتشاری ثبت نشده.\n"
                 f"⏳ {pending_posts or 0} پست در صف\n\n"
-                f"/addplan برای تنظیم زمان‌بندی",
+                f"برای ساخت، «➕ ساخت برنامه جدید» را بزنید.",
                 with_keypad=True,
             )
             return
@@ -1058,19 +1013,17 @@ async def handle_calendar_display(client, user_id: int, target_channel_id: str) 
         # Group scheduled runs by day
         day_slots: Dict[str, List[str]] = {}
         for p in plans:
+            if not p["is_active"]:
+                continue
             next_run = p["next_run"]
             if not next_run or next_run > week_end:
                 continue
             day_key = fmt_tehran(next_run, "%Y/%m/%d")
             time_str = fmt_tehran(next_run, "%H:%M")
-            src = p["source_name"] or f"مسیر #{p['route_id']}"
+            src = p["source_name"] or "دسته محتوا"
             pk = p["plan_kind"] or p["schedule_type"]
-            if pk == "interval":
-                type_info = f"هر {p['interval_minutes']} دقیقه"
-            elif pk == "daily_count":
-                type_info = f"{p['daily_count']} پیام/روز"
-            else:
-                type_info = pk
+            cfg = p["config"] if isinstance(p["config"], dict) else json.loads(p["config"] or "{}")
+            type_info = describe_plan(pk, cfg) if pk == "publishing_program" else pk
             slot = f"  {time_str} — {src} ({type_info})"
             day_slots.setdefault(day_key, []).append(slot)
 
@@ -1081,24 +1034,21 @@ async def handle_calendar_display(client, user_id: int, target_channel_id: str) 
             msg += "هیچ ارسالی در ۷ روز آینده برنامه‌ریزی نشده.\n\n"
 
         # Show all active schedules summary
-        msg += "برنامه‌های فعال:\n"
+        msg += "برنامه‌های انتشار:\n"
         for p in plans:
-            src = p["source_name"] or f"مسیر #{p['route_id']}"
+            src = p["source_name"] or "دسته محتوا"
             pk = p["plan_kind"] or p["schedule_type"]
-            if pk == "interval":
-                type_info = f"هر {p['interval_minutes']} دقیقه"
-            elif pk == "daily_count":
-                type_info = f"{p['daily_count']} پیام/روز"
-            else:
-                type_info = pk
-            msg += f"• {src}: {type_info}\n"
+            cfg = p["config"] if isinstance(p["config"], dict) else json.loads(p["config"] or "{}")
+            type_info = describe_plan(pk, cfg) if pk == "publishing_program" else pk
+            state = "فعال" if p["is_active"] else (p["paused_reason"] or "غیرفعال")
+            msg += f"• {src}: {type_info} — {state}\n"
 
         inline_buttons = [
-            (f"📋 مسیرهای {target_channel_id}", f"dst_routes_{target_channel_id}"),
-            (f"➕ مسیر جدید", f"dst_addroute_{target_channel_id}"),
+            (f"📅 برنامه‌های {target_channel_id}", f"dst_plans_{target_channel_id}"),
+            ("➕ ساخت برنامه جدید", "new_program"),
         ]
         keypad = _make_inline_keypad(inline_buttons, cols=2)
-        await client.send_message(user_id, msg, keypad=keypad)
+        await client.send_message(user_id, msg, inline_keypad=keypad)
     except Exception as e:
         logger.error(f"handle_calendar_display error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
@@ -1366,32 +1316,22 @@ async def verify_renewal_payment_polling(client, subscription_service, authority
 async def handle_help(client, user_id: int) -> None:
     logger.info(f"/help for user {user_id}")
     msg = (
-        "📖 راهنمای دستورات Rubifo\n\n"
-        "Rubifo برای حذف ادمین بارگذاری ساخته شده است؛ بدون آپلود دستی در پنل، "
-        "محتوا را آماده یا فوروارد کنید تا صف و انتشار منظم خودکار انجام شود.\n\n"
-        "📦 سورس‌ها:\n"
-        "/mysources — سورس‌های من + افزودن پست (دکمه inline)\n"
-        "/addsource — سورس جدید\n"
-        "/addpost [شناسه] — افزودن پست به سورس\n"
-        "/viewsource [شناسه] — مشاهده پست‌ها\n"
-        "/deletesource [شناسه] — حذف سورس\n\n"
-        "📍 کانال‌های مقصد:\n"
-        "/my_destinations — کانال‌های من (hub اصلی)\n"
-        "/addroute — مسیر جدید\n"
-        "/listroutes — مسیرهای من\n"
-        "/removeroute [شناسه] — حذف مسیر\n\n"
-        "📅 برنامه‌ریزی:\n"
-        "/addplan — برنامه جدید\n"
-        "/listplans — برنامه‌های من\n"
-        "/toggleplan [شناسه] — فعال/غیرفعال\n"
-        "/removeplan [شناسه] — حذف برنامه\n\n"
-        "📊 تقویم:\n"
-        "/calendar — تقویم محتوایی ۷ روزه\n\n"
-        "💳 اشتراک:\n"
-        "/subscription_status — وضعیت اشتراک و کانال‌ها\n"
-        "/buy — خرید اشتراک\n"
-        "/renew — تمدید اشتراک\n\n"
-        "📊 /logs — گزارش فعالیت‌ها"
+        "📖 راهنمای Rubifo\n\n"
+        "Rubifo پست‌های کانالتان را طبق برنامه‌ای که می‌سازید خودکار منتشر می‌کند "
+        "و برای حذف ادمین بارگذاری از کارهای تکراری و آپلود دستی ساخته شده است.\n\n"
+        "مفهوم‌ها:\n"
+        "📍 کانال مقصد: کانالی که Rubifo در آن پست منتشر می‌کند. باید Rubifo را در آن ادمین کنید.\n"
+        "📁 دسته محتوا: پست‌های هم‌موضوع؛ مثل آموزشی، معرفی محصول یا رضایت مشتری.\n"
+        "📅 برنامه انتشار: مشخص می‌کند کدام دسته محتوا در کدام کانال و چه زمانی منتشر شود.\n\n"
+        "برای شروع، دکمه «➕ ساخت برنامه جدید» را بزنید. "
+        "در مسیر ساخت برنامه می‌توانید برنامه آزمایشی سه‌پستی یا برنامه واقعی بسازید.\n\n"
+        "دکمه‌های اصلی و دستورهای ساده:\n"
+        "➕ ساخت برنامه جدید — شروع ساخت برنامه انتشار\n"
+        "📅 برنامه‌های انتشار — دیدن و مدیریت برنامه‌ها\n"
+        "📊 تقویم انتشار — دیدن ارسال‌های آینده هر کانال\n"
+        "📁 دسته‌های محتوا — مدیریت پست‌های ذخیره‌شده\n"
+        "📍 کانال‌های من — بررسی کانال‌های تاییدشده\n"
+        "💳 اشتراک — وضعیت تریال یا خرید"
     )
     await client.send_message(user_id, msg, with_keypad=True)
 
@@ -1438,10 +1378,9 @@ async def handle_logs(client, user_id: int) -> None:
             await client.send_message(
                 user_id,
                 "📊 هنوز فعالیتی ثبت نشده.\n\n"
-                "برای شروع ارسال:\n"
-                "1. سورس داشته باشید (/mysources)\n"
-                "2. مسیر تنظیم کنید (/listroutes)\n"
-                "3. برنامه فعال باشد (/listplans)",
+                "برای شروع ارسال، دکمه «➕ ساخت برنامه جدید» را بزنید.\n"
+                "در همان فرایند، کانال مقصد را تایید می‌کنید، دسته محتوا می‌سازید "
+                "و برنامه انتشار را فعال می‌کنید.",
                 with_keypad=True,
             )
             return
@@ -1827,10 +1766,32 @@ async def handle_listplans(client, user_id: int) -> None:
     logger.info(f"/listplans for user {user_id}")
     try:
         from src.database import pool
+        from src.core.publishing_program_service import PublishingProgramService
         from src.core.schedule_service import ScheduleService
+
+        programs = await PublishingProgramService(pool).list_programs(user_id)
+        if programs:
+            msg = "📅 برنامه‌های انتشار شما:\n\n"
+            for p in programs:
+                active = "✅" if p.get("is_active") else "⏳"
+                source = p.get("source_name") or "دسته نامشخص"
+                channel = p.get("channel_id") or p.get("target_channel_id") or "کانال نامشخص"
+                config = p.get("config") or {}
+                if isinstance(config, str):
+                    import json
+                    config = json.loads(config)
+                type_info = describe_plan(p.get("plan_kind") or p.get("schedule_type"), config)
+                next_run = fmt_tehran(p.get("next_run"), "%d/%m %H:%M") if p.get("next_run") else "—"
+                paused = f"\n   وضعیت: {p.get('paused_reason')}" if p.get("paused_reason") else ""
+                msg += f"{active} {source} → {channel}\n   {type_info}\n   اجرای بعدی: {next_run}{paused}\n\n"
+
+            msg += "برای ساخت برنامه تازه، «➕ ساخت برنامه جدید» را بزنید."
+            await client.send_message(user_id, msg, with_keypad=True)
+            return
+
         schedules = await ScheduleService(pool).get_user_schedules(user_id)
         if not schedules:
-            await client.send_message(user_id, "هیچ برنامه‌ای ندارید.\n/addplan برای ایجاد.")
+            await client.send_message(user_id, "هنوز برنامه انتشاری ندارید.\n➕ ساخت برنامه جدید")
             return
 
         msg = "📅 برنامه‌های شما:\n\n"
@@ -1842,7 +1803,7 @@ async def handle_listplans(client, user_id: int) -> None:
                 type_info = describe_plan(s.plan_kind or s.schedule_type, s.config or {})
             next_run = fmt_tehran(s.next_run, "%d/%m %H:%M") if s.next_run else "—"
             paused = f"\n   دلیل توقف: {s.paused_reason}" if getattr(s, "paused_reason", None) else ""
-            msg += f"{active} #{s.id} — مسیر #{s.route_id}\n   {type_info}\n   بعدی: {next_run}{paused}\n\n"
+            msg += f"{active} برنامه #{s.id}\n   {type_info}\n   بعدی: {next_run}{paused}\n\n"
 
         msg += "/toggleplan [شناسه] — فعال/غیرفعال\n/removeplan [شناسه] — حذف"
         await client.send_message(user_id, msg, with_keypad=True)
@@ -1930,34 +1891,34 @@ async def handle_calendar(client, user_id: int) -> None:
     logger.info(f"/calendar for user {user_id}")
     try:
         from src.database import pool
-        from src.core.route_service import RouteService
+        from src.core.destination_service import DestinationService
 
-        destinations = await RouteService(pool).get_destinations_by_user(user_id)
+        destinations = await DestinationService(pool).list_verified(user_id)
 
         if not destinations:
             await client.send_message(
                 user_id,
                 "📊 هیچ کانال مقصدی ندارید.\n"
-                "برای شروع /addroute را بفرستید.",
+                "برای شروع، «➕ ساخت برنامه جدید» را بزنید و کانال مقصد را اضافه کنید.",
                 with_keypad=True,
             )
             return
 
         if len(destinations) == 1:
             # Only one channel — go directly to calendar
-            await handle_calendar_display(client, user_id, destinations[0]["target_channel_id"])
+            await handle_calendar_display(client, user_id, destinations[0].channel_id)
             return
 
         # Multiple channels — ask user to select
-        msg = "📊 تقویم کدوم کانال؟\n\n"
+        msg = "📊 تقویم انتشار کدام کانال را می‌خواهید ببینید؟\n\n"
         inline_buttons: List[Tuple[str, str]] = []
         for i, dest in enumerate(destinations, 1):
-            ch = dest["target_channel_id"]
+            ch = dest.channel_id
             msg += f"{i}️⃣ {ch}\n"
             inline_buttons.append((f"{i}️⃣ {ch}", f"cal_{ch}"))
 
         keypad = _make_inline_keypad(inline_buttons, cols=1)
-        await client.send_message(user_id, msg, keypad=keypad)
+        await client.send_message(user_id, msg, inline_keypad=keypad)
     except Exception as e:
         logger.error(f"/calendar error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")

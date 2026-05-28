@@ -44,6 +44,7 @@ class ScheduleService:
         if schedule_type not in [
             "interval",
             "daily_count",
+            "publishing_program",
             "campaign",
             "smart_queue",
             "timing_pattern",
@@ -127,6 +128,71 @@ class ScheduleService:
             posts_per_run=posts_per_run,
             loop_mode=loop_mode,
         )
+
+    async def create_publishing_schedule(
+        self,
+        user_id: str,
+        route_id: int,
+        config: Dict[str, Any],
+        is_active: bool = True,
+        paused_reason: Optional[str] = None,
+        program_purpose: str = "real",
+    ) -> Schedule:
+        """Create the user-facing publishing-program schedule."""
+        next_run = PlanSlotGenerator().next_run("publishing_program", config) if is_active else None
+        row = await self.db.fetchrow(
+            """
+            INSERT INTO schedules
+              (user_id, route_id, schedule_type, plan_kind, config, posts_per_run,
+               loop_mode, next_run, is_active, paused_reason, program_purpose)
+            VALUES ($1, $2, 'publishing_program', 'publishing_program', $3::jsonb,
+                    $4, $5, $6, $7, $8, $9)
+            RETURNING *
+            """,
+            user_id,
+            route_id,
+            json.dumps(config),
+            int(config.get("posts_per_run", 1)),
+            bool(config.get("loop_mode", False)),
+            next_run,
+            is_active,
+            paused_reason,
+            program_purpose,
+        )
+        return Schedule(**self._row_dict(row))
+
+    async def update_publishing_schedule(
+        self,
+        schedule_id: int,
+        config: Dict[str, Any],
+        has_content: bool,
+    ) -> Schedule:
+        """Update timing for an existing publishing-program schedule."""
+        next_run = PlanSlotGenerator().next_run("publishing_program", config) if has_content else None
+        row = await self.db.fetchrow(
+            """
+            UPDATE schedules
+            SET schedule_type = 'publishing_program',
+                plan_kind = 'publishing_program',
+                config = $2::jsonb,
+                posts_per_run = $3,
+                loop_mode = $4,
+                next_run = $5,
+                is_active = $6,
+                paused_reason = $7,
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING *
+            """,
+            schedule_id,
+            json.dumps(config),
+            int(config.get("posts_per_run", 1)),
+            bool(config.get("loop_mode", False)),
+            next_run,
+            has_content,
+            None if has_content else "در انتظار محتوا",
+        )
+        return Schedule(**self._row_dict(row))
 
     async def update_professional_schedule(
         self,

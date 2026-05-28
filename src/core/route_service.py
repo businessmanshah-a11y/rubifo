@@ -139,6 +139,47 @@ class RouteService:
         logger.info(f"Route created for user {user_id}: source {source_id} → {target_channel_id}")
         return result["id"]
 
+    async def get_or_create_internal_route(
+        self,
+        user_id: str,
+        source_id: int,
+        destination_id: int,
+        target_channel_id: str,
+        program_purpose: str = "real",
+    ) -> int:
+        """Return the hidden source-to-destination route used by publishing programs."""
+        existing = await self.db.fetchrow(
+            """
+            SELECT id FROM routes
+            WHERE user_id = $1 AND source_id = $2 AND destination_id = $3
+              AND is_active = true AND program_purpose = $4
+            """,
+            user_id,
+            source_id,
+            destination_id,
+            program_purpose,
+        )
+        if existing:
+            return existing["id"]
+
+        row = await self.db.fetchrow(
+            """
+            INSERT INTO routes
+              (user_id, source_id, target_channel_id, destination_id, program_purpose, is_active)
+            VALUES ($1, $2, $3, $4, $5, true)
+            RETURNING id
+            """,
+            user_id,
+            source_id,
+            target_channel_id,
+            destination_id,
+            program_purpose,
+        )
+        logger.info(
+            f"Internal route created for user {user_id}: source {source_id} → {target_channel_id}"
+        )
+        return row["id"]
+
     async def get_user_routes(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all routes for a user.
 

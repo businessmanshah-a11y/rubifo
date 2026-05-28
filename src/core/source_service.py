@@ -47,10 +47,10 @@ class SourceService:
     def __init__(self, db):
         self.db = db
 
-    async def create_source(self, user_id: int, name: str) -> Source:
+    async def create_source(self, user_id: int, name: str, program_purpose: str = "real") -> Source:
         row = await self.db.fetchrow(
-            "INSERT INTO sources (user_id, name) VALUES ($1, $2) RETURNING *",
-            user_id, name,
+            "INSERT INTO sources (user_id, name, program_purpose) VALUES ($1, $2, $3) RETURNING *",
+            user_id, name, program_purpose,
         )
         logger.info(f"Source created: {row['id']} for user {user_id}")
         return Source(**dict(row))

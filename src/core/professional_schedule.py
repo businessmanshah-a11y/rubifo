@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 PlanKind = Literal[
     "interval",
     "daily_count",
+    "publishing_program",
     "campaign",
     "smart_queue",
     "timing_pattern",
@@ -240,6 +241,55 @@ class ContentMixPlanConfig(BasePlanConfig):
         return sum(self.quotas.values())
 
 
+class PublishingProgramConfig(BaseModel):
+    """User-facing publishing program schedule.
+
+    This is the humane wrapper around the internal schedule model. It supports
+    the v1 publishing-program goals: recurring daily activity and dated campaigns,
+    each with fixed intervals, daily counts, or exact times.
+    """
+
+    program_mode: Literal["recurring", "dated"] = "recurring"
+    cadence: Literal["interval", "daily_count", "exact_times"]
+    start_time: str = "09:00"
+    end_time: str = "23:59"
+    interval_minutes: Optional[int] = Field(default=None, ge=1, le=10080)
+    daily_count: Optional[int] = Field(default=None, ge=1, le=96)
+    times: List[str] = Field(default_factory=list)
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    posts_per_run: int = Field(default=1, ge=1, le=20)
+    loop_mode: bool = False
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_window_times(cls, value: str) -> str:
+        return format_hhmm(value)
+
+    @field_validator("times")
+    @classmethod
+    def validate_exact_times(cls, values: List[str]) -> List[str]:
+        return [format_hhmm(value) for value in values]
+
+    @model_validator(mode="after")
+    def validate_program(self):
+        if self.cadence in ("interval", "daily_count"):
+            if parse_hhmm(self.start_time) >= parse_hhmm(self.end_time):
+                raise ValueError("start_time must be before end_time")
+        if self.cadence == "interval" and not self.interval_minutes:
+            raise ValueError("interval_minutes is required for interval cadence")
+        if self.cadence == "daily_count" and not self.daily_count:
+            raise ValueError("daily_count is required for daily_count cadence")
+        if self.cadence == "exact_times" and not self.times:
+            raise ValueError("times is required for exact_times cadence")
+        if self.program_mode == "dated":
+            if not self.start_date or not self.end_date:
+                raise ValueError("start_date and end_date are required for dated programs")
+            if parse_jalali_date(self.start_date) > parse_jalali_date(self.end_date):
+                raise ValueError("start_date must be before end_date")
+        return self
+
+
 @dataclass
 class GeneratedSlot:
     utc_time: datetime
@@ -258,6 +308,8 @@ class PlanSlotGenerator:
         self.now_utc = tehran_now_utc_naive(now_utc)
 
     def next_slots(self, plan_kind: str, config: Dict[str, Any], count: int = 5) -> List[GeneratedSlot]:
+        if plan_kind == "publishing_program":
+            return self._publishing_program_slots(PublishingProgramConfig(**config), count)
         if plan_kind == "campaign":
             cfg = CampaignPlanConfig(**config)
             return self._daily_slots(cfg.daily_count, cfg.start_time, cfg.end_time, count, cfg)
@@ -354,6 +406,53 @@ class PlanSlotGenerator:
             result.append(time(minute_of_day // 60, minute_of_day % 60))
         return result
 
+    def _publishing_program_slots(self, config: PublishingProgramConfig, count: int) -> List[GeneratedSlot]:
+        now_teh = utc_to_tehran(self.now_utc)
+        day = now_teh.date()
+        slots: List[GeneratedSlot] = []
+
+        while len(slots) < count:
+            if config.program_mode == "dated":
+                start_date = parse_jalali_date(config.start_date or "")
+                end_date = parse_jalali_date(config.end_date or "")
+                if day < start_date:
+                    day = start_date
+                if day > end_date:
+                    break
+
+            for slot_time in self._publishing_times_for_day(config):
+                slot_teh = datetime.combine(day, slot_time)
+                if slot_teh <= now_teh:
+                    continue
+                slots.append(
+                    GeneratedSlot(
+                        utc_time=tehran_to_utc(slot_teh),
+                        tehran_time=slot_teh,
+                        metadata={"program_mode": config.program_mode, "cadence": config.cadence},
+                    )
+                )
+                if len(slots) >= count:
+                    return slots
+            day += timedelta(days=1)
+        return slots
+
+    def _publishing_times_for_day(self, config: PublishingProgramConfig) -> List[time]:
+        if config.cadence == "exact_times":
+            return sorted(parse_hhmm(value) for value in config.times)
+        if config.cadence == "daily_count":
+            return self._times_for_day(config.daily_count or 1, config.start_time, config.end_time, 0)
+
+        start = parse_hhmm(config.start_time)
+        end = parse_hhmm(config.end_time)
+        current = start.hour * 60 + start.minute
+        end_minutes = end.hour * 60 + end.minute
+        step = config.interval_minutes or 60
+        result: List[time] = []
+        while current <= end_minutes:
+            result.append(time(current // 60, current % 60))
+            current += step
+        return result
+
     def _current_stage(self, config: MultiStagePlanConfig) -> tuple[StageConfig, int]:
         start = parse_jalali_date(config.start_date)
         today = utc_to_tehran(self.now_utc).date()
@@ -435,6 +534,14 @@ class PersianQuickPlanParser:
 
 
 def describe_plan(plan_kind: str, config: Dict[str, Any]) -> str:
+    if plan_kind == "publishing_program":
+        cfg = PublishingProgramConfig(**config)
+        prefix = "کمپین تاریخ‌دار" if cfg.program_mode == "dated" else "انتشار منظم روزانه"
+        if cfg.cadence == "exact_times":
+            return f"{prefix}: ساعت‌های دقیق {'، '.join(cfg.times)}"
+        if cfg.cadence == "daily_count":
+            return f"{prefix}: روزی {cfg.daily_count} پست از {cfg.start_time} تا {cfg.end_time}"
+        return f"{prefix}: از {cfg.start_time} تا {cfg.end_time} هر {cfg.interval_minutes} دقیقه"
     if plan_kind == "campaign":
         cfg = CampaignPlanConfig(**config)
         weekdays = "، ".join(cfg.active_weekdays)

@@ -33,6 +33,23 @@ async def test_send_message_forwards_inline_keypad_to_rubika_sdk():
     )
 
 
+def test_main_keypad_uses_publishing_program_language():
+    from src.bot.main import MAIN_KEYPAD
+
+    labels = [
+        button.button_text
+        for row in MAIN_KEYPAD.rows
+        for button in row.buttons
+    ]
+
+    assert "➕ ساخت برنامه جدید" in labels
+    assert "📅 برنامه‌های انتشار" in labels
+    assert "📊 تقویم انتشار" in labels
+    assert "📁 دسته‌های محتوا" in labels
+    assert "📋 مسیرهای من" not in labels
+    assert "📦 سورس‌های من" not in labels
+
+
 @pytest.mark.asyncio
 async def test_registers_only_inline_message_endpoint():
     client = RubikaClient.__new__(RubikaClient)

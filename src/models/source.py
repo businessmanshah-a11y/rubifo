@@ -10,6 +10,7 @@ class Source:
     name: str
     is_active: bool
     created_at: datetime
+    program_purpose: str = "real"
 
     def __post_init__(self):
         if isinstance(self.created_at, str):

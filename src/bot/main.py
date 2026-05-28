@@ -41,13 +41,15 @@ async def _save_offset_db(offset_id: str) -> None:
 
 MAIN_KEYPAD = Keypad(rows=[
     KeypadRow(buttons=[
-        Button(id="mysources", type=ButtonTypeEnum.SIMPLE, button_text="📦 سورس‌های من"),
-        Button(id="my_destinations", type=ButtonTypeEnum.SIMPLE, button_text="📍 کانال‌های من"),
-        Button(id="listroutes", type=ButtonTypeEnum.SIMPLE, button_text="📋 مسیرهای من"),
+        Button(id="new_program", type=ButtonTypeEnum.SIMPLE, button_text="➕ ساخت برنامه جدید"),
+        Button(id="publishing_programs", type=ButtonTypeEnum.SIMPLE, button_text="📅 برنامه‌های انتشار"),
     ]),
     KeypadRow(buttons=[
-        Button(id="listplans", type=ButtonTypeEnum.SIMPLE, button_text="📅 پلن‌های من"),
-        Button(id="calendar", type=ButtonTypeEnum.SIMPLE, button_text="📊 تقویم محتوایی"),
+        Button(id="calendar", type=ButtonTypeEnum.SIMPLE, button_text="📊 تقویم انتشار"),
+        Button(id="content_categories", type=ButtonTypeEnum.SIMPLE, button_text="📁 دسته‌های محتوا"),
+    ]),
+    KeypadRow(buttons=[
+        Button(id="my_destinations", type=ButtonTypeEnum.SIMPLE, button_text="📍 کانال‌های من"),
         Button(id="subscription_status", type=ButtonTypeEnum.SIMPLE, button_text="💳 اشتراک"),
     ]),
     KeypadRow(buttons=[
@@ -90,6 +92,7 @@ class RubikaClient:
         text: str,
         with_keypad: bool = False,
         keypad=None,
+        inline_keypad=None,
     ) -> bool:
         """Send a text message to a user.
 
@@ -98,9 +101,12 @@ class RubikaClient:
             text: Message text
             with_keypad: If True, attach the main persistent keypad
             keypad: Custom Keypad object to attach (overrides with_keypad)
+            inline_keypad: Inline Keypad rendered under this message
         """
         try:
             kwargs: Dict[str, Any] = {"chat_id": str(user_id), "text": text}
+            if inline_keypad is not None:
+                kwargs["inline_keypad"] = inline_keypad
             if keypad is not None:
                 kwargs["chat_keypad"] = keypad
                 kwargs["chat_keypad_type"] = ChatKeypadTypeEnum.NEW
@@ -113,6 +119,57 @@ class RubikaClient:
         except Exception as e:
             logger.error(f"Failed to send message to {user_id}: {e}")
             return False
+
+    async def register_inline_webhook(self, webhook_url: str) -> None:
+        """Register the endpoint that receives InlineKeypad clicks."""
+        if not webhook_url.startswith("https://"):
+            raise ValueError("RUBIKA_INLINE_WEBHOOK_URL must be HTTPS")
+        await self._bot.update_bot_endpoints(webhook_url, "ReceiveInlineMessage")
+
+    async def verify_destination_channel(self, channel_id: str) -> Dict[str, Any]:
+        """Verify that the bot can publish to a destination channel."""
+        try:
+            chat = await self._bot.get_chat(channel_id)
+            chat_id = getattr(chat, "chat_id", None) or getattr(chat, "object_guid", None) or channel_id
+            title = getattr(chat, "title", None)
+
+            me = await self._bot.get_me()
+            bot_id = (
+                getattr(me, "bot_id", None)
+                or getattr(me, "user_id", None)
+                or getattr(me, "id", None)
+            )
+            admins = await self._bot.get_chat_administrators(chat_id)
+            members = admins.get("members", admins) if isinstance(admins, dict) else admins
+            admin_ids = {
+                str(member.get("user_id") if isinstance(member, dict) else getattr(member, "user_id", ""))
+                for member in (members or [])
+            }
+            if str(bot_id) not in admin_ids:
+                return {"verified": False, "status": "not_admin", "title": title}
+
+            probe = await self._bot.send_message(
+                chat_id=str(chat_id),
+                text="بررسی دسترسی انتشار Rubifo. این پیام به‌صورت خودکار حذف می‌شود.",
+            )
+            message_id = (
+                probe.get("message_id")
+                if isinstance(probe, dict)
+                else getattr(probe, "message_id", None)
+            )
+            try:
+                if message_id:
+                    await self._bot.delete_message(str(chat_id), str(message_id))
+            except Exception as exc:
+                return {
+                    "verified": True,
+                    "status": "cleanup_failed",
+                    "title": title,
+                    "error": str(exc),
+                }
+            return {"verified": True, "status": "verified", "title": title}
+        except Exception as exc:
+            return {"verified": False, "status": "not_found", "error": str(exc)}
 
     async def send_file(self, chat_id: str, file_id: str, file_type: str = "File", caption: str = "") -> bool:
         try:

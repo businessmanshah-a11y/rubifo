@@ -7,6 +7,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_NAME = "rubifo"
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Tehran")
+RUBIKA_INLINE_WEBHOOK_URL = os.getenv("RUBIKA_INLINE_WEBHOOK_URL")
 
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/rubifo")

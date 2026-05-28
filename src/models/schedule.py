@@ -10,9 +10,10 @@ class Schedule:
     id: int = 0
     user_id: int = 0
     route_id: int = 0
-    schedule_type: Literal["interval", "daily_count", "campaign", "smart_queue", "timing_pattern", "multi_stage", "content_mix"] = "interval"
+    schedule_type: Literal["interval", "daily_count", "publishing_program", "campaign", "smart_queue", "timing_pattern", "multi_stage", "content_mix"] = "interval"
     plan_kind: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
+    program_purpose: str = "real"
     interval_minutes: Optional[int] = None
     daily_count: Optional[int] = None
     posts_per_run: int = 1

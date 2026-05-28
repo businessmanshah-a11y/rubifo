@@ -13,13 +13,30 @@ class TestBotStartCommand:
 
     async def test_start_command_new_user(self, mock_bot_client, mock_db):
         """Test /start with new user."""
-        mock_db.fetchrow.return_value = None
+        mock_db.fetchrow.return_value = {
+            "id": 1,
+            "user_id": 123456789,
+            "username": "testuser",
+            "trial_start_at": datetime.now(),
+            "trial_end_at": datetime.now() + timedelta(hours=72),
+            "is_trial_active": True,
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+        }
         mock_db.execute.return_value = None
 
         with patch("src.database.pool", mock_db):
             await commands.handle_start(mock_bot_client, 123456789, "testuser")
 
         assert mock_bot_client.send_message.called
+        message = mock_bot_client.send_message.call_args.args[1]
+        assert "برنامه انتشار" in message
+        assert "دسته محتوا" in message
+        assert "ادمین" in message
+        assert "➕ ایجاد برنامه جدید انتشار محتوا" in message
+        assert "مسیر" not in message
+        assert "سورس" not in message
+        assert mock_bot_client.send_message.call_args.kwargs["inline_keypad"] is not None
 
     async def test_start_command_existing_user(self, mock_bot_client, mock_db):
         """Test /start with existing user."""
@@ -39,9 +56,9 @@ class TestBotStartCommand:
             await commands.handle_start(mock_bot_client, 123456789, "testuser")
 
         assert mock_bot_client.send_message.called
-        # Should mention trial hours remaining
         call_args = mock_bot_client.send_message.call_args
-        assert "ساعت" in str(call_args)  # Farsi word for "hours"
+        assert "تریال" in str(call_args)
+        assert "برنامه انتشار" in str(call_args)
 
 
 @pytest.mark.asyncio
@@ -299,6 +316,26 @@ class TestBotUtilityCommands:
 
         assert mock_bot_client.send_message.called
 
+    async def test_logs_empty_state_uses_publishing_program_language(self, mock_bot_client, mock_db):
+        """Empty activity report should not send users back to source/route commands."""
+        mock_db.fetchrow.return_value = {
+            "total_sent": 0,
+            "total_failed": 0,
+            "total_pending": 0,
+            "today_sent": 0,
+            "today_failed": 0,
+        }
+        mock_db.fetch.return_value = []
+
+        with patch("src.database.pool", mock_db):
+            await commands.handle_logs(mock_bot_client, 123456789)
+
+        message = mock_bot_client.send_message.call_args.args[1]
+        assert "ساخت برنامه جدید" in message
+        assert "دسته محتوا" in message
+        assert "سورس" not in message
+        assert "مسیر" not in message
+
 
 @pytest.mark.asyncio
 class TestMessageRouter:
@@ -320,6 +357,66 @@ class TestMessageRouter:
         with patch("src.database.pool", mock_db):
             with patch("src.bot.commands.handle_buy", new_callable=AsyncMock):
                 await handlers.route_message(mock_bot_client, 123456789, message)
+
+    async def test_old_route_keypad_button_opens_publishing_programs(self, mock_bot_client, mock_db):
+        """Legacy route button should no longer expose the route-management UI."""
+        message = {"text": "📋 مسیرهای من"}
+
+        with patch("src.database.pool", mock_db):
+            with patch("src.bot.commands.handle_listplans", new_callable=AsyncMock) as list_programs:
+                with patch("src.bot.commands.handle_listroutes", new_callable=AsyncMock) as list_routes:
+                    await handlers.route_message(mock_bot_client, 123456789, message)
+
+        list_programs.assert_awaited_once()
+        list_routes.assert_not_awaited()
+
+    async def test_old_new_route_button_starts_program_wizard(self, mock_bot_client, mock_db):
+        """Legacy new-route button should enter the new publishing-program wizard."""
+        message = {"text": "➕ مسیر جدید"}
+
+        with patch("src.database.pool", mock_db):
+            with patch("src.bot.publishing_flow.begin_program", new_callable=AsyncMock) as begin_program:
+                with patch("src.bot.commands.handle_addroute", new_callable=AsyncMock) as add_route:
+                    await handlers.route_message(mock_bot_client, 123456789, message)
+
+        begin_program.assert_awaited_once_with(mock_bot_client, 123456789)
+        add_route.assert_not_awaited()
+
+    async def test_old_destination_new_route_inline_starts_program_wizard(self, mock_bot_client, mock_db):
+        """Legacy per-channel new-route inline text should start program creation."""
+        message = {"text": "➕ مسیر جدید (@shop)"}
+
+        with patch("src.database.pool", mock_db):
+            with patch("src.bot.publishing_flow.begin_program", new_callable=AsyncMock) as begin_program:
+                with patch("src.bot.commands.handle_addroute_for_channel", new_callable=AsyncMock) as add_route:
+                    await handlers.route_message(mock_bot_client, 123456789, message)
+
+        begin_program.assert_awaited_once_with(mock_bot_client, 123456789)
+        add_route.assert_not_awaited()
+
+    async def test_legacy_addroute_command_starts_program_wizard(self, mock_bot_client, mock_db):
+        """Typing old route/setup commands should not expose the legacy wizard."""
+        message = {"text": "/addroute"}
+
+        with patch("src.database.pool", mock_db):
+            with patch("src.bot.publishing_flow.begin_program", new_callable=AsyncMock) as begin_program:
+                with patch("src.bot.commands.handle_addroute", new_callable=AsyncMock) as add_route:
+                    await handlers.route_message(mock_bot_client, 123456789, message)
+
+        begin_program.assert_awaited_once_with(mock_bot_client, 123456789)
+        add_route.assert_not_awaited()
+
+    async def test_legacy_addplan_command_starts_program_wizard(self, mock_bot_client, mock_db):
+        """Typing old plan command should enter program creation instead of route selection."""
+        message = {"text": "/addplan"}
+
+        with patch("src.database.pool", mock_db):
+            with patch("src.bot.publishing_flow.begin_program", new_callable=AsyncMock) as begin_program:
+                with patch("src.bot.commands.handle_addplan", new_callable=AsyncMock) as add_plan:
+                    await handlers.route_message(mock_bot_client, 123456789, message)
+
+        begin_program.assert_awaited_once_with(mock_bot_client, 123456789)
+        add_plan.assert_not_awaited()
 
     async def test_route_unknown_command(self, mock_bot_client):
         """Test routing unknown command."""
