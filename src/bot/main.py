@@ -436,7 +436,8 @@ class RufifoBot:
         Both loops must run together so the bot is fully responsive.
         """
         logger.info("Starting Rufifo bot (hybrid: polling + webhook)...")
-        self.client = RubikaClient(self.token)
+        if not self.client:
+            self.client = RubikaClient(self.token)
         self.running = True
 
         self.background_tasks.append(asyncio.create_task(self._polling_loop()))

@@ -100,21 +100,28 @@ def _json_response(payload: dict, status_code: int = 200) -> JSONResponse:
 
 @app.post("/webhook")
 async def webhook(request: Request):
+    from src.logger import logger
     try:
         data = await request.json()
     except Exception:
         return _json_response({"ok": False}, status_code=400)
 
+    logger.info(f"[WEBHOOK] received keys={list(data.keys())} raw={str(data)[:200]}")
+
     if "inline_message" in data:
         msg = data.get("inline_message") or {}
         chat_id = msg.get("chat_id")
         btn_id = (msg.get("aux_data") or {}).get("button_id", "")
+        logger.info(f"[WEBHOOK] inline_message chat_id={chat_id} btn_id={btn_id!r}")
         if not chat_id or not btn_id:
             return _json_response({"ok": True})
         entry = {"user_id": str(chat_id), "text": btn_id, "new_message": msg}
-        if _bot_ref and _bot_ref.client:
+        client = _bot_ref.client if _bot_ref else None
+        if client:
             from src.bot.handlers import route_message
-            asyncio.create_task(route_message(_bot_ref.client, str(chat_id), entry))
+            asyncio.create_task(route_message(client, str(chat_id), entry))
+        else:
+            logger.warning("[WEBHOOK] inline_message received but bot client not ready")
         return _json_response({"ok": True})
 
     raw = data.get("update") or data
@@ -187,17 +194,22 @@ async def _startup():
         logger.warning(f"Migration check failed: {e}")
 
     from src.config import BOT_TOKEN, RUBIKA_INLINE_WEBHOOK_URL
-    from src.bot.main import RufifoBot
+    from src.bot.main import RufifoBot, RubikaClient
 
     bot = RufifoBot(BOT_TOKEN)
+    # Create and assign client NOW so webhook handler can use it immediately
+    bot.client = RubikaClient(BOT_TOKEN)
     _bot_ref = bot
+
     if RUBIKA_INLINE_WEBHOOK_URL:
-        # Rubika sends under-message button clicks only to ReceiveInlineMessage.
-        client = bot.client or __import__("src.bot.main", fromlist=["RubikaClient"]).RubikaClient(BOT_TOKEN)
-        await client.register_inline_webhook(RUBIKA_INLINE_WEBHOOK_URL)
-    # Webhook mode: messages arrive via POST /webhook — no polling loop
+        try:
+            await bot.client.register_inline_webhook(RUBIKA_INLINE_WEBHOOK_URL)
+            logger.info(f"Inline webhook registered: {RUBIKA_INLINE_WEBHOOK_URL}")
+        except Exception as e:
+            logger.error(f"Failed to register inline webhook: {e}")
+
     asyncio.create_task(bot.start_webhook_mode())
-    logger.info("Bot started in webhook mode (no polling)")
+    logger.info("Bot started (polling + inline webhook)")
 
 
 @app.on_event("shutdown")
