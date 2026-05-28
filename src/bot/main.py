@@ -429,19 +429,21 @@ class RufifoBot:
             pass
 
     async def start_webhook_mode(self) -> None:
-        """Start bot without polling loop — for webhook deployments.
+        """Start bot in hybrid mode: polling for regular messages, webhook for inline clicks.
 
-        Messages arrive via POST /webhook; this method only starts the
-        background execution and reminder loops so schedules keep running.
+        Rubika delivers NewMessage/StartedBot via polling (getUpdates).
+        Inline keypad clicks arrive via POST /webhook (ReceiveInlineMessage).
+        Both loops must run together so the bot is fully responsive.
         """
-        logger.info("Starting Rufifo bot (webhook mode — polling disabled)...")
+        logger.info("Starting Rufifo bot (hybrid: polling + webhook)...")
         self.client = RubikaClient(self.token)
         self.running = True
 
+        self.background_tasks.append(asyncio.create_task(self._polling_loop()))
         self.background_tasks.append(asyncio.create_task(self._trial_reminder_loop()))
         self.background_tasks.append(asyncio.create_task(self._execution_loop()))
 
-        logger.info("Bot background tasks started (webhook mode)")
+        logger.info("Bot background tasks started (polling + webhook)")
         try:
             while self.running:
                 await asyncio.sleep(1)
