@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 import csv
 import io
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, List
 from src.admin.auth import verify_token
 import src.database as db_module
@@ -705,4 +706,211 @@ async def get_performance_metrics(username: str = Depends(verify_token)) -> dict
         "average_retry_count": float(avg_retry["avg"] or 0),
         "largest_queues": [dict(row) for row in queue_stats],
         "subscription_distribution": [dict(row) for row in tier_distribution],
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# Feature 1: Manual Subscription Grant
+# ─────────────────────────────────────────────────────────────
+
+class GrantSubscriptionRequest(BaseModel):
+    tier: str          # silver / gold / platinum
+    months: int        # 1, 3, 6, 12
+
+
+@router.post("/users/{user_id}/grant-subscription")
+async def grant_subscription(
+    user_id: int,
+    body: GrantSubscriptionRequest,
+    username: str = Depends(verify_token),
+) -> dict:
+    """Manually grant a subscription to a user (admin action).
+
+    Deactivates any existing active subscription then creates a new one.
+    Sends a Rubika notification to the user.
+    """
+    valid_tiers = {"silver", "gold", "platinum"}
+    if body.tier not in valid_tiers:
+        raise HTTPException(status_code=400, detail=f"Invalid tier. Use: {valid_tiers}")
+    if body.months not in {1, 3, 6, 12}:
+        raise HTTPException(status_code=400, detail="months must be 1, 3, 6, or 12")
+
+    user = await _db().fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    rubika_user_id = user["user_id"]
+    start = date.today()
+    end = start + timedelta(days=30 * body.months)
+
+    # Deactivate existing active subscriptions
+    await _db().execute(
+        "UPDATE subscriptions SET is_active = false WHERE user_id = $1 AND is_active = true",
+        rubika_user_id,
+    )
+
+    # Create new subscription
+    await _db().execute(
+        """
+        INSERT INTO subscriptions (user_id, tier, start_date, end_date, is_active)
+        VALUES ($1, $2, $3, $4, true)
+        """,
+        rubika_user_id, body.tier, start, end,
+    )
+
+    logger.info(
+        f"Admin {username} granted {body.tier}/{body.months}m subscription to user {user_id}"
+    )
+
+    # Notify user via bot
+    try:
+        from src.bot.main import _get_bot_client
+        client = _get_bot_client()
+        tier_fa = {"silver": "نقره‌ای 🥈", "gold": "طلایی 🥇", "platinum": "پلاتین 💎"}
+        if client:
+            await client.send_message(
+                rubika_user_id,
+                f"🎉 اشتراک شما توسط ادمین فعال شد!\n\n"
+                f"📦 پلن: {tier_fa.get(body.tier, body.tier)}\n"
+                f"📅 تاریخ شروع: {start}\n"
+                f"📅 تاریخ پایان: {end}\n"
+                f"⏳ مدت: {body.months} ماه\n\n"
+                f"از اعتماد شما ممنونیم 🙏",
+            )
+    except Exception as e:
+        logger.warning(f"Could not send subscription notification: {e}")
+
+    return {
+        "success": True,
+        "user_id": user_id,
+        "rubika_user_id": rubika_user_id,
+        "tier": body.tier,
+        "months": body.months,
+        "start_date": str(start),
+        "end_date": str(end),
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# Feature 2 & 3: Activity Logs (user behaviour + errors)
+# ─────────────────────────────────────────────────────────────
+
+@router.get("/activity")
+async def get_activity(
+    username: str = Depends(verify_token),
+    user_id: Optional[str] = Query(None),
+    level: Optional[str] = Query(None),       # info / error / warning
+    action: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """Get user activity & error logs with optional filters."""
+
+    conditions = []
+    params: list = []
+    idx = 1
+
+    if user_id:
+        conditions.append(f"user_id = ${idx}")
+        params.append(user_id)
+        idx += 1
+    if level:
+        conditions.append(f"LOWER(level) = ${idx}")
+        params.append(level.lower())
+        idx += 1
+    if action:
+        conditions.append(f"action ILIKE ${idx}")
+        params.append(f"%{action}%")
+        idx += 1
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    total_row = await _db().fetchrow(
+        f"SELECT COUNT(*) as count FROM logs {where}", *params
+    )
+    total = total_row["count"] if total_row else 0
+
+    rows = await _db().fetch(
+        f"""
+        SELECT id, level, user_id, action, message, created_at
+        FROM logs {where}
+        ORDER BY created_at DESC
+        LIMIT ${idx} OFFSET ${idx + 1}
+        """,
+        *params, limit, offset,
+    )
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "logs": [dict(r) for r in rows],
+    }
+
+
+@router.get("/activity/users")
+async def get_active_users(
+    username: str = Depends(verify_token),
+) -> dict:
+    """Get distinct users that have activity logs (for filter dropdown)."""
+    rows = await _db().fetch(
+        """
+        SELECT DISTINCT user_id, COUNT(*) as event_count
+        FROM logs WHERE user_id IS NOT NULL
+        GROUP BY user_id ORDER BY event_count DESC LIMIT 200
+        """
+    )
+    return {"users": [dict(r) for r in rows]}
+
+
+# ─────────────────────────────────────────────────────────────
+# Feature 4: Channel List
+# ─────────────────────────────────────────────────────────────
+
+@router.get("/channels")
+async def get_channels(
+    username: str = Depends(verify_token),
+) -> dict:
+    """List destination channels and content sources from the database."""
+
+    # ── Destination channels (bot publishes to these) ─────────────────────
+    dest_rows = await _db().fetch(
+        """
+        SELECT
+            r.destination_channel_id               AS channel_id,
+            NULL::text                             AS channel_name,
+            COUNT(r.id)                            AS route_count,
+            COUNT(DISTINCT r.user_id)              AS distinct_users,
+            COUNT(CASE WHEN r.is_active THEN 1 END) AS active_routes,
+            MAX(r.created_at)                      AS last_updated
+        FROM routes r
+        GROUP BY r.destination_channel_id
+        ORDER BY active_routes DESC, route_count DESC
+        """
+    )
+    destinations = [dict(r) for r in dest_rows]
+
+    # ── Source channels / content sources (users manage these) ────────────
+    src_rows = await _db().fetch(
+        """
+        SELECT
+            s.id                                   AS source_id,
+            s.name                                 AS source_name,
+            'source'                               AS source_type,
+            COUNT(DISTINCT r.id)                   AS route_count,
+            COUNT(DISTINCT sp.id)                  AS post_count,
+            s.is_active,
+            s.created_at
+        FROM sources s
+        LEFT JOIN routes r  ON r.source_id = s.id
+        LEFT JOIN source_posts sp ON sp.source_id = s.id
+        GROUP BY s.id, s.name, s.is_active, s.created_at
+        ORDER BY route_count DESC, post_count DESC
+        """
+    )
+    sources = [dict(r) for r in src_rows]
+
+    return {
+        "destinations": destinations,
+        "sources": sources,
     }

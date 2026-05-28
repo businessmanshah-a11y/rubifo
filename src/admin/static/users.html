@@ -5,52 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rubifo — Users</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .grant-btn { background: #10b981; color: #fff; border: none; padding: 4px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; margin-left: 4px; }
+        .grant-btn:hover { background: #059669; }
+        .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 13px; color: #94a3b8; }
+        .form-group select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f1f5f9; font-size: 14px; }
+        .success-msg { background: #064e3b; color: #6ee7b7; padding: 10px 14px; border-radius: 8px; margin-top: 12px; display: none; }
+        .error-msg   { background: #7f1d1d; color: #fca5a5; padding: 10px 14px; border-radius: 8px; margin-top: 12px; display: none; }
+        #grantModal .modal-content { max-width: 480px; }
+    </style>
 </head>
 <body>
     <div class="app-container">
-        <!-- Sidebar Navigation -->
         <nav class="sidebar">
-            <div class="logo">
-                <h2>Rubifo</h2>
-                <p>Admin</p>
-            </div>
-
+            <div class="logo"><h2>Rubifo</h2><p>Admin</p></div>
             <ul class="nav-menu">
                 <li><a href="/admin/dashboard.html">Dashboard</a></li>
                 <li><a href="/admin/users.html" class="active">Users</a></li>
+                <li><a href="/admin/activity.html">Activity & Errors</a></li>
+                <li><a href="/admin/channels.html">Channels</a></li>
                 <li><a href="/admin/logs.html">Logs</a></li>
                 <li><a href="/admin/performance.html">Performance</a></li>
                 <li><a href="/admin/settings.html">Settings</a></li>
             </ul>
-
             <div class="user-info">
                 <p id="currentUser">User</p>
                 <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
             </div>
         </nav>
 
-        <!-- Main Content -->
         <main class="content">
             <div class="header">
                 <h1>Users Management</h1>
                 <div class="search-bar">
-                    <input type="number" id="userIdFilter" placeholder="Filter by user ID">
+                    <input type="text" id="userIdFilter" placeholder="Filter by user ID or username">
                     <button class="btn btn-primary" onclick="loadUsers()">Search</button>
                 </div>
             </div>
 
-            <!-- Users Table -->
             <table class="data-table">
                 <thead>
                     <tr>
                         <th>ID</th>
                         <th>User ID</th>
                         <th>Username</th>
-                        <th>Trial Status</th>
-                        <th>Current Tier</th>
-                        <th>Sub End Date</th>
+                        <th>Trial</th>
+                        <th>Tier</th>
+                        <th>Sub Until</th>
                         <th>Joined</th>
-                        <th>Action</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="usersTable">
@@ -58,7 +62,6 @@
                 </tbody>
             </table>
 
-            <!-- Pagination -->
             <div class="pagination">
                 <button class="btn btn-small" onclick="previousPage()">← Previous</button>
                 <span id="pageInfo">Page 1</span>
@@ -66,11 +69,10 @@
             </div>
 
             <!-- User Detail Modal -->
-            <div id="userModal" class="modal" style="display: none;">
+            <div id="userModal" class="modal" style="display:none;">
                 <div class="modal-content">
                     <span class="close" onclick="closeUserModal()">&times;</span>
                     <h2>User Details</h2>
-
                     <div class="user-detail-section">
                         <h3>User Information</h3>
                         <p><strong>ID:</strong> <span id="detailId"></span></p>
@@ -79,29 +81,56 @@
                         <p><strong>Joined:</strong> <span id="detailCreatedAt"></span></p>
                         <p><strong>Trial Status:</strong> <span id="detailTrialStatus"></span></p>
                     </div>
-
                     <div class="user-detail-section">
                         <h3>Active Subscriptions</h3>
-                        <ul id="detailSubscriptions">
-                            <li>None</li>
-                        </ul>
+                        <ul id="detailSubscriptions"><li>None</li></ul>
                     </div>
-
                     <div class="user-detail-section">
                         <h3>Routes</h3>
-                        <ul id="detailRoutes">
-                            <li>None</li>
-                        </ul>
+                        <ul id="detailRoutes"><li>None</li></ul>
                     </div>
-
                     <div class="user-detail-section">
                         <h3>Recent Transactions</h3>
-                        <ul id="detailTransactions">
-                            <li>None</li>
-                        </ul>
+                        <ul id="detailTransactions"><li>None</li></ul>
+                    </div>
+                    <button class="btn btn-primary" onclick="closeUserModal()">Close</button>
+                </div>
+            </div>
+
+            <!-- Grant Subscription Modal -->
+            <div id="grantModal" class="modal" style="display:none;">
+                <div class="modal-content">
+                    <span class="close" onclick="closeGrantModal()">&times;</span>
+                    <h2>🎁 Grant Manual Subscription</h2>
+                    <p style="color:#94a3b8; margin-bottom:16px;">
+                        User: <strong id="grantUserLabel" style="color:#f1f5f9;"></strong>
+                    </p>
+
+                    <div class="modal-grid">
+                        <div class="form-group">
+                            <label>Plan (Tier)</label>
+                            <select id="grantTier">
+                                <option value="silver">🥈 Silver</option>
+                                <option value="gold" selected>🥇 Gold</option>
+                                <option value="platinum">💎 Platinum</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Duration</label>
+                            <select id="grantMonths">
+                                <option value="1">1 Month</option>
+                                <option value="3" selected>3 Months</option>
+                                <option value="6">6 Months</option>
+                                <option value="12">12 Months</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <button class="btn btn-primary" onclick="closeUserModal()">Close</button>
+                    <button class="btn btn-primary" onclick="confirmGrant()" id="grantConfirmBtn">
+                        ✅ Activate Subscription
+                    </button>
+                    <div class="success-msg" id="grantSuccess"></div>
+                    <div class="error-msg" id="grantError"></div>
                 </div>
             </div>
         </main>
@@ -109,126 +138,136 @@
 
     <script>
         const token = localStorage.getItem('token');
-        if (!token) {
-            window.location.href = '/admin/login.html';
-        }
+        if (!token) window.location.href = '/admin/login.html';
 
         let currentPage = 1;
         const pageSize = 20;
+        let grantUserId = null;
 
-        async function fetchAPI(endpoint) {
-            const response = await fetch(endpoint, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
+        async function fetchAPI(endpoint, options = {}) {
+            const res = await fetch(endpoint, {
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                ...options,
             });
-
-            if (response.status === 401) {
-                localStorage.removeItem('token');
-                window.location.href = '/admin/login.html';
-            }
-
-            return response.json();
+            if (res.status === 401) { localStorage.removeItem('token'); window.location.href = '/admin/login.html'; }
+            return res.json();
         }
 
         async function loadUsers() {
             try {
-                const userIdFilter = document.getElementById('userIdFilter').value;
+                const filter = document.getElementById('userIdFilter').value.trim();
                 let endpoint = `/admin/users?limit=${pageSize}&offset=${(currentPage - 1) * pageSize}`;
-
-                if (userIdFilter) {
-                    endpoint += `&user_id=${userIdFilter}`;
-                    currentPage = 1;
-                }
+                if (filter) endpoint += `&user_id=${encodeURIComponent(filter)}`;
 
                 const data = await fetchAPI(endpoint);
                 const tbody = document.getElementById('usersTable');
                 tbody.innerHTML = '';
 
                 (data.users || []).forEach(user => {
-                    const trialStatus = user.is_trial_active ? '✅ Active' : '❌ Expired';
-                    const tier = user.current_tier || 'None';
-                    const subEndDate = user.subscription_end ? new Date(user.subscription_end).toLocaleDateString() : '-';
+                    const trialBadge = user.is_trial_active
+                        ? '<span class="badge badge-info">Trial</span>'
+                        : '<span class="badge badge-danger">Expired</span>';
+                    const tier = user.current_tier
+                        ? `<span class="badge badge-warning">${user.current_tier}</span>`
+                        : '<span style="color:#64748b">None</span>';
+                    const subEnd = user.subscription_end
+                        ? new Date(user.subscription_end).toLocaleDateString()
+                        : '-';
 
                     tbody.innerHTML += `
                         <tr>
                             <td>${user.id}</td>
-                            <td>${user.user_id}</td>
-                            <td>${user.username || 'N/A'}</td>
-                            <td>${trialStatus}</td>
+                            <td style="font-size:11px;color:#94a3b8">${user.user_id}</td>
+                            <td>${user.username || '<em style="color:#64748b">N/A</em>'}</td>
+                            <td>${trialBadge}</td>
                             <td>${tier}</td>
-                            <td>${subEndDate}</td>
+                            <td>${subEnd}</td>
                             <td>${new Date(user.created_at).toLocaleDateString()}</td>
-                            <td><button class="btn btn-small" onclick="viewUserDetail(${user.id})">View</button></td>
-                        </tr>
-                    `;
+                            <td>
+                                <button class="btn btn-small" onclick="viewUserDetail(${user.id})">View</button>
+                                <button class="grant-btn" onclick="openGrant(${user.id}, '${user.user_id}', '${user.username || ''}')">🎁 Grant Sub</button>
+                            </td>
+                        </tr>`;
                 });
 
                 document.getElementById('pageInfo').textContent = `Page ${currentPage} (${data.total} users)`;
-            } catch (error) {
-                console.error('Error loading users:', error);
-            }
+            } catch (e) { console.error(e); }
         }
 
         async function viewUserDetail(userId) {
+            const data = await fetchAPI(`/admin/users/${userId}`);
+            const user = data.user;
+            document.getElementById('detailId').textContent = user.id;
+            document.getElementById('detailUserId').textContent = user.user_id;
+            document.getElementById('detailUsername').textContent = user.username || 'N/A';
+            document.getElementById('detailCreatedAt').textContent = new Date(user.created_at).toLocaleDateString();
+            document.getElementById('detailTrialStatus').textContent = user.is_trial_active ? 'Active' : 'Expired';
+
+            const subList = document.getElementById('detailSubscriptions');
+            subList.innerHTML = (data.subscriptions || []).length === 0
+                ? '<li>None</li>'
+                : data.subscriptions.map(s =>
+                    `<li><strong>${s.tier}</strong> — until ${new Date(s.end_date).toLocaleDateString()} ${s.is_active ? '✅' : '❌'}</li>`
+                  ).join('');
+
+            const routeList = document.getElementById('detailRoutes');
+            routeList.innerHTML = (data.routes || []).length === 0
+                ? '<li>None</li>'
+                : data.routes.map(r => `<li>Route #${r.id}</li>`).join('');
+
+            const txnList = document.getElementById('detailTransactions');
+            txnList.innerHTML = (data.recent_transactions || []).length === 0
+                ? '<li>None</li>'
+                : data.recent_transactions.map(t =>
+                    `<li>${t.amount} — ${t.status} — ${new Date(t.created_at).toLocaleDateString()}</li>`
+                  ).join('');
+
+            document.getElementById('userModal').style.display = 'block';
+        }
+
+        function openGrant(userId, rubikaId, username) {
+            grantUserId = userId;
+            document.getElementById('grantUserLabel').textContent = username || rubikaId;
+            document.getElementById('grantSuccess').style.display = 'none';
+            document.getElementById('grantError').style.display = 'none';
+            document.getElementById('grantConfirmBtn').disabled = false;
+            document.getElementById('grantModal').style.display = 'block';
+        }
+
+        async function confirmGrant() {
+            const tier   = document.getElementById('grantTier').value;
+            const months = parseInt(document.getElementById('grantMonths').value);
+            const btn    = document.getElementById('grantConfirmBtn');
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+
             try {
-                const data = await fetchAPI(`/admin/users/${userId}`);
-                const user = data.user;
-
-                document.getElementById('detailId').textContent = user.id;
-                document.getElementById('detailUserId').textContent = user.user_id;
-                document.getElementById('detailUsername').textContent = user.username || 'N/A';
-                document.getElementById('detailCreatedAt').textContent = new Date(user.created_at).toLocaleDateString();
-                document.getElementById('detailTrialStatus').textContent = user.is_trial_active ? 'Active' : 'Expired';
-
-                const subList = document.getElementById('detailSubscriptions');
-                subList.innerHTML = '';
-                (data.subscriptions || []).forEach(sub => {
-                    subList.innerHTML += `<li>${sub.tier} - Until ${new Date(sub.end_date).toLocaleDateString()}</li>`;
+                const res = await fetchAPI(`/admin/users/${grantUserId}/grant-subscription`, {
+                    method: 'POST',
+                    body: JSON.stringify({ tier, months }),
                 });
-                if (data.subscriptions.length === 0) {
-                    subList.innerHTML = '<li>None</li>';
+                if (res.success) {
+                    const ok = document.getElementById('grantSuccess');
+                    ok.textContent = `✅ ${tier} subscription activated until ${res.end_date}. User notified.`;
+                    ok.style.display = 'block';
+                    btn.textContent = '✅ Done';
+                    loadUsers();
+                } else {
+                    throw new Error(res.detail || 'Unknown error');
                 }
-
-                const routeList = document.getElementById('detailRoutes');
-                routeList.innerHTML = '';
-                (data.routes || []).forEach(route => {
-                    routeList.innerHTML += `<li>Route #${route.id}: ${route.source_channel_id} → ${route.target_channel_id}</li>`;
-                });
-                if (data.routes.length === 0) {
-                    routeList.innerHTML = '<li>None</li>';
-                }
-
-                const txnList = document.getElementById('detailTransactions');
-                txnList.innerHTML = '';
-                (data.recent_transactions || []).forEach(txn => {
-                    txnList.innerHTML += `<li>${txn.amount} - ${txn.status} - ${new Date(txn.created_at).toLocaleDateString()}</li>`;
-                });
-                if (data.recent_transactions.length === 0) {
-                    txnList.innerHTML = '<li>None</li>';
-                }
-
-                document.getElementById('userModal').style.display = 'block';
-            } catch (error) {
-                console.error('Error loading user detail:', error);
+            } catch (e) {
+                const err = document.getElementById('grantError');
+                err.textContent = '❌ ' + e.message;
+                err.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = '✅ Activate Subscription';
             }
         }
 
-        function closeUserModal() {
-            document.getElementById('userModal').style.display = 'none';
-        }
-
-        function previousPage() {
-            if (currentPage > 1) {
-                currentPage--;
-                loadUsers();
-            }
-        }
-
-        function nextPage() {
-            currentPage++;
-            loadUsers();
-        }
+        function closeUserModal()  { document.getElementById('userModal').style.display = 'none'; }
+        function closeGrantModal() { document.getElementById('grantModal').style.display = 'none'; }
+        function previousPage() { if (currentPage > 1) { currentPage--; loadUsers(); } }
+        function nextPage()     { currentPage++; loadUsers(); }
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
             localStorage.removeItem('token');
@@ -237,7 +276,6 @@
 
         const payload = JSON.parse(atob(token.split('.')[1]));
         document.getElementById('currentUser').textContent = payload.sub || 'Admin';
-
         loadUsers();
     </script>
 </body>

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rubifo — Activity & Errors</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+        .tab-btn { padding: 8px 20px; border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #94a3b8; cursor: pointer; font-size: 14px; transition: all .2s; }
+        .tab-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+        .tab-btn:hover:not(.active) { background: #273549; color: #f1f5f9; }
+
+        .filters { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; align-items: flex-end; }
+        .filter-group { display: flex; flex-direction: column; gap: 4px; }
+        .filter-group label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+        .filter-group input,
+        .filter-group select { background: #1e293b; border: 1px solid #334155; color: #f1f5f9; border-radius: 8px; padding: 8px 12px; font-size: 13px; min-width: 140px; }
+        .filter-group input::placeholder { color: #475569; }
+
+        .auto-refresh { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+        .toggle { position: relative; width: 40px; height: 22px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; inset: 0; background: #334155; border-radius: 22px; cursor: pointer; transition: .3s; }
+        .slider:before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s; }
+        input:checked + .slider { background: #3b82f6; }
+        input:checked + .slider:before { transform: translateX(18px); }
+
+        /* Timeline log entries */
+        .log-feed { display: flex; flex-direction: column; gap: 6px; }
+        .log-entry { background: #1e293b; border: 1px solid #1e293b; border-radius: 10px; padding: 12px 16px; display: grid; grid-template-columns: 90px 120px 150px 1fr; gap: 12px; align-items: start; font-size: 13px; transition: border-color .15s; }
+        .log-entry:hover { border-color: #334155; }
+
+        /* level badges */
+        .lvl { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+        .lvl-info    { background: #1e3a5f; color: #60a5fa; }
+        .lvl-warning { background: #3f2c00; color: #fbbf24; }
+        .lvl-error   { background: #3b0f0f; color: #f87171; }
+        .lvl-debug   { background: #1e293b; color: #64748b; border: 1px solid #334155; }
+
+        .log-time  { color: #64748b; font-size: 11px; padding-top: 2px; }
+        .log-uid   { color: #94a3b8; font-size: 11px; padding-top: 2px; font-family: monospace; }
+        .log-action { color: #c084fc; font-size: 12px; font-weight: 600; padding-top: 2px; word-break: break-all; }
+        .log-msg   { color: #e2e8f0; line-height: 1.5; word-break: break-word; }
+
+        /* Error card variant */
+        .log-entry.is-error { border-left: 3px solid #ef4444; border-radius: 0 10px 10px 0; background: #1a1010; }
+        .log-entry.is-warning { border-left: 3px solid #f59e0b; border-radius: 0 10px 10px 0; }
+
+        /* User summary chips */
+        .user-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+        .user-chip { background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 4px 12px; font-size: 12px; color: #94a3b8; cursor: pointer; transition: all .15s; }
+        .user-chip:hover, .user-chip.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+        .user-chip .cnt { background: #334155; border-radius: 20px; padding: 1px 6px; margin-left: 4px; font-size: 10px; }
+        .user-chip.active .cnt { background: rgba(255,255,255,.2); }
+
+        .empty-state { text-align: center; padding: 48px; color: #475569; }
+        .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+
+        .section-label { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; padding: 8px 0 4px; border-bottom: 1px solid #1e293b; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar">
+            <div class="logo"><h2>Rubifo</h2><p>Admin</p></div>
+            <ul class="nav-menu">
+                <li><a href="/admin/dashboard.html">Dashboard</a></li>
+                <li><a href="/admin/users.html">Users</a></li>
+                <li><a href="/admin/activity.html" class="active">Activity & Errors</a></li>
+                <li><a href="/admin/channels.html">Channels</a></li>
+                <li><a href="/admin/logs.html">Logs</a></li>
+                <li><a href="/admin/performance.html">Performance</a></li>
+                <li><a href="/admin/settings.html">Settings</a></li>
+            </ul>
+            <div class="user-info">
+                <p id="currentUser">User</p>
+                <button id="logoutBtn" class="btn btn-small btn-danger">Logout</button>
+            </div>
+        </nav>
+
+        <main class="content">
+            <div class="header">
+                <h1>Activity & Errors</h1>
+                <div class="auto-refresh">
+                    <span style="font-size:12px;color:#64748b;">Auto-refresh</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="autoRefreshToggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <button class="btn btn-small" onclick="loadData()">↻ Refresh</button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('activity', this)">📊 User Activity</button>
+                <button class="tab-btn" onclick="switchTab('errors', this)">🚨 Errors & Warnings</button>
+            </div>
+
+            <!-- ──────────── ACTIVITY TAB ──────────── -->
+            <div id="tab-activity">
+                <!-- User chips for quick filtering -->
+                <div id="userChips" class="user-chips"></div>
+
+                <!-- Filters -->
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>User ID / Username</label>
+                        <input type="text" id="actUserFilter" placeholder="filter by user…" oninput="debouncedLoad()">
+                    </div>
+                    <div class="filter-group">
+                        <label>Action</label>
+                        <input type="text" id="actActionFilter" placeholder="/start, /buy…" oninput="debouncedLoad()">
+                    </div>
+                    <div class="filter-group">
+                        <label>Level</label>
+                        <select id="actLevelFilter" onchange="loadActivity()">
+                            <option value="">All</option>
+                            <option value="info">Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="error">Error</option>
+                            <option value="debug">Debug</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-small" style="align-self:flex-end" onclick="clearActivityFilters()">Clear</button>
+                </div>
+
+                <div class="log-feed" id="activityFeed">
+                    <div class="empty-state"><div class="icon">⏳</div>Loading…</div>
+                </div>
+                <div class="pagination" style="margin-top:16px">
+                    <button class="btn btn-small" onclick="actPrevPage()">← Previous</button>
+                    <span id="actPageInfo" style="font-size:13px;color:#94a3b8">Page 1</span>
+                    <button class="btn btn-small" onclick="actNextPage()">Next →</button>
+                </div>
+            </div>
+
+            <!-- ──────────── ERRORS TAB ──────────── -->
+            <div id="tab-errors" style="display:none">
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>User ID</label>
+                        <input type="text" id="errUserFilter" placeholder="filter by user…" oninput="debouncedLoadErr()">
+                    </div>
+                    <button class="btn btn-small" style="align-self:flex-end" onclick="clearErrorFilters()">Clear</button>
+                </div>
+
+                <div class="section-label">Errors</div>
+                <div class="log-feed" id="errorFeed">
+                    <div class="empty-state"><div class="icon">⏳</div>Loading…</div>
+                </div>
+
+                <div class="section-label" style="margin-top:20px">Warnings</div>
+                <div class="log-feed" id="warningFeed">
+                    <div class="empty-state"><div class="icon">⏳</div>Loading…</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/admin/login.html';
+
+        let activeTab = 'activity';
+        let actPage = 1;
+        const PAGE_SIZE = 50;
+        let refreshInterval = null;
+        let debounceTimer = null;
+
+        // ── Auth ──────────────────────────────────────────────────────────
+        async function fetchAPI(endpoint, options = {}) {
+            const res = await fetch(endpoint, {
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                ...options,
+            });
+            if (res.status === 401) { localStorage.removeItem('token'); window.location.href = '/admin/login.html'; }
+            return res.json();
+        }
+
+        // ── Tab switching ─────────────────────────────────────────────────
+        function switchTab(tab, btn) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-activity').style.display = tab === 'activity' ? '' : 'none';
+            document.getElementById('tab-errors').style.display   = tab === 'errors'   ? '' : 'none';
+            activeTab = tab;
+            loadData();
+        }
+
+        // ── Debounce ──────────────────────────────────────────────────────
+        function debouncedLoad()    { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadActivity, 400); }
+        function debouncedLoadErr() { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadErrors, 400); }
+
+        // ── Main dispatcher ───────────────────────────────────────────────
+        function loadData() {
+            if (activeTab === 'activity') { loadActivity(); loadUserChips(); }
+            else                          { loadErrors(); }
+        }
+
+        // ── Render helper ─────────────────────────────────────────────────
+        function levelBadge(level) {
+            const cls = { info: 'lvl-info', warning: 'lvl-warning', error: 'lvl-error', debug: 'lvl-debug' }[level] || 'lvl-debug';
+            return `<span class="lvl ${cls}">${level}</span>`;
+        }
+
+        function fmtTime(iso) {
+            const d = new Date(iso);
+            return d.toLocaleDateString() + '<br>' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+        }
+
+        function renderEntry(log, extraClass = '') {
+            return `
+                <div class="log-entry ${extraClass}">
+                    <div class="log-time">${fmtTime(log.created_at)}</div>
+                    <div class="log-uid">${log.user_id || '—'}</div>
+                    <div class="log-action">${escHtml(log.action || '')} ${levelBadge(log.level)}</div>
+                    <div class="log-msg">${escHtml(log.message || '')}</div>
+                </div>`;
+        }
+
+        function escHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        // ── Activity Tab ──────────────────────────────────────────────────
+        async function loadActivity() {
+            const userFilter   = document.getElementById('actUserFilter').value.trim();
+            const actionFilter = document.getElementById('actActionFilter').value.trim();
+            const levelFilter  = document.getElementById('actLevelFilter').value;
+
+            let url = `/admin/activity?limit=${PAGE_SIZE}&offset=${(actPage - 1) * PAGE_SIZE}`;
+            if (userFilter)   url += `&user_id=${encodeURIComponent(userFilter)}`;
+            if (actionFilter) url += `&action=${encodeURIComponent(actionFilter)}`;
+            if (levelFilter)  url += `&level=${encodeURIComponent(levelFilter)}`;
+
+            const feed = document.getElementById('activityFeed');
+            try {
+                const data = await fetchAPI(url);
+                const logs = data.logs || [];
+                if (logs.length === 0) {
+                    feed.innerHTML = '<div class="empty-state"><div class="icon">🔍</div>No activity found</div>';
+                } else {
+                    feed.innerHTML = logs.map(l => {
+                        const cls = l.level === 'error' ? 'is-error' : l.level === 'warning' ? 'is-warning' : '';
+                        return renderEntry(l, cls);
+                    }).join('');
+                }
+                document.getElementById('actPageInfo').textContent =
+                    `Page ${actPage}  ·  ${data.total ?? logs.length} total`;
+            } catch (e) {
+                feed.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Failed to load: ${e.message}</div>`;
+            }
+        }
+
+        async function loadUserChips() {
+            try {
+                const data = await fetchAPI('/admin/activity/users?limit=20');
+                const chips = document.getElementById('userChips');
+                if (!data.users || data.users.length === 0) { chips.innerHTML = ''; return; }
+                chips.innerHTML = data.users.map(u => `
+                    <span class="user-chip" onclick="filterByUser('${u.user_id}')">
+                        ${u.user_id} <span class="cnt">${u.event_count ?? u.count ?? 0}</span>
+                    </span>`).join('');
+            } catch (_) {}
+        }
+
+        function filterByUser(uid) {
+            document.getElementById('actUserFilter').value = uid;
+            document.querySelectorAll('.user-chip').forEach(c => {
+                c.classList.toggle('active', c.textContent.trim().startsWith(uid));
+            });
+            actPage = 1;
+            loadActivity();
+        }
+
+        function clearActivityFilters() {
+            document.getElementById('actUserFilter').value   = '';
+            document.getElementById('actActionFilter').value = '';
+            document.getElementById('actLevelFilter').value  = '';
+            document.querySelectorAll('.user-chip').forEach(c => c.classList.remove('active'));
+            actPage = 1;
+            loadActivity();
+        }
+
+        function actPrevPage() { if (actPage > 1) { actPage--; loadActivity(); } }
+        function actNextPage() { actPage++; loadActivity(); }
+
+        // ── Errors Tab ────────────────────────────────────────────────────
+        async function loadErrors() {
+            const userFilter = document.getElementById('errUserFilter').value.trim();
+
+            for (const [level, feedId] of [['error', 'errorFeed'], ['warning', 'warningFeed']]) {
+                let url = `/admin/activity?limit=100&offset=0&level=${level}`;
+                if (userFilter) url += `&user_id=${encodeURIComponent(userFilter)}`;
+
+                const feed = document.getElementById(feedId);
+                try {
+                    const data = await fetchAPI(url);
+                    const logs = data.logs || [];
+                    if (logs.length === 0) {
+                        feed.innerHTML = `<div class="empty-state"><div class="icon">${level === 'error' ? '✅' : '👍'}</div>No ${level}s</div>`;
+                    } else {
+                        const cls = level === 'error' ? 'is-error' : 'is-warning';
+                        feed.innerHTML = logs.map(l => renderEntry(l, cls)).join('');
+                    }
+                } catch (e) {
+                    feed.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Failed to load</div>`;
+                }
+            }
+        }
+
+        function clearErrorFilters() {
+            document.getElementById('errUserFilter').value = '';
+            loadErrors();
+        }
+
+        // ── Auto-refresh ──────────────────────────────────────────────────
+        function setupAutoRefresh() {
+            const toggle = document.getElementById('autoRefreshToggle');
+            function apply() {
+                clearInterval(refreshInterval);
+                if (toggle.checked) refreshInterval = setInterval(loadData, 30000);
+            }
+            toggle.addEventListener('change', apply);
+            apply();
+        }
+
+        // ── Logout ────────────────────────────────────────────────────────
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/admin/login.html';
+        });
+
+        // ── Boot ──────────────────────────────────────────────────────────
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        document.getElementById('currentUser').textContent = payload.sub || 'Admin';
+        loadData();
+        loadUserChips();
+        setupAutoRefresh();
+    </script>
+</body>
+</html>

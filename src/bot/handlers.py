@@ -3,6 +3,21 @@ from src.logger import logger
 from src.bot import commands
 
 
+async def _log_action(user_id: str, action: str, message: str, level: str = "info") -> None:
+    """Insert a user action log entry into the logs table."""
+    try:
+        from src.database import execute
+        await execute(
+            """
+            INSERT INTO logs (level, user_id, action, message)
+            VALUES ($1, $2, $3, $4)
+            """,
+            level, user_id, action, message[:2000],
+        )
+    except Exception as e:
+        logger.warning(f"Failed to write action log: {e}")
+
+
 BUTTON_COMMAND_MAP = {
     "📦 سورس‌های من": "/mysources",
     "📍 کانال‌های من": "/my_destinations",
@@ -77,6 +92,11 @@ async def route_message(client, user_id: str, message: dict) -> None:
     """Route incoming messages to appropriate command handlers."""
     try:
         text = (message.get("text") or "").strip()
+
+        # ── log every incoming message ──────────────────────────────────────
+        if text:
+            action = text if text.startswith("/") else "message"
+            await _log_action(user_id, action, text)
 
         # ── collecting_source: handle ALL messages (media + text) ──────────
         state = commands.conversation_states.get(user_id, {})
@@ -176,7 +196,9 @@ async def route_message(client, user_id: str, message: dict) -> None:
             await client.send_message(user_id, "دستور نامشخص. /help را بفرستید.")
 
     except ValueError:
+        await _log_action(user_id, "error", "ValueError in route_message", level="error")
         await client.send_message(user_id, "فرمت دستور اشتباه است.")
     except Exception as e:
         logger.error(f"Error routing message from {user_id}: {e}")
+        await _log_action(user_id, "error", str(e), level="error")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
