@@ -371,6 +371,26 @@ class RufifoBot:
         except asyncio.CancelledError:
             pass
 
+    async def start_webhook_mode(self) -> None:
+        """Start bot without polling loop — for webhook deployments.
+
+        Messages arrive via POST /webhook; this method only starts the
+        background execution and reminder loops so schedules keep running.
+        """
+        logger.info("Starting Rufifo bot (webhook mode — polling disabled)...")
+        self.client = RubikaClient(self.token)
+        self.running = True
+
+        self.background_tasks.append(asyncio.create_task(self._trial_reminder_loop()))
+        self.background_tasks.append(asyncio.create_task(self._execution_loop()))
+
+        logger.info("Bot background tasks started (webhook mode)")
+        try:
+            while self.running:
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            pass
+
     async def stop(self) -> None:
         logger.info("Stopping bot...")
         self.running = False

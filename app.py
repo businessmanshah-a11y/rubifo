@@ -137,17 +137,44 @@ async def _startup():
     global _bot_ref
     from src.database import init_db
     from src.logger import logger
+    import src.database as _db_mod
 
     await init_db()
     logger.info("Database pool ready")
+
+    # Auto-apply missing migrations
+    try:
+        await _db_mod.pool.execute("""
+            CREATE TABLE IF NOT EXISTS logs (
+                id         SERIAL PRIMARY KEY,
+                level      VARCHAR(20)  NOT NULL DEFAULT 'info',
+                user_id    TEXT,
+                action     VARCHAR(255),
+                message    TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        await _db_mod.pool.execute(
+            "CREATE INDEX IF NOT EXISTS idx_logs_user_id ON logs(user_id)"
+        )
+        await _db_mod.pool.execute(
+            "CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level)"
+        )
+        await _db_mod.pool.execute(
+            "CREATE INDEX IF NOT EXISTS idx_logs_created_at ON logs(created_at DESC)"
+        )
+        logger.info("Migration: logs table ensured")
+    except Exception as e:
+        logger.warning(f"Migration check failed: {e}")
 
     from src.config import BOT_TOKEN
     from src.bot.main import RufifoBot
 
     bot = RufifoBot(BOT_TOKEN)
     _bot_ref = bot
-    asyncio.create_task(bot.start())
-    logger.info("Bot started as background task")
+    # Webhook mode: messages arrive via POST /webhook — no polling loop
+    asyncio.create_task(bot.start_webhook_mode())
+    logger.info("Bot started in webhook mode (no polling)")
 
 
 @app.on_event("shutdown")
