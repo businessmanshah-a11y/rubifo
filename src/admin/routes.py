@@ -39,6 +39,17 @@ def _db():
     return db_module.pool or _EMPTY_DB
 
 
+@router.get("/health-db")
+async def db_health(username: str = Depends(verify_token)) -> dict:
+    """Check actual database connectivity."""
+    try:
+        result = await _db().fetchrow("SELECT 1 as ok")
+        connected = bool(result and result.get("ok") == 1)
+    except Exception:
+        connected = False
+    return {"connected": connected, "pool_available": db_module.pool is not None}
+
+
 @router.get("/transactions")
 async def get_transactions(
     username: str = Depends(verify_token),
@@ -351,19 +362,20 @@ async def get_route_detail(
         offset,
     )
 
-    # Get queue stats
-    stats = await _db().fetchrow(
+    # Get queue stats (multiple rows — one per status)
+    stats_rows = await _db().fetch(
         """
         SELECT status, COUNT(*) as count FROM post_queue
         WHERE route_id = $1 GROUP BY status
         """,
         route_id,
     )
+    queue_stats = {row["status"]: row["count"] for row in stats_rows}
 
     return {
         "route": dict(route),
         "queue_items": [dict(item) for item in queue],
-        "queue_stats": dict(stats) if stats else {},
+        "queue_stats": queue_stats,
     }
 
 
@@ -458,16 +470,19 @@ async def get_user_detail(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Resolve rubika GUID — subscriptions/routes/transactions store TEXT rubika IDs
+    rubika_uid = user["user_id"]
+
     # Get subscriptions
     subscriptions = await _db().fetch(
         "SELECT * FROM subscriptions WHERE user_id = $1 ORDER BY created_at DESC",
-        user_id,
+        rubika_uid,
     )
 
     # Get routes
     routes = await _db().fetch(
         "SELECT * FROM routes WHERE user_id = $1 ORDER BY created_at DESC",
-        user_id,
+        rubika_uid,
     )
 
     # Get recent transactions
@@ -476,7 +491,7 @@ async def get_user_detail(
         SELECT * FROM transactions WHERE user_id = $1
         ORDER BY created_at DESC LIMIT 10
         """,
-        user_id,
+        rubika_uid,
     )
 
     return {
@@ -920,14 +935,14 @@ async def get_channels(
     dest_rows = await _db().fetch(
         """
         SELECT
-            r.destination_channel_id               AS channel_id,
+            r.target_channel_id                    AS channel_id,
             NULL::text                             AS channel_name,
             COUNT(r.id)                            AS route_count,
             COUNT(DISTINCT r.user_id)              AS distinct_users,
             COUNT(CASE WHEN r.is_active THEN 1 END) AS active_routes,
             MAX(r.created_at)                      AS last_updated
         FROM routes r
-        GROUP BY r.destination_channel_id
+        GROUP BY r.target_channel_id
         ORDER BY active_routes DESC, route_count DESC
         """
     )

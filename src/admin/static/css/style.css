@@ -3,7 +3,13 @@
    چراغ عملیات · Obsidian Warm · Saffron Gold · Vazirmatn + Inter
    ================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Local Vazirmatn — no external dependency */
+@font-face { font-family: 'Vazirmatn'; src: url('../fonts/Vazirmatn-Regular.woff2')   format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Vazirmatn'; src: url('../fonts/Vazirmatn-Medium.woff2')    format('woff2'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Vazirmatn'; src: url('../fonts/Vazirmatn-SemiBold.woff2')  format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Vazirmatn'; src: url('../fonts/Vazirmatn-Bold.woff2')      format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Vazirmatn'; src: url('../fonts/Vazirmatn-ExtraBold.woff2') format('woff2'); font-weight: 800; font-display: swap; }
+/* JetBrains Mono for monospace — keep as system fallback */
 
 /* ── Tokens ─────────────────────────────────────────────────── */
 
@@ -63,8 +69,8 @@
 
   /* Type */
   --font-fa:   'Vazirmatn', system-ui, sans-serif;
-  --font:      'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font:      'Vazirmatn', system-ui, sans-serif;
+  --font-mono: 'Courier New', 'Fira Code', monospace;
 
   --f-2xs:  10px;
   --f-xs:   11px;
@@ -90,7 +96,7 @@
 html { color-scheme: dark; }
 
 body {
-  font-family: var(--font);
+  font-family: var(--font-fa);
   font-size: var(--f-base);
   background: var(--bg);
   color: var(--text);

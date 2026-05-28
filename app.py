@@ -1,108 +1,165 @@
 """
-Parspack entry point — runs the bot alongside a web server.
-Parspack Python buildpack requires a process bound to 0.0.0.0 on port > 1000.
+ParsPackPaaS entry point — combined FastAPI app.
 
-Routes:
-  GET  /          → landing page (index.html)
-  GET  /static/*  → static assets (CSS, fonts, JS)
-  GET  /health    → "ok" (Parsback health check)
-  POST /webhook   → Rubika webhook updates
+All three services run in one process on one port:
+  Landing page   GET  /
+  Admin panel    GET  /admin/*   POST /admin/login
+  Bot webhook    POST /webhook
+  Health check   GET  /health
+
+Run:
+  uvicorn app:app --host 0.0.0.0 --port $PORT
+or:
+  python app.py
 """
 import asyncio
 import os
 from pathlib import Path
-from aiohttp import web
-
-_bot_ref = None  # set after bot starts
+from pydantic import BaseModel
+from fastapi import FastAPI, Depends, HTTPException, Request, status
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 _STATIC_DIR = Path(__file__).parent / "src" / "admin" / "static"
 
+app = FastAPI(title="Rubifo", docs_url=None, redoc_url=None)
 
-async def landing_page(request):
-    """Serve the public landing page."""
-    return web.FileResponse(_STATIC_DIR / "index.html")
+# ─────────────────────────────────────────────────────────────
+# Static assets
+# ─────────────────────────────────────────────────────────────
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+app.mount("/fonts", StaticFiles(directory=_STATIC_DIR / "fonts"), name="fonts")
+
+# ─────────────────────────────────────────────────────────────
+# Admin API routes  (/admin/*)
+# ─────────────────────────────────────────────────────────────
+from src.admin import routes as _admin_routes
+from src.admin.auth import verify_token, auth_service
+
+app.include_router(_admin_routes.router)
 
 
-async def health(request):
-    return web.Response(text="ok")
+class _LoginBody(BaseModel):
+    username: str
+    password: str
 
 
-async def webhook(request):
-    """Receive a single update from Rubika (webhook mode)."""
+@app.post("/admin/login")
+async def admin_login(body: _LoginBody):
+    token = auth_service.authenticate(body.username, body.password)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="نام کاربری یا رمز عبور اشتباه است")
+    return {"access_token": token, "token_type": "bearer"}
+
+
+# ─────────────────────────────────────────────────────────────
+# Admin HTML pages  /admin/<page>.html  and  /admin/
+# ─────────────────────────────────────────────────────────────
+@app.get("/admin/")
+async def admin_root():
+    return FileResponse(_STATIC_DIR / "login.html", media_type="text/html")
+
+
+@app.get("/admin/{page}.html")
+async def admin_page(page: str):
+    fp = _STATIC_DIR / f"{page}.html"
+    if fp.exists():
+        return FileResponse(str(fp), media_type="text/html")
+    return FileResponse(str(_STATIC_DIR / "login.html"), media_type="text/html")
+
+
+# ─────────────────────────────────────────────────────────────
+# Landing page  /
+# ─────────────────────────────────────────────────────────────
+@app.get("/")
+async def landing():
+    return FileResponse(_STATIC_DIR / "index.html", media_type="text/html")
+
+
+# ─────────────────────────────────────────────────────────────
+# Health check
+# ─────────────────────────────────────────────────────────────
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+# ─────────────────────────────────────────────────────────────
+# Bot webhook  POST /webhook
+# ─────────────────────────────────────────────────────────────
+_bot_ref = None
+
+
+@app.post("/webhook")
+async def webhook(request: Request):
     try:
         data = await request.json()
     except Exception:
-        return web.Response(status=400, text="bad json")
+        return JSONResponse({"ok": False}, status_code=400)
 
-    # Rubika sends {"update": {...}} for receiveUpdate
-    raw_update = data.get("update") or data
-    update_type = raw_update.get("type", "")
-    chat_id = raw_update.get("chat_id")
+    raw = data.get("update") or data
+    update_type = raw.get("type", "")
+    chat_id = raw.get("chat_id")
 
     if not chat_id:
-        return web.Response(text="ok")
+        return JSONResponse({"ok": True})
 
-    # Normalise into the same shape route_message expects
     if update_type == "NewMessage":
-        msg = raw_update.get("new_message") or {}
+        msg = raw.get("new_message") or {}
         text = (msg.get("text") or "").strip()
         if not text:
-            aux = msg.get("aux_data") or {}
-            btn_id = aux.get("button_id", "")
+            btn_id = (msg.get("aux_data") or {}).get("button_id", "")
             if btn_id:
                 text = f"/{btn_id}"
         entry = {"user_id": str(chat_id), "text": text, "new_message": msg}
-        forwarded = msg.get("forwarded_from") or {}
-        if forwarded:
-            entry["forwarded_from_chat"] = str(
-                forwarded.get("chat_id") or forwarded.get("object_guid", "")
-            )
+        fwd = msg.get("forwarded_from") or {}
+        if fwd:
+            entry["forwarded_from_chat"] = str(fwd.get("chat_id") or fwd.get("object_guid", ""))
             entry["forwarded_message_id"] = str(msg.get("message_id", ""))
     elif update_type == "StartedBot":
         entry = {"user_id": str(chat_id), "text": "/start", "new_message": {}}
     else:
-        return web.Response(text="ok")
+        return JSONResponse({"ok": True})
 
     if _bot_ref and _bot_ref.client:
         from src.bot.handlers import route_message
         asyncio.create_task(route_message(_bot_ref.client, str(chat_id), entry))
 
-    return web.Response(text="ok")
+    return JSONResponse({"ok": True})
 
 
-async def run_health_server():
-    import mimetypes
-    # Ensure woff2/woff have correct MIME types (not always in Python's defaults)
-    mimetypes.add_type("font/woff2", ".woff2")
-    mimetypes.add_type("font/woff", ".woff")
-
-    app = web.Application()
-    app.router.add_get("/", landing_page)
-    app.router.add_get("/health", health)
-    app.router.add_post("/webhook", webhook)
-    # /static/* for any explicit /static/... references
-    app.router.add_static("/static", _STATIC_DIR, show_index=False)
-    # /fonts/* — index.html uses url('./fonts/...') which browsers resolve to /fonts/
-    app.router.add_static("/fonts", _STATIC_DIR / "fonts", show_index=False)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    port = int(os.getenv("PORT", "8000"))
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-
-
-async def main():
+# ─────────────────────────────────────────────────────────────
+# Startup / Shutdown
+# ─────────────────────────────────────────────────────────────
+@app.on_event("startup")
+async def _startup():
     global _bot_ref
+    from src.database import init_db
+    from src.logger import logger
+
+    await init_db()
+    logger.info("Database pool ready")
+
     from src.config import BOT_TOKEN
     from src.bot.main import RufifoBot
 
     bot = RufifoBot(BOT_TOKEN)
     _bot_ref = bot
-    await asyncio.gather(
-        run_health_server(),
-        bot.start(),
-    )
+    asyncio.create_task(bot.start())
+    logger.info("Bot started as background task")
 
 
+@app.on_event("shutdown")
+async def _shutdown():
+    from src.database import close_db
+    await close_db()
+
+
+# ─────────────────────────────────────────────────────────────
+# Direct run  (python app.py)
+# ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    asyncio.run(main())
+    import uvicorn
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, log_level="info")
