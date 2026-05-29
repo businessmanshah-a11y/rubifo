@@ -151,8 +151,14 @@ async def route_message(client, user_id: str, message: dict) -> None:
         if await publishing_flow.handle_message(client, user_id, message):
             return
 
-        if text and not text.startswith("/") and await publishing_flow.handle_text(client, user_id, text):
-            return
+        if not text.startswith("/") and publishing_flow.active_flows.get(user_id):
+            forwarded = (message.get("new_message") or {}).get("forwarded_from")
+            if forwarded or not text:
+                handled = await publishing_flow.handle_text(client, user_id, text, message)
+            else:
+                handled = await publishing_flow.handle_text(client, user_id, text)
+            if handled:
+                return
 
         # ── collecting_source: handle ALL messages (media + text) ──────────
         state = commands.conversation_states.get(user_id, {})

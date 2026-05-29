@@ -3,11 +3,13 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 from rubpy import BotClient
+from rubpy.bot.exceptions import APIException
 from rubpy.bot.models import Keypad, KeypadRow, Button
 from rubpy.bot.enums import ChatKeypadTypeEnum, ButtonTypeEnum
 from src.database import init_db, close_db
 from src.logger import logger
 from src.config import BOT_TOKEN
+from src.bot.text import format_rtl_message
 
 OFFSET_FILE = "logs/bot_offset.json"
 
@@ -104,7 +106,8 @@ class RubikaClient:
             inline_keypad: Inline Keypad rendered under this message
         """
         try:
-            kwargs: Dict[str, Any] = {"chat_id": str(user_id), "text": text}
+            formatted_text = format_rtl_message(text)
+            kwargs: Dict[str, Any] = {"chat_id": str(user_id), "text": formatted_text}
             if inline_keypad is not None:
                 kwargs["inline_keypad"] = inline_keypad
             if keypad is not None:
@@ -127,8 +130,12 @@ class RubikaClient:
         endpoint_type = "ReceiveInlineMessage"
         result = await self._bot.update_bot_endpoints(webhook_url, endpoint_type)
         status = result.get("status") if isinstance(result, dict) else None
-        if status and status != "OK":
-            logger.error(f"[WEBHOOK-REG] {endpoint_type} → {webhook_url} rejected: {result}")
+        if status and status not in {"OK", "Done"}:
+            dev_message = result.get("dev_message") or result.get("message") if isinstance(result, dict) else None
+            logger.error(
+                f"[WEBHOOK-REG] {endpoint_type} → {webhook_url} rejected: "
+                f"status={status}, dev_message={dev_message}, response={result}"
+            )
             raise RuntimeError(f"Rubika webhook registration failed: {status}")
         logger.info(f"[WEBHOOK-REG] {endpoint_type} → {webhook_url} | response={result}")
 
@@ -171,9 +178,23 @@ class RubikaClient:
                     "verified": True,
                     "status": "cleanup_failed",
                     "title": title,
+                    "channel_id": str(chat_id),
                     "error": str(exc),
                 }
-            return {"verified": True, "status": "verified", "title": title}
+            return {"verified": True, "status": "verified", "title": title, "channel_id": str(chat_id)}
+        except APIException as exc:
+            status = getattr(exc, "status", None)
+            if status == "INVALID_ACCESS":
+                mapped_status = "invalid_access"
+            elif status == "INVALID_INPUT":
+                mapped_status = "invalid_input"
+            else:
+                mapped_status = "api_error"
+            return {
+                "verified": False,
+                "status": mapped_status,
+                "error": str(exc),
+            }
         except Exception as exc:
             return {"verified": False, "status": "not_found", "error": str(exc)}
 

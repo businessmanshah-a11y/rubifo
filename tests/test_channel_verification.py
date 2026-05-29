@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.bot.main import RubikaClient
+from rubpy.bot.exceptions import APIException
 
 
 def client_with_bot():
@@ -54,3 +55,40 @@ async def test_verify_destination_keeps_verification_when_probe_cleanup_fails():
 
     assert result["status"] == "cleanup_failed"
     assert result["verified"] is True
+
+
+@pytest.mark.asyncio
+async def test_verify_destination_reports_invalid_access_from_rubika_api():
+    client = client_with_bot()
+    client._bot.get_chat.side_effect = APIException(
+        status="INVALID_ACCESS",
+        dev_message="The bot doesn’t have access to the chat.",
+    )
+
+    result = await client.verify_destination_channel("@shop")
+
+    assert result["status"] == "invalid_access"
+    assert result["verified"] is False
+    assert "INVALID_ACCESS" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_verify_destination_reports_invalid_input_from_rubika_api():
+    client = client_with_bot()
+    client._bot.get_chat.side_effect = APIException(status="INVALID_INPUT")
+
+    result = await client.verify_destination_channel("shop")
+
+    assert result["status"] == "invalid_input"
+    assert result["verified"] is False
+
+
+@pytest.mark.asyncio
+async def test_verify_destination_reports_unknown_api_error_separately():
+    client = client_with_bot()
+    client._bot.get_chat.side_effect = APIException(status="SOMETHING_ELSE")
+
+    result = await client.verify_destination_channel("@shop")
+
+    assert result["status"] == "api_error"
+    assert result["verified"] is False

@@ -151,15 +151,27 @@ async def _prompt_channel(client, user_id: str, state: Dict[str, Any]) -> None:
         )
     await client.send_message(
         user_id,
-        "ابتدا کانال مقصد را مشخص کنید.\n"
-        "Rubifo باید در آن کانال مدیر باشد و اجازه انتشار پست داشته باشد.\n"
-        "آدرس را مانند @my_channel یا https://rubika.ir/my_channel بفرستید."
-        f"{known}\n\nدر صورت رفع خطا، همین آدرس را برای «بررسی دوباره» ارسال کنید.",
+        "کانال مقصد همان جایی است که پست‌ها منتشر می‌شوند.\n"
+        "ابتدا Rubifo را در آن کانال ادمین کنید و اجازه ارسال پست بدهید.\n"
+        "سپس یکی از این‌ها را بفرستید:\n"
+        "@my_channel\n"
+        "https://rubika.ir/my_channel\n"
+        "یا یک پست فورواردشده از همان کانال."
+        f"{known}\n\nبعد از رفع خطا، آدرس کانال یا پست فورواردشده را دوباره ارسال کنید.",
         inline_keypad=_inline_choices(*[channel.channel_id for channel in channels]) if channels else None,
     )
 
 
-async def handle_text(client, user_id: str, text: str) -> bool:
+def _forwarded_channel_identifier(message: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not message:
+        return None
+    new_message = message.get("new_message") if isinstance(message, dict) else None
+    forwarded = (new_message or {}).get("forwarded_from") or {}
+    identifier = forwarded.get("chat_id") or forwarded.get("object_guid")
+    return str(identifier).strip() if identifier else None
+
+
+async def handle_text(client, user_id: str, text: str, message: Optional[Dict[str, Any]] = None) -> bool:
     """Consume wizard text and return whether the message belonged to the wizard."""
     from src.database import pool
 
@@ -205,7 +217,12 @@ async def handle_text(client, user_id: str, text: str) -> bool:
             return True
 
         if state["step"] == "channel":
-            channel_id = DestinationService.normalize_channel_input(value)
+            forwarded_channel_id = _forwarded_channel_identifier(message)
+            try:
+                channel_id = forwarded_channel_id or DestinationService.normalize_channel_input(value)
+            except ValueError as exc:
+                await client.send_message(user_id, str(exc))
+                return True
             allowed, error = await DestinationService(pool).can_register(user_id, channel_id)
             if not allowed:
                 state.update({"step": "channel_limit", "pending_channel_id": channel_id})
@@ -226,15 +243,19 @@ async def handle_text(client, user_id: str, text: str) -> bool:
             status = verification["status"]
             if not verification.get("verified"):
                 instructions = {
-                    "not_admin": "Rubifo را به مدیران کانال اضافه کنید و سپس بررسی دوباره را انجام دهید.",
-                    "cannot_publish": "اجازه ارسال پست را برای Rubifo فعال کنید و سپس بررسی دوباره را انجام دهید.",
+                    "not_admin": "Rubifo هنوز ادمین کانال نیست. آن را ادمین کنید، اجازه ارسال پست بدهید، سپس دوباره آدرس یا یک پست فورواردشده از کانال را بفرستید.",
+                    "invalid_access": "Rubifo به این آدرس دسترسی ندارد. یک پست از همان کانال را فوروارد کنید تا شناسه واقعی کانال بررسی شود.",
+                    "invalid_input": "آدرس کانال معتبر نیست. آیدی را مثل @my_channel یا لینک rubika.ir بفرستید.",
+                    "cannot_publish": "Rubifo اجازه انتشار در کانال را ندارد. دسترسی ارسال پست را فعال کنید و دوباره بررسی کنید.",
                     "not_found": "آدرس کانال پیدا نشد؛ آدرس را بررسی و دوباره ارسال کنید.",
+                    "api_error": "روبیکا پاسخ خطا داد. چند دقیقه بعد دوباره آدرس یا یک پست فورواردشده از کانال را بفرستید.",
                 }
                 await client.send_message(user_id, f"تایید کانال انجام نشد.\n{instructions.get(status, 'تلاش مجدد کنید.')}")
                 return True
+            verified_channel_id = verification.get("channel_id") or channel_id
             destination = await DestinationService(pool).record_verification(
                 user_id,
-                channel_id,
+                verified_channel_id,
                 verification.get("title"),
                 status,
                 verification.get("error"),

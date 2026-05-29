@@ -8,6 +8,7 @@ import app
 import src.config as config
 from src.bot import commands, handlers
 from src.bot.main import RubikaClient
+from src.bot.text import format_rtl_message
 
 
 class FakeRequest:
@@ -29,7 +30,7 @@ async def test_send_message_forwards_inline_keypad_to_rubika_sdk():
     assert result is True
     client._bot.send_message.assert_awaited_once_with(
         chat_id="u1",
-        text="choose",
+        text=format_rtl_message("choose"),
         inline_keypad=inline_keypad,
     )
 
@@ -63,6 +64,20 @@ def test_inline_keypad_uses_payload_as_button_id():
 async def test_registers_only_inline_message_endpoint():
     client = RubikaClient.__new__(RubikaClient)
     client._bot = AsyncMock()
+
+    await client.register_inline_webhook("https://app.example/webhook")
+
+    client._bot.update_bot_endpoints.assert_awaited_once_with(
+        "https://app.example/webhook",
+        "ReceiveInlineMessage",
+    )
+
+
+@pytest.mark.asyncio
+async def test_inline_webhook_registration_accepts_done_status():
+    client = RubikaClient.__new__(RubikaClient)
+    client._bot = AsyncMock()
+    client._bot.update_bot_endpoints = AsyncMock(return_value={"status": "Done"})
 
     await client.register_inline_webhook("https://app.example/webhook")
 
@@ -250,3 +265,18 @@ async def test_startup_defers_inline_webhook_registration_until_after_server_rea
 
     assert fake_client.register_called is False
     assert len(scheduled) == 2
+
+
+def test_format_rtl_message_wraps_ltr_fragments_without_changing_visible_text():
+    raw = "آدرس @testrubifo2 یا https://rubika.ir/testrubifo2 را بفرستید. مثال /start در 120 دقیقه."
+
+    formatted = format_rtl_message(raw)
+
+    assert formatted.startswith("\u200f")
+    assert "@testrubifo2" in formatted
+    assert "https://rubika.ir/testrubifo2" in formatted
+    assert "/start" in formatted
+    assert "120" in formatted
+    assert "\u2066@testrubifo2\u2069" in formatted
+    assert "\u2066https://rubika.ir/testrubifo2\u2069" in formatted
+    assert "\u2066/start\u2069" in formatted

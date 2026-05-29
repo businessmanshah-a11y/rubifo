@@ -84,6 +84,51 @@ async def test_verified_real_channel_proceeds_to_content_choice(mock_bot_client,
 
 
 @pytest.mark.asyncio
+async def test_invalid_access_channel_asks_for_forwarded_post(mock_bot_client, mock_db):
+    mock_bot_client.verify_destination_channel = AsyncMock(
+        return_value={"status": "invalid_access", "verified": False, "error": "INVALID_ACCESS"}
+    )
+    publishing_flow.active_flows["u1"] = {"step": "channel", "flow_kind": "real"}
+
+    with patch("src.database.pool", mock_db):
+        with patch.object(publishing_flow.DestinationService, "can_register", new_callable=AsyncMock, return_value=(True, None)):
+            await publishing_flow.handle_text(mock_bot_client, "u1", "@shop")
+
+    text = mock_bot_client.send_message.await_args.args[1]
+    assert "یک پست از همان کانال را فوروارد کنید" in text
+    assert "پیدا نشد" not in text
+
+
+@pytest.mark.asyncio
+async def test_forwarded_channel_message_verifies_real_chat_id(mock_bot_client, mock_db):
+    destination = SimpleNamespace(id=8, channel_id="c0real")
+    mock_bot_client.verify_destination_channel = AsyncMock(
+        return_value={"status": "verified", "verified": True, "channel_id": "c0real", "title": "Shop"}
+    )
+    publishing_flow.active_flows["u1"] = {"step": "channel", "flow_kind": "real"}
+    forwarded_message = {
+        "new_message": {
+            "forwarded_from": {
+                "chat_id": "c0real",
+                "object_guid": "c0real",
+            }
+        }
+    }
+
+    with patch("src.database.pool", mock_db):
+        with patch.object(publishing_flow.DestinationService, "can_register", new_callable=AsyncMock, return_value=(True, None)) as can_register:
+            with patch.object(publishing_flow.DestinationService, "record_verification", new_callable=AsyncMock, return_value=destination) as record:
+                with patch.object(publishing_flow.PublishingProgramService, "save_draft", new_callable=AsyncMock):
+                    await publishing_flow.handle_text(mock_bot_client, "u1", "", forwarded_message)
+
+    mock_bot_client.verify_destination_channel.assert_awaited_once_with("c0real")
+    can_register.assert_awaited_once_with("u1", "c0real")
+    record.assert_awaited_once()
+    assert record.await_args.args[1] == "c0real"
+    assert publishing_flow.active_flows["u1"]["step"] == "content_choice"
+
+
+@pytest.mark.asyncio
 async def test_full_channel_capacity_offers_reuse_replace_and_upgrade(mock_bot_client, mock_db):
     publishing_flow.active_flows["u1"] = {"step": "channel", "flow_kind": "real"}
 
