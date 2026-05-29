@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional
 from rubpy import BotClient
 from rubpy.bot.exceptions import APIException
@@ -14,6 +15,21 @@ from src.bot.text import format_rtl_message
 OFFSET_FILE = "logs/bot_offset.json"
 
 _OFFSET_KEY = "offset_id"
+
+_RUBIKA_GUID_RE = re.compile(r"^[A-Za-z][0-9][A-Za-z0-9_-]{4,}$")
+
+
+def _looks_like_rubika_guid(value: str) -> bool:
+    return bool(_RUBIKA_GUID_RE.match(str(value or "").strip()))
+
+
+def _map_api_exception_status(exc: APIException) -> str:
+    status = getattr(exc, "status", None)
+    if status == "INVALID_ACCESS":
+        return "invalid_access"
+    if status == "INVALID_INPUT":
+        return "invalid_input"
+    return "api_error"
 
 
 async def _load_offset_db() -> Optional[str]:
@@ -142,29 +158,56 @@ class RubikaClient:
     async def verify_destination_channel(self, channel_id: str) -> Dict[str, Any]:
         """Verify that the bot can publish to a destination channel."""
         try:
-            chat = await self._bot.get_chat(channel_id)
-            chat_id = getattr(chat, "chat_id", None) or getattr(chat, "object_guid", None) or channel_id
-            title = getattr(chat, "title", None)
+            chat_id = channel_id
+            title = None
+            should_check_admins = True
 
-            me = await self._bot.get_me()
-            bot_id = (
-                getattr(me, "bot_id", None)
-                or getattr(me, "user_id", None)
-                or getattr(me, "id", None)
-            )
-            admins = await self._bot.get_chat_administrators(chat_id)
-            members = admins.get("members", admins) if isinstance(admins, dict) else admins
-            admin_ids = {
-                str(member.get("user_id") if isinstance(member, dict) else getattr(member, "user_id", ""))
-                for member in (members or [])
-            }
-            if str(bot_id) not in admin_ids:
-                return {"verified": False, "status": "not_admin", "title": title}
+            try:
+                chat = await self._bot.get_chat(channel_id)
+                chat_id = getattr(chat, "chat_id", None) or getattr(chat, "object_guid", None) or channel_id
+                title = getattr(chat, "title", None)
+            except APIException as exc:
+                if not _looks_like_rubika_guid(channel_id):
+                    raise
+                should_check_admins = False
+                logger.warning(
+                    f"get_chat blocked for real channel id {channel_id}: {exc}; probing send access directly"
+                )
 
-            probe = await self._bot.send_message(
-                chat_id=str(chat_id),
-                text="بررسی دسترسی انتشار Rubifo. این پیام به‌صورت خودکار حذف می‌شود.",
-            )
+            if should_check_admins:
+                try:
+                    me = await self._bot.get_me()
+                    bot_id = (
+                        getattr(me, "bot_id", None)
+                        or getattr(me, "user_id", None)
+                        or getattr(me, "id", None)
+                    )
+                    admins = await self._bot.get_chat_administrators(chat_id)
+                    members = admins.get("members", admins) if isinstance(admins, dict) else admins
+                    admin_ids = {
+                        str(member.get("user_id") if isinstance(member, dict) else getattr(member, "user_id", ""))
+                        for member in (members or [])
+                    }
+                    if str(bot_id) not in admin_ids:
+                        return {"verified": False, "status": "not_admin", "title": title}
+                except APIException as exc:
+                    logger.warning(
+                        f"admin lookup unavailable for destination {chat_id}: {exc}; probing send access directly"
+                    )
+
+            try:
+                probe = await self._bot.send_message(
+                    chat_id=str(chat_id),
+                    text="بررسی دسترسی انتشار Rubifo. این پیام به‌صورت خودکار حذف می‌شود.",
+                )
+            except APIException as exc:
+                return {
+                    "verified": False,
+                    "status": "cannot_publish",
+                    "title": title,
+                    "channel_id": str(chat_id),
+                    "error": str(exc),
+                }
             message_id = (
                 probe.get("message_id")
                 if isinstance(probe, dict)
@@ -183,16 +226,9 @@ class RubikaClient:
                 }
             return {"verified": True, "status": "verified", "title": title, "channel_id": str(chat_id)}
         except APIException as exc:
-            status = getattr(exc, "status", None)
-            if status == "INVALID_ACCESS":
-                mapped_status = "invalid_access"
-            elif status == "INVALID_INPUT":
-                mapped_status = "invalid_input"
-            else:
-                mapped_status = "api_error"
             return {
                 "verified": False,
-                "status": mapped_status,
+                "status": _map_api_exception_status(exc),
                 "error": str(exc),
             }
         except Exception as exc:
@@ -405,7 +441,9 @@ class RubikaClient:
                 forwarded = msg.get("forwarded_from") or {}
                 if forwarded:
                     entry["forwarded_from_chat"] = str(
-                        forwarded.get("chat_id") or forwarded.get("object_guid", "")
+                        forwarded.get("from_chat_id")
+                        or forwarded.get("chat_id")
+                        or forwarded.get("object_guid", "")
                     )
                     entry["forwarded_message_id"] = str(msg.get("message_id", ""))
 
@@ -528,7 +566,8 @@ class RufifoBot:
                         (update.get("new_message") or {}).get("file") or
                         (update.get("new_message") or {}).get("sticker")
                     )
-                    if user_id and (text or has_media):
+                    has_forwarded = bool((update.get("new_message") or {}).get("forwarded_from"))
+                    if user_id and (text or has_media or has_forwarded):
                         logger.info(f"New message from {user_id}: {text[:80]}")
                         try:
                             await route_message(self.client, user_id, update)

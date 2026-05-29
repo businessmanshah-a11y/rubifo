@@ -154,7 +154,9 @@ async def _handle_webhook_payload(data: dict) -> JSONResponse:
         entry = {"user_id": str(chat_id), "text": text, "new_message": msg}
         fwd = msg.get("forwarded_from") or {}
         if fwd:
-            entry["forwarded_from_chat"] = str(fwd.get("chat_id") or fwd.get("object_guid", ""))
+            entry["forwarded_from_chat"] = str(
+                fwd.get("from_chat_id") or fwd.get("chat_id") or fwd.get("object_guid", "")
+            )
             entry["forwarded_message_id"] = str(msg.get("message_id", ""))
     elif update_type == "StartedBot":
         entry = {"user_id": str(chat_id), "text": "/start", "new_message": {}}

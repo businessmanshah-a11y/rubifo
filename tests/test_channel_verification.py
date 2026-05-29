@@ -92,3 +92,43 @@ async def test_verify_destination_reports_unknown_api_error_separately():
 
     assert result["status"] == "api_error"
     assert result["verified"] is False
+
+
+@pytest.mark.asyncio
+async def test_verify_destination_can_probe_forwarded_real_chat_id_when_get_chat_is_blocked():
+    client = client_with_bot()
+    client._bot.get_chat.side_effect = APIException(status="INVALID_ACCESS")
+    client._bot.send_message.return_value = SimpleNamespace(message_id="m1")
+
+    result = await client.verify_destination_channel("c0real")
+
+    assert result["status"] == "verified"
+    assert result["verified"] is True
+    client._bot.send_message.assert_awaited_once()
+    client._bot.delete_message.assert_awaited_once_with("c0real", "m1")
+
+
+@pytest.mark.asyncio
+async def test_verify_destination_probes_when_admin_list_is_unavailable():
+    client = client_with_bot()
+    client._bot.get_chat.return_value = SimpleNamespace(chat_id="c1", title="Shop")
+    client._bot.get_me.return_value = SimpleNamespace(bot_id="b1")
+    client._bot.get_chat_administrators.side_effect = APIException(status="INVALID_ACCESS")
+    client._bot.send_message.return_value = SimpleNamespace(message_id="m1")
+
+    result = await client.verify_destination_channel("c1")
+
+    assert result["status"] == "verified"
+    assert result["verified"] is True
+
+
+@pytest.mark.asyncio
+async def test_verify_destination_reports_cannot_publish_when_probe_send_is_rejected():
+    client = client_with_bot()
+    client._bot.get_chat.side_effect = APIException(status="INVALID_ACCESS")
+    client._bot.send_message.side_effect = APIException(status="INVALID_ACCESS")
+
+    result = await client.verify_destination_channel("c0real")
+
+    assert result["status"] == "cannot_publish"
+    assert result["verified"] is False

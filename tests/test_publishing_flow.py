@@ -129,6 +129,40 @@ async def test_forwarded_channel_message_verifies_real_chat_id(mock_bot_client, 
 
 
 @pytest.mark.asyncio
+async def test_forwarded_channel_message_uses_rubika_from_chat_id(mock_bot_client, mock_db):
+    destination = SimpleNamespace(id=8, channel_id="c0from")
+    mock_bot_client.verify_destination_channel = AsyncMock(
+        return_value={"status": "verified", "verified": True, "channel_id": "c0from", "title": "Shop"}
+    )
+    publishing_flow.active_flows["u1"] = {"step": "channel", "flow_kind": "real"}
+    forwarded_message = {
+        "new_message": {
+            "text": "متن پست فوروارد شده که آیدی کانال نیست",
+            "forwarded_from": {
+                "type_from": "Channel",
+                "from_chat_id": "c0from",
+                "message_id": "m1",
+            },
+        }
+    }
+
+    with patch("src.database.pool", mock_db):
+        with patch.object(publishing_flow.DestinationService, "can_register", new_callable=AsyncMock, return_value=(True, None)):
+            with patch.object(publishing_flow.DestinationService, "record_verification", new_callable=AsyncMock, return_value=destination) as record:
+                with patch.object(publishing_flow.PublishingProgramService, "save_draft", new_callable=AsyncMock):
+                    await publishing_flow.handle_text(
+                        mock_bot_client,
+                        "u1",
+                        "متن پست فوروارد شده که آیدی کانال نیست",
+                        forwarded_message,
+                    )
+
+    mock_bot_client.verify_destination_channel.assert_awaited_once_with("c0from")
+    assert record.await_args.args[1] == "c0from"
+    assert publishing_flow.active_flows["u1"]["step"] == "content_choice"
+
+
+@pytest.mark.asyncio
 async def test_full_channel_capacity_offers_reuse_replace_and_upgrade(mock_bot_client, mock_db):
     publishing_flow.active_flows["u1"] = {"step": "channel", "flow_kind": "real"}
 

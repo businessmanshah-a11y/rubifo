@@ -167,7 +167,11 @@ def _forwarded_channel_identifier(message: Optional[Dict[str, Any]]) -> Optional
         return None
     new_message = message.get("new_message") if isinstance(message, dict) else None
     forwarded = (new_message or {}).get("forwarded_from") or {}
-    identifier = forwarded.get("chat_id") or forwarded.get("object_guid")
+    identifier = (
+        forwarded.get("from_chat_id")
+        or forwarded.get("chat_id")
+        or forwarded.get("object_guid")
+    )
     return str(identifier).strip() if identifier else None
 
 
