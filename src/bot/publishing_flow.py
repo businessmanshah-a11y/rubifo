@@ -144,20 +144,19 @@ async def _prompt_channel(client, user_id: str, state: Dict[str, Any]) -> None:
     from src.database import pool
 
     channels = await DestinationService(pool).list_verified(user_id)
-    known = ""
+    previous = ""
     if channels:
-        known = "\nکانال‌های تاییدشده شما:\n" + "\n".join(
+        previous = "\n\nکانال‌های تاییدشده قبلی شما:\n" + "\n".join(
             f"{index}. {channel.channel_id}" for index, channel in enumerate(channels, 1)
         )
     await client.send_message(
         user_id,
-        "کانال مقصد همان جایی است که پست‌ها منتشر می‌شوند.\n"
-        "ابتدا Rubifo را در آن کانال ادمین کنید و اجازه ارسال پست بدهید.\n"
-        "سپس یکی از این‌ها را بفرستید:\n"
-        "@my_channel\n"
-        "https://rubika.ir/my_channel\n"
-        "یا یک پست فورواردشده از همان کانال."
-        f"{known}\n\nبعد از رفع خطا، آدرس کانال یا پست فورواردشده را دوباره ارسال کنید.",
+        "کانال مقصد همان جایی است که پست‌ها منتشر می‌شوند.\n\n"
+        "ابتدا این مراحل را انجام دهید:\n"
+        "۱. ربات Rubifo را به عنوان عضو به کانال مقصد اضافه کنید\n"
+        "۲. ربات را ادمین کنید و همه دسترسی‌ها (خصوصاً ارسال پیام) را فعال کنید\n"
+        "۳. یکی از پیام‌های همان کانال را اینجا فوروارد کنید"
+        f"{previous}",
         inline_keypad=_inline_choices(*[channel.channel_id for channel in channels]) if channels else None,
     )
 
@@ -222,6 +221,21 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
 
         if state["step"] == "channel":
             forwarded_channel_id = _forwarded_channel_identifier(message)
+            # Accept inline-button taps (previously-verified channel IDs) as text input
+            is_known_channel = any(
+                ch.channel_id == value
+                for ch in await DestinationService(pool).list_verified(user_id)
+            )
+            if not forwarded_channel_id and not is_known_channel:
+                await client.send_message(
+                    user_id,
+                    "لطفاً یک پیام از کانال مقصد را اینجا فوروارد کنید.\n\n"
+                    "اگر هنوز ربات را ادمین نکرده‌اید:\n"
+                    "۱. Rubifo را در کانال مقصد عضو و ادمین کنید\n"
+                    "۲. همه دسترسی‌ها (خصوصاً ارسال پیام) را فعال کنید\n"
+                    "۳. یکی از پیام‌های همان کانال را اینجا فوروارد کنید",
+                )
+                return True
             try:
                 channel_id = forwarded_channel_id or DestinationService.normalize_channel_input(value)
             except ValueError as exc:
@@ -487,14 +501,72 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
             if not cadence:
                 await _prompt_cadence(client, user_id)
                 return True
-            state.update({"cadence": cadence, "step": "timing"})
+            if cadence == "exact_times":
+                state.update({"cadence": cadence, "step": "timing"})
+                await _persist(user_id, state)
+                await client.send_message(user_id, "ساعت‌های انتشار را بنویسید؛ مثال: 09:00 14:00 20:00")
+            else:
+                state.update({"cadence": cadence, "step": "timing_start"})
+                await _persist(user_id, state)
+                await _prompt_timing_start(client, user_id)
+            return True
+
+        if state["step"] == "timing_start":
+            try:
+                start_time = format_hhmm(value)
+            except ValueError:
+                await client.send_message(user_id, "❌ ساعت معتبر نیست. عدد ساعت را بنویسید، مثلاً: ۸ یا ۰۸:۳۰")
+                return True
+            state.update({"timing_start": start_time, "step": "timing_end"})
             await _persist(user_id, state)
-            examples = {
-                "interval": "بازه و فاصله را بفرستید؛ مثال: 08:00 تا 23:59 | 120",
-                "daily_count": "بازه و تعداد روزانه را بفرستید؛ مثال: 08:00 تا 23:59 | 3",
-                "exact_times": "ساعت‌ها را بفرستید؛ مثال: 09:00 14:00 20:00",
+            await _prompt_timing_end(client, user_id)
+            return True
+
+        if state["step"] == "timing_end":
+            try:
+                end_time = format_hhmm(value)
+            except ValueError:
+                await client.send_message(user_id, "❌ ساعت معتبر نیست. عدد ساعت را بنویسید، مثلاً: ۲۳ یا ۲۳:۰۰")
+                return True
+            state.update({"timing_end": end_time, "step": "timing_value"})
+            await _persist(user_id, state)
+            await _prompt_timing_value(client, user_id, state["cadence"])
+            return True
+
+        if state["step"] == "timing_value":
+            try:
+                number = int(value.strip())
+                if number <= 0:
+                    raise ValueError()
+            except ValueError:
+                label = "دقیقه" if state["cadence"] == "interval" else "تعداد پست"
+                await client.send_message(user_id, f"❌ عدد معتبر نیست. لطفاً {label} را به صورت عدد بنویسید.")
+                return True
+            config: Dict[str, Any] = {
+                "program_mode": state["program_mode"],
+                "cadence": state["cadence"],
+                "start_time": state["timing_start"],
+                "end_time": state["timing_end"],
             }
-            await client.send_message(user_id, examples[cadence])
+            if state["cadence"] == "interval":
+                config["interval_minutes"] = number
+            else:
+                config["daily_count"] = number
+            if state["program_mode"] == "dated":
+                config.update({"start_date": state["start_date"], "end_date": state["end_date"]})
+            PublishingProgramConfig(**config)
+            state.update({"config": config, "step": "confirm"})
+            await _persist(user_id, state)
+            source = state["source"]
+            destination = state["destination"]
+            await client.send_message(
+                user_id,
+                f"دسته محتوا: {source.name}\n"
+                f"کانال مقصد: {destination.channel_id}\n"
+                f"نحوه انتشار: {describe_plan('publishing_program', config)}\n\n"
+                f"برای ذخیره «{CONFIRM}» را بفرستید.",
+                inline_keypad=_inline_choices(CONFIRM),
+            )
             return True
 
         if state["step"] == "timing":
@@ -610,12 +682,36 @@ async def _prompt_cadence(client, user_id: str) -> None:
     )
 
 
+async def _prompt_timing_start(client, user_id: str) -> None:
+    await client.send_message(
+        user_id,
+        "از چه ساعتی شروع به انتشار شود؟\n(عدد ساعت را بنویسید، مثلاً: ۸ یا ۰۸:۳۰)",
+    )
+
+
+async def _prompt_timing_end(client, user_id: str) -> None:
+    await client.send_message(
+        user_id,
+        "تا چه ساعتی انتشار داشته باشد؟\n(مثلاً: ۲۳ یا ۲۳:۰۰)",
+    )
+
+
+async def _prompt_timing_value(client, user_id: str, cadence: str) -> None:
+    if cadence == "interval":
+        await client.send_message(user_id, "هر چند دقیقه یک پست منتشر شود؟\n(مثلاً: ۶۰ برای هر یک ساعت)")
+    else:
+        await client.send_message(user_id, "در طول این بازه زمانی چند پست روزانه منتشر شود؟")
+
+
 async def _repeat_step_prompt(client, user_id: str, state: Dict[str, Any]) -> None:
     prompts = {
         "channel": lambda: _prompt_channel(client, user_id, state),
         "content_choice": lambda: _prompt_content_choice(client, user_id),
         "purpose": lambda: _prompt_purpose(client, user_id),
         "cadence": lambda: _prompt_cadence(client, user_id),
+        "timing_start": lambda: _prompt_timing_start(client, user_id),
+        "timing_end": lambda: _prompt_timing_end(client, user_id),
+        "timing_value": lambda: _prompt_timing_value(client, user_id, state.get("cadence", "")),
     }
     if state["step"] in prompts:
         await prompts[state["step"]]()
