@@ -98,23 +98,17 @@ def _json_response(payload: dict, status_code: int = 200) -> JSONResponse:
     return response
 
 
-@app.post("/webhook")
-async def webhook(request: Request):
+async def _handle_webhook_payload(data: dict) -> JSONResponse:
+    """Shared handler for all Rubika webhook payloads."""
     from src.logger import logger
-    try:
-        data = await request.json()
-    except Exception:
-        return _json_response({"ok": False}, status_code=400)
 
     logger.info(f"[WEBHOOK] received keys={list(data.keys())} raw={str(data)[:200]}")
 
     if "inline_message" in data:
         msg = data.get("inline_message") or {}
         chat_id = msg.get("chat_id") or msg.get("sender_id")
-        btn_id = (msg.get("aux_data") or {}).get("button_id", "")
-        # Use the button's visible label text (what the user sees); fall back to button_id
-        text = (msg.get("text") or "").strip() or btn_id
-        logger.info(f"[WEBHOOK] inline_message chat_id={chat_id} text={text!r} btn_id={btn_id!r}")
+        text = (msg.get("aux_data") or {}).get("button_id", "").strip()
+        logger.info(f"[WEBHOOK] inline_message chat_id={chat_id} btn_id={text!r}")
         if not chat_id or not text:
             return _json_response({"ok": True})
         entry = {"user_id": str(chat_id), "text": text, "new_message": msg}
@@ -155,6 +149,39 @@ async def webhook(request: Request):
         asyncio.create_task(route_message(_bot_ref.client, str(chat_id), entry))
 
     return _json_response({"ok": True})
+
+
+# Rubika may POST to /webhook (base) OR /webhook/<type> depending on registration.
+# We register the base URL and handle all paths here.
+@app.post("/webhook")
+async def webhook(request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        return _json_response({"ok": False}, status_code=400)
+    return await _handle_webhook_payload(data)
+
+
+@app.post("/webhook/receiveInlineMessage")
+async def webhook_inline(request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        return _json_response({"ok": False}, status_code=400)
+    # Rubika sends inline click payload directly (not wrapped in "inline_message")
+    # Normalize it so _handle_webhook_payload can process it uniformly.
+    if "inline_message" not in data and "update" not in data:
+        data = {"inline_message": data}
+    return await _handle_webhook_payload(data)
+
+
+@app.post("/webhook/receiveUpdate")
+async def webhook_update(request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        return _json_response({"ok": False}, status_code=400)
+    return await _handle_webhook_payload(data)
 
 
 # ─────────────────────────────────────────────────────────────
