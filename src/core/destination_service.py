@@ -38,8 +38,8 @@ class DestinationService:
             INSERT INTO destination_channels
               (user_id, channel_id, title, verification_status, verification_error,
                verified_at, is_active)
-            VALUES ($1, $2, $3, $4, $5,
-                    CASE WHEN $4 IN ('verified', 'cleanup_failed') THEN NOW() END, true)
+            VALUES ($1, $2, $3, $4::varchar(30), $5,
+                    CASE WHEN $4::varchar IN ('verified', 'cleanup_failed') THEN NOW() END, true)
             ON CONFLICT (user_id, channel_id) WHERE is_active = true
             DO UPDATE SET title = EXCLUDED.title,
                           verification_status = EXCLUDED.verification_status,

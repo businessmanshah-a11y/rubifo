@@ -44,6 +44,7 @@ async def test_record_verified_channel_upserts_a_persistent_destination(mock_db)
     assert isinstance(destination, DestinationChannel)
     assert destination.channel_id == "@shop"
     assert "destination_channels" in mock_db.fetchrow.await_args.args[0]
+    assert "$4::varchar" in mock_db.fetchrow.await_args.args[0]
 
 
 @pytest.mark.asyncio
