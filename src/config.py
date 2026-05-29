@@ -3,14 +3,36 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _first_env(*names: str) -> str:
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value
+    return ""
+
 # Bot Configuration
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_NAME = "rubifo"
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Tehran")
 RUBIKA_INLINE_WEBHOOK_URL = os.getenv("RUBIKA_INLINE_WEBHOOK_URL")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 
 # Database
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/rubifo")
+DATABASE_URL = _first_env(
+    "DATABASE_URL",
+    "DB_URL",
+    "POSTGRES_URL",
+    "POSTGRESQL_URL",
+    "POSTGRES_DATABASE_URL",
+)
+if not DATABASE_URL:
+    if ENVIRONMENT in {"production", "prod", "staging"}:
+        raise RuntimeError(
+            "DATABASE_URL is required in production/staging. "
+            "Set it to the managed PostgreSQL connection string in the hosting panel."
+        )
+    DATABASE_URL = "postgresql://user:password@localhost:5432/rubifo"
 
 # Payment Gateway
 ZARINPAL_MERCHANT_ID = os.getenv("ZARINPAL_MERCHANT_ID")
