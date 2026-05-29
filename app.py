@@ -151,6 +151,24 @@ async def _handle_webhook_payload(data: dict) -> JSONResponse:
     return _json_response({"ok": True})
 
 
+# Rubika validates the webhook endpoint with HEAD before sending events.
+# We must respond 200 to HEAD on all webhook paths, otherwise Rubika
+# considers the endpoint invalid and never delivers button click events.
+@app.api_route("/webhook", methods=["GET", "HEAD"])
+async def webhook_health(request: Request):
+    return _json_response({"ok": True})
+
+
+@app.api_route("/webhook/receiveInlineMessage", methods=["GET", "HEAD"])
+async def webhook_inline_health(request: Request):
+    return _json_response({"ok": True})
+
+
+@app.api_route("/webhook/receiveUpdate", methods=["GET", "HEAD"])
+async def webhook_update_health(request: Request):
+    return _json_response({"ok": True})
+
+
 # Rubika may POST to /webhook (base) OR /webhook/<type> depending on registration.
 # We register the base URL and handle all paths here.
 @app.post("/webhook")
@@ -168,10 +186,18 @@ async def webhook_inline(request: Request):
         data = await request.json()
     except Exception:
         return _json_response({"ok": False}, status_code=400)
-    # Rubika sends inline click payload directly (not wrapped in "inline_message")
-    # Normalize it so _handle_webhook_payload can process it uniformly.
+    # Normalize in case Rubika sends the payload unwrapped at this typed path
     if "inline_message" not in data and "update" not in data:
         data = {"inline_message": data}
+    return await _handle_webhook_payload(data)
+
+
+@app.post("/webhook/receiveUpdate")
+async def webhook_update(request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        return _json_response({"ok": False}, status_code=400)
     return await _handle_webhook_payload(data)
 
 
