@@ -172,3 +172,38 @@ async def test_paas_startup_requires_inline_webhook_url(monkeypatch):
 
     with pytest.raises(RuntimeError, match="RUBIKA_INLINE_WEBHOOK_URL"):
         await app.main()
+
+
+@pytest.mark.asyncio
+async def test_startup_continues_when_inline_webhook_registration_fails(monkeypatch):
+    import src.bot.main as bot_main
+    import src.database as database
+
+    class FakePool:
+        async def execute(self, *args, **kwargs):
+            return None
+
+    class FakeClient:
+        async def register_inline_webhook(self, url):
+            raise RuntimeError("Rubika webhook registration failed: InvalidUrl")
+
+    class FakeBot:
+        def __init__(self, token):
+            self.client = None
+
+        async def start_webhook_mode(self):
+            return None
+
+    monkeypatch.setattr(database, "init_db", AsyncMock())
+    monkeypatch.setattr(database, "pool", FakePool())
+    monkeypatch.setattr(config, "BOT_TOKEN", "token")
+    monkeypatch.setattr(config, "RUBIKA_INLINE_WEBHOOK_URL", "https://rubifo.ir/webhook")
+    monkeypatch.setattr(bot_main, "RufifoBot", FakeBot)
+    monkeypatch.setattr(bot_main, "RubikaClient", lambda token: FakeClient())
+
+    def close_created_coroutine(coro):
+        coro.close()
+
+    monkeypatch.setattr(app.asyncio, "create_task", close_created_coroutine)
+
+    await app._startup()

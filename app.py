@@ -261,8 +261,7 @@ async def _startup():
             await bot.client.register_inline_webhook(RUBIKA_INLINE_WEBHOOK_URL)
             logger.info(f"Inline webhook registered: {RUBIKA_INLINE_WEBHOOK_URL}")
         except Exception as e:
-            logger.error(f"Failed to register inline webhook: {e}")
-            raise
+            logger.error(f"Failed to register inline webhook; continuing with polling fallback: {e}")
 
     asyncio.create_task(bot.start_webhook_mode())
     logger.info("Bot started (polling + inline webhook)")
