@@ -32,7 +32,7 @@ def _make_inline_keypad(buttons: List[Tuple[str, str]], cols: int = 2):
     rows = []
     for i in range(0, len(buttons), cols):
         row_buttons = [
-            Button(id=btn_id, type=ButtonTypeEnum.SIMPLE, button_text=label)
+            Button(id=label, type=ButtonTypeEnum.SIMPLE, button_text=label)
             for label, btn_id in buttons[i:i + cols]
         ]
         rows.append(KeypadRow(buttons=row_buttons))
