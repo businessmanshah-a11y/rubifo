@@ -124,7 +124,12 @@ class RubikaClient:
         """Register the endpoint that receives InlineKeypad clicks."""
         if not webhook_url.startswith("https://"):
             raise ValueError("RUBIKA_INLINE_WEBHOOK_URL must be HTTPS")
-        await self._bot.update_bot_endpoints(webhook_url, "ReceiveInlineMessage")
+        for endpoint_type in ("ReceiveInlineMessage", "ReceiveQuery"):
+            try:
+                result = await self._bot.update_bot_endpoints(webhook_url, endpoint_type)
+                logger.info(f"[WEBHOOK-REG] {endpoint_type} → {webhook_url} | response={result}")
+            except Exception as e:
+                logger.error(f"[WEBHOOK-REG] {endpoint_type} failed: {e}")
 
     async def verify_destination_channel(self, channel_id: str) -> Dict[str, Any]:
         """Verify that the bot can publish to a destination channel."""
@@ -342,6 +347,20 @@ class RubikaClient:
             if update_type == "StartedBot":
                 started_bot_users.add(str(chat_id))
 
+            elif update_type == "InlineMessage":
+                # Rubika delivers inline keypad button clicks via polling
+                # when no ReceiveInlineMessage webhook is registered.
+                text = (update.get("aux_data") or {}).get("button_id", "").strip()
+                if not text:
+                    text = (update.get("text") or "").strip()
+                logger.info(f"[POLL] InlineMessage from {chat_id} btn_id={text!r} raw={str(update)[:200]}")
+                if text:
+                    messages.append({
+                        "user_id": str(chat_id),
+                        "text": text,
+                        "new_message": update,
+                    })
+
             elif update_type == "NewMessage":
                 msg = update.get("new_message") or {}
                 text = (msg.get("text") or "").strip()
@@ -375,7 +394,7 @@ class RubikaClient:
                     messages.append(entry)
 
             else:
-                logger.info(f"Unknown update type: {update_type} | raw: {update}")
+                logger.info(f"[POLL] unknown update type={update_type!r} raw={str(update)[:200]}")
 
         # Add /start for users who had StartedBot but no NewMessage /start
         for uid in started_bot_users:
