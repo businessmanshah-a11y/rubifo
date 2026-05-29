@@ -98,6 +98,23 @@ def _json_response(payload: dict, status_code: int = 200) -> JSONResponse:
     return response
 
 
+async def _register_inline_webhook_after_startup(client, webhook_url: str) -> None:
+    """Register Rubika inline webhook after ASGI startup has returned.
+
+    Rubika validates the URL during updateBotEndpoints. If this runs inside the
+    FastAPI startup handler, Uvicorn has not started accepting requests yet and
+    Rubika can reject an otherwise healthy URL as InvalidUrl.
+    """
+    from src.logger import logger
+
+    await asyncio.sleep(5)
+    try:
+        await client.register_inline_webhook(webhook_url)
+        logger.info(f"Inline webhook registered: {webhook_url}")
+    except Exception as e:
+        logger.error(f"Failed to register inline webhook; continuing with polling fallback: {e}")
+
+
 async def _handle_webhook_payload(data: dict) -> JSONResponse:
     """Shared handler for all Rubika webhook payloads."""
     from src.logger import logger
@@ -257,11 +274,10 @@ async def _startup():
     _bot_ref = bot
 
     if RUBIKA_INLINE_WEBHOOK_URL:
-        try:
-            await bot.client.register_inline_webhook(RUBIKA_INLINE_WEBHOOK_URL)
-            logger.info(f"Inline webhook registered: {RUBIKA_INLINE_WEBHOOK_URL}")
-        except Exception as e:
-            logger.error(f"Failed to register inline webhook; continuing with polling fallback: {e}")
+        asyncio.create_task(
+            _register_inline_webhook_after_startup(bot.client, RUBIKA_INLINE_WEBHOOK_URL)
+        )
+        logger.info(f"Inline webhook registration scheduled: {RUBIKA_INLINE_WEBHOOK_URL}")
 
     asyncio.create_task(bot.start_webhook_mode())
     logger.info("Bot started (polling + inline webhook)")

@@ -207,3 +207,46 @@ async def test_startup_continues_when_inline_webhook_registration_fails(monkeypa
     monkeypatch.setattr(app.asyncio, "create_task", close_created_coroutine)
 
     await app._startup()
+
+
+@pytest.mark.asyncio
+async def test_startup_defers_inline_webhook_registration_until_after_server_ready(monkeypatch):
+    import src.bot.main as bot_main
+    import src.database as database
+
+    class FakePool:
+        async def execute(self, *args, **kwargs):
+            return None
+
+    class FakeClient:
+        register_called = False
+
+        async def register_inline_webhook(self, url):
+            self.register_called = True
+
+    class FakeBot:
+        def __init__(self, token):
+            self.client = None
+
+        async def start_webhook_mode(self):
+            return None
+
+    scheduled = []
+
+    def capture_created_coroutine(coro):
+        scheduled.append(coro)
+        coro.close()
+
+    monkeypatch.setattr(database, "init_db", AsyncMock())
+    monkeypatch.setattr(database, "pool", FakePool())
+    monkeypatch.setattr(config, "BOT_TOKEN", "token")
+    monkeypatch.setattr(config, "RUBIKA_INLINE_WEBHOOK_URL", "https://rubifo.ir/webhook")
+    monkeypatch.setattr(bot_main, "RufifoBot", FakeBot)
+    fake_client = FakeClient()
+    monkeypatch.setattr(bot_main, "RubikaClient", lambda token: fake_client)
+    monkeypatch.setattr(app.asyncio, "create_task", capture_created_coroutine)
+
+    await app._startup()
+
+    assert fake_client.register_called is False
+    assert len(scheduled) == 2
