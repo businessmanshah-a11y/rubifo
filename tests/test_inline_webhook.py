@@ -6,6 +6,7 @@ import pytest
 
 import app
 import src.config as config
+from src.bot import commands, handlers
 from src.bot.main import RubikaClient
 
 
@@ -50,6 +51,14 @@ def test_main_keypad_uses_publishing_program_language():
     assert "📦 سورس‌های من" not in labels
 
 
+def test_inline_keypad_uses_payload_as_button_id():
+    keypad = commands._make_inline_keypad([("Visible label", "stable_payload")], cols=1)
+    button = keypad.rows[0].buttons[0]
+
+    assert button.id == "stable_payload"
+    assert button.button_text == "Visible label"
+
+
 @pytest.mark.asyncio
 async def test_registers_only_inline_message_endpoint():
     client = RubikaClient.__new__(RubikaClient)
@@ -61,6 +70,16 @@ async def test_registers_only_inline_message_endpoint():
         "https://app.example/webhook",
         "ReceiveInlineMessage",
     )
+
+
+@pytest.mark.asyncio
+async def test_inline_webhook_registration_raises_on_rubika_rejection():
+    client = RubikaClient.__new__(RubikaClient)
+    client._bot = AsyncMock(return_value={"status": "InvalidUrl"})
+    client._bot.update_bot_endpoints = AsyncMock(return_value={"status": "InvalidUrl"})
+
+    with pytest.raises(RuntimeError, match="InvalidUrl"):
+        await client.register_inline_webhook("https://app.example/webhook")
 
 
 @pytest.mark.asyncio
@@ -92,6 +111,46 @@ async def test_inline_webhook_routes_button_id(monkeypatch):
     route.assert_awaited_once()
     assert route.await_args.args[1] == "u1"
     assert route.await_args.args[2]["text"] == "🧪 برنامه آزمایشی و آموزشی"
+
+
+@pytest.mark.asyncio
+async def test_route_stable_new_program_button_id(monkeypatch):
+    client = AsyncMock()
+
+    with patch("src.bot.handlers.publishing_flow.begin_program", new_callable=AsyncMock) as begin:
+        await handlers.route_message(client, "u1", {"text": "new_program", "new_message": {}})
+
+    begin.assert_awaited_once_with(client, "u1")
+
+
+@pytest.mark.asyncio
+async def test_route_stable_source_button_ids(monkeypatch):
+    client = AsyncMock()
+
+    with patch("src.bot.commands.handle_viewsource", new_callable=AsyncMock) as viewsource:
+        await handlers.route_message(client, "u1", {"text": "viewsource_5", "new_message": {}})
+    viewsource.assert_awaited_once_with(client, "u1", 5)
+
+    with patch("src.bot.commands.handle_addpost", new_callable=AsyncMock) as addpost:
+        await handlers.route_message(client, "u1", {"text": "addpost_5", "new_message": {}})
+    addpost.assert_awaited_once_with(client, "u1", 5)
+
+
+@pytest.mark.asyncio
+async def test_route_stable_destination_button_ids(monkeypatch):
+    client = AsyncMock()
+
+    with patch("src.bot.commands.handle_destination_plans", new_callable=AsyncMock) as plans:
+        await handlers.route_message(client, "u1", {"text": "dst_plans_@shop", "new_message": {}})
+    plans.assert_awaited_once_with(client, "u1", "@shop")
+
+    with patch("src.bot.commands.handle_calendar_display", new_callable=AsyncMock) as calendar:
+        await handlers.route_message(client, "u1", {"text": "dst_cal_@shop", "new_message": {}})
+    calendar.assert_awaited_once_with(client, "u1", "@shop")
+
+    with patch("src.bot.commands.handle_calendar_display", new_callable=AsyncMock) as calendar:
+        await handlers.route_message(client, "u1", {"text": "cal_@shop", "new_message": {}})
+    calendar.assert_awaited_once_with(client, "u1", "@shop")
 
 
 @pytest.mark.asyncio

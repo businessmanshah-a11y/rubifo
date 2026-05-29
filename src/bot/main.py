@@ -124,12 +124,13 @@ class RubikaClient:
         """Register the endpoint that receives InlineKeypad clicks."""
         if not webhook_url.startswith("https://"):
             raise ValueError("RUBIKA_INLINE_WEBHOOK_URL must be HTTPS")
-        for endpoint_type in ("ReceiveInlineMessage", "ReceiveQuery"):
-            try:
-                result = await self._bot.update_bot_endpoints(webhook_url, endpoint_type)
-                logger.info(f"[WEBHOOK-REG] {endpoint_type} → {webhook_url} | response={result}")
-            except Exception as e:
-                logger.error(f"[WEBHOOK-REG] {endpoint_type} failed: {e}")
+        endpoint_type = "ReceiveInlineMessage"
+        result = await self._bot.update_bot_endpoints(webhook_url, endpoint_type)
+        status = result.get("status") if isinstance(result, dict) else None
+        if status and status != "OK":
+            logger.error(f"[WEBHOOK-REG] {endpoint_type} → {webhook_url} rejected: {result}")
+            raise RuntimeError(f"Rubika webhook registration failed: {status}")
+        logger.info(f"[WEBHOOK-REG] {endpoint_type} → {webhook_url} | response={result}")
 
     async def verify_destination_channel(self, channel_id: str) -> Dict[str, Any]:
         """Verify that the bot can publish to a destination channel."""

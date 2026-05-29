@@ -41,8 +41,15 @@ BUTTON_COMMAND_MAP = {
     "📊 گزارش‌ها": "/logs",
 }
 
-# Rubika SIMPLE buttons send their label text as the message (not button_id).
-# These patterns match the dynamic inline button labels and extract the channel.
+# Stable inline button IDs used by newly-sent InlineKeypads.
+_STABLE_VIEWSOURCE_BTN = re.compile(r"^viewsource_(\d+)$")
+_STABLE_ADDPOST_BTN = re.compile(r"^addpost_(\d+)$")
+_STABLE_DST_PLANS_BTN = re.compile(r"^dst_plans_(.+)$")
+_STABLE_DST_CAL_BTN = re.compile(r"^dst_cal_(.+)$")
+_STABLE_CAL_BTN = re.compile(r"^cal_(.+)$")
+
+# Legacy fallback for already-sent buttons on users' devices.
+# Older Rubifo messages used the visible label as the button ID.
 _INLINE_BTN_PATTERNS = [
     (re.compile(r"^📋 مسیرها \((.+)\)$"), "routes"),
     (re.compile(r"^📅 پلن‌ها \((.+)\)$"), "plans"),
@@ -62,6 +69,31 @@ _CAL_SELECT_BTN = re.compile(r"^[1-9️⃣️]+\s+(@\S+)$")
 
 async def _route_inline_button(client, user_id: str, text: str) -> bool:
     """Try to route dynamic inline button text. Returns True if matched."""
+    m = _STABLE_VIEWSOURCE_BTN.match(text)
+    if m:
+        await commands.handle_viewsource(client, user_id, int(m.group(1)))
+        return True
+
+    m = _STABLE_ADDPOST_BTN.match(text)
+    if m:
+        await commands.handle_addpost(client, user_id, int(m.group(1)))
+        return True
+
+    m = _STABLE_DST_PLANS_BTN.match(text)
+    if m:
+        await commands.handle_destination_plans(client, user_id, m.group(1))
+        return True
+
+    m = _STABLE_DST_CAL_BTN.match(text)
+    if m:
+        await commands.handle_calendar_display(client, user_id, m.group(1))
+        return True
+
+    m = _STABLE_CAL_BTN.match(text)
+    if m:
+        await commands.handle_calendar_display(client, user_id, m.group(1))
+        return True
+
     # Per-destination hub buttons
     for pattern, action in _INLINE_BTN_PATTERNS:
         m = pattern.match(text)
