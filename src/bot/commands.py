@@ -1044,7 +1044,7 @@ async def handle_calendar_display(client, user_id: int, target_channel_id: str) 
             msg += f"• {src}: {type_info} — {state}\n"
 
         inline_buttons = [
-            (f"📅 برنامه‌های {target_channel_id}", f"dst_plans_{target_channel_id}"),
+            (f"📅 برنامه‌ها ({target_channel_id})", f"dst_plans_{target_channel_id}"),
             ("➕ ساخت برنامه جدید", "new_program"),
         ]
         keypad = _make_inline_keypad(inline_buttons, cols=2)

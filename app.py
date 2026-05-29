@@ -110,12 +110,14 @@ async def webhook(request: Request):
 
     if "inline_message" in data:
         msg = data.get("inline_message") or {}
-        chat_id = msg.get("chat_id")
+        chat_id = msg.get("chat_id") or msg.get("sender_id")
         btn_id = (msg.get("aux_data") or {}).get("button_id", "")
-        logger.info(f"[WEBHOOK] inline_message chat_id={chat_id} btn_id={btn_id!r}")
-        if not chat_id or not btn_id:
+        # Use the button's visible label text (what the user sees); fall back to button_id
+        text = (msg.get("text") or "").strip() or btn_id
+        logger.info(f"[WEBHOOK] inline_message chat_id={chat_id} text={text!r} btn_id={btn_id!r}")
+        if not chat_id or not text:
             return _json_response({"ok": True})
-        entry = {"user_id": str(chat_id), "text": btn_id, "new_message": msg}
+        entry = {"user_id": str(chat_id), "text": text, "new_message": msg}
         client = _bot_ref.client if _bot_ref else None
         if client:
             from src.bot.handlers import route_message
