@@ -245,19 +245,32 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
                 return True
             allowed, error = await DestinationService(pool).can_register(user_id, channel_id)
             if not allowed:
-                state.update({"step": "channel_limit", "pending_channel_id": channel_id})
-                await _persist(user_id, state)
-                await client.send_message(
-                    user_id,
-                    f"{error}\n\n"
-                    "یکی از این اقدام‌ها را انتخاب کنید:\n"
-                    "ادامه با کانال ثبت‌شده\n"
-                    "جایگزینی کانال\n"
-                    "ارتقای اشتراک",
-                    inline_keypad=_inline_choices(
-                        "ادامه با کانال ثبت‌شده", "جایگزینی کانال", "ارتقای اشتراک"
-                    ),
-                )
+                if forwarded_channel_id:
+                    # Forwarded GUID may differ from the stored @handle for the same channel.
+                    # Showing the replace dialog here risks accidentally deactivating existing
+                    # programs — guide the user to pick from their verified channels instead.
+                    verified = await DestinationService(pool).list_verified(user_id)
+                    await client.send_message(
+                        user_id,
+                        "این کانال در لیست کانال‌های تاییدشده شما نیست و ظرفیت اضافه کردن کانال جدید ندارید.\n\n"
+                        "اگر کانال مقصد قبلاً ثبت شده، از دکمه‌های زیر آن را انتخاب کنید.\n"
+                        "برای جایگزینی یا حذف کانال، از «📍 کانال‌های من» اقدام کنید.",
+                        inline_keypad=_inline_choices(*[d.channel_id for d in verified]) if verified else None,
+                    )
+                else:
+                    state.update({"step": "channel_limit", "pending_channel_id": channel_id})
+                    await _persist(user_id, state)
+                    await client.send_message(
+                        user_id,
+                        f"{error}\n\n"
+                        "یکی از این اقدام‌ها را انتخاب کنید:\n"
+                        "ادامه با کانال ثبت‌شده\n"
+                        "جایگزینی کانال\n"
+                        "ارتقای اشتراک",
+                        inline_keypad=_inline_choices(
+                            "ادامه با کانال ثبت‌شده", "جایگزینی کانال", "ارتقای اشتراک"
+                        ),
+                    )
                 return True
             verification = await client.verify_destination_channel(channel_id)
             status = verification["status"]
