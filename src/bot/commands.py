@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta
 import asyncio
 from src.logger import logger
-from src.config import SUBSCRIPTION_TIERS
+from src.config import SUBSCRIPTION_TIERS, WEB_BASE_URL
 from src.utils import fmt_jalali_tehran, normalize_digits, to_jalali_date
 from src.integrations.zarinpal import create_zarinpal_gateway
 from src.core.professional_schedule import (
@@ -50,6 +50,13 @@ def _tier_name(tier: str) -> str:
 
 def _tier_price(tier: str) -> int:
     return SUBSCRIPTION_TIERS.get(tier, {}).get("price_monthly", 0)
+
+
+def _checkout_url(tier: Optional[str] = None) -> str:
+    base = WEB_BASE_URL.rstrip("/")
+    if tier:
+        return f"{base}/checkout?tier={tier}"
+    return f"{base}/checkout"
 
 
 def _plan_type_menu() -> str:
@@ -106,6 +113,17 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
         from src.core.user_service import UserService
 
         user = await UserService(pool).get_or_create_user(user_id, username)
+
+        if not user.phone_number or not user.password_hash or not user.onboarding_completed_at:
+            conversation_states[user_id] = {"command": "web_onboarding_phone"}
+            await client.send_message(
+                user_id,
+                "👋 خوش آمدید به Rubifo!\n\n"
+                "برای اینکه بعداً خرید اشتراک در وب‌سایت به همین حساب روبیکا وصل شود، "
+                "لطفاً شماره تماس خود را وارد کنید.\n\n"
+                "فرمت شماره: 09123456789"
+            )
+            return
 
         def _sub_line(u) -> str:
             if u.is_trial_active:
@@ -756,6 +774,70 @@ async def handle_conversation_response(client, user_id: int, text: str) -> None:
         await handle_addplan_professional_input(client, user_id, text)
     elif command == "addplan_confirm":
         await handle_addplan_confirm(client, user_id, text)
+    elif command == "web_onboarding_phone":
+        await handle_web_onboarding_phone(client, user_id, text)
+    elif command == "web_onboarding_password":
+        await handle_web_onboarding_password(client, user_id, text)
+
+
+async def handle_web_onboarding_phone(client, user_id: int, text: str) -> None:
+    """Collect and validate the website login phone number."""
+    try:
+        from src.core.user_service import UserService
+
+        phone_number = UserService.normalize_phone(text)
+    except ValueError:
+        conversation_states[user_id] = {"command": "web_onboarding_phone"}
+        await client.send_message(
+            user_id,
+            "❌ شماره تماس معتبر نیست.\n"
+            "لطفاً شماره موبایل را با فرمت 09xxxxxxxxx وارد کنید."
+        )
+        return
+
+    conversation_states[user_id] = {
+        "command": "web_onboarding_password",
+        "phone_number": phone_number,
+    }
+    await client.send_message(
+        user_id,
+        "✅ شماره تماس ثبت شد.\n\n"
+        "حالا یک رمز عبور ثابت برای ورود به وب‌سایت انتخاب کنید.\n"
+        "رمز باید حداقل ۶ کاراکتر باشد."
+    )
+
+
+async def handle_web_onboarding_password(client, user_id: int, text: str) -> None:
+    """Store website login credentials and finish onboarding."""
+    password = (text or "").strip()
+    if len(password) < 6:
+        await client.send_message(
+            user_id,
+            "❌ رمز عبور کوتاه است. لطفاً رمزی با حداقل ۶ کاراکتر وارد کنید."
+        )
+        return
+
+    state = conversation_states.get(user_id, {})
+    phone_number = state.get("phone_number")
+    if not phone_number:
+        conversation_states[user_id] = {"command": "web_onboarding_phone"}
+        await client.send_message(user_id, "لطفاً ابتدا شماره تماس را وارد کنید.")
+        return
+
+    try:
+        from src.database import pool
+        from src.core.user_service import UserService
+
+        await UserService(pool).set_web_credentials(user_id, phone_number, password)
+        conversation_states.pop(user_id, None)
+        await client.send_message(
+            user_id,
+            "✅ شماره تماس و رمز ورود وب‌سایت ثبت شد.\n\n"
+            "از این به بعد برای خرید یا تمدید اشتراک، /buy را بفرستید."
+        )
+    except Exception as e:
+        logger.error(f"web onboarding password error for user {user_id}: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 
 # ─────────────────────────────────────────────
@@ -1144,19 +1226,12 @@ async def handle_buy(client, user_id: int) -> None:
         await client.send_message(
             user_id,
             "💳 اشتراک‌های Rubifo\n\n"
-            "Rubifo برای حذف ادمین بارگذاری ساخته شده است؛ با کسری از هزینه حقوق ماهانه.\n"
-            "تریال برای تست ارزش اصلی است. با خرید، همه امکانات آزاد می‌شود و فقط تعداد کانال مقصد محدود است.\n\n"
-            f"📦 شروع حرفه‌ای\n"
-            f"   • 1 کانال مقصد | {_format_price(_tier_price('basic'))} تومان/ماه\n"
-            "   /buy_basic\n\n"
-            f"⭐ رشد\n"
-            f"   • 3 کانال مقصد | {_format_price(_tier_price('pro'))} تومان/ماه\n"
-            "   /buy_pro\n\n"
-            f"👑 مقیاس\n"
-            f"   • 10 کانال مقصد | {_format_price(_tier_price('enterprise'))} تومان/ماه\n"
-            "   /buy_enterprise\n\n"
-            "🏢 سازمانی\n"
-            "   • سفارشی، از 15,000,000 تومان/ماه — تماس با پشتیبانی"
+            "خرید و تمدید اشتراک از وب‌سایت انجام می‌شود تا پرداخت، رسید و فعال‌سازی "
+            "روی همین حساب روبیکا ثبت شود.\n\n"
+            f"لینک خرید:\n{_checkout_url()}\n\n"
+            f"📦 شروع حرفه‌ای: {_format_price(_tier_price('basic'))} تومان/ماه\n"
+            f"⭐ رشد: {_format_price(_tier_price('pro'))} تومان/ماه\n"
+            f"👑 مقیاس: {_format_price(_tier_price('enterprise'))} تومان/ماه"
         )
     except Exception as e:
         logger.error(f"/buy error: {e}")
@@ -1168,33 +1243,13 @@ async def handle_buy_tier(client, user_id: int, tier: str) -> None:
     if tier not in SUBSCRIPTION_TIERS:
         await client.send_message(user_id, "سطح اشتراک نامعتبر است.")
         return
-    try:
-        from src.database import pool
-        from src.core.subscription_service import SubscriptionService
-        amount = SUBSCRIPTION_TIERS[tier]["price_monthly"]
-        tier_fa = _tier_name(tier)
-        gateway = create_zarinpal_gateway(sandbox=True)
-        success, result = await gateway.request_payment(
-            amount=amount, description=f"اشتراک {tier_fa} - Rubifo", callback_url=None
-        )
-        if not success:
-            await client.send_message(user_id, f"خطا در درخواست پرداخت: {result}")
-            return
-
-        authority = result.split("/StartPay/")[-1]
-        pending_payments[authority] = {"user_id": user_id, "tier": tier, "amount": amount}
-        await client.send_message(
-            user_id,
-            f"لینک پرداخت پلن {tier_fa} ({_format_price(amount)} تومان):\n"
-            f"{result}\n\n"
-            "لطفا منتظر تأیید بمانید..."
-        )
-        asyncio.create_task(
-            verify_payment_polling(client, SubscriptionService(pool), authority, amount)
-        )
-    except Exception as e:
-        logger.error(f"/buy_{tier} error: {e}")
-        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+    amount = SUBSCRIPTION_TIERS[tier]["price_monthly"]
+    tier_fa = _tier_name(tier)
+    await client.send_message(
+        user_id,
+        f"برای خرید پلن {tier_fa} ({_format_price(amount)} تومان)، وارد وب‌سایت شوید:\n"
+        f"{_checkout_url(tier)}"
+    )
 
 
 async def verify_payment_polling(client, subscription_service, authority: str, amount: int) -> None:
@@ -1256,24 +1311,10 @@ async def handle_renew(client, user_id: int) -> None:
         tier = sub.tier
         amount = SUBSCRIPTION_TIERS.get(tier, {}).get("price_monthly", 0)
         tier_fa = _tier_name(tier)
-        gateway = create_zarinpal_gateway(sandbox=True)
-        success, result = await gateway.request_payment(
-            amount=amount, description=f"تمدید اشتراک {tier_fa} - Rubifo", callback_url=None
-        )
-        if not success:
-            await client.send_message(user_id, f"خطا: {result}")
-            return
-
-        authority = result.split("/StartPay/")[-1]
-        pending_payments[authority] = {"user_id": user_id, "tier": tier, "amount": amount, "is_renewal": True}
         await client.send_message(
             user_id,
-            f"لینک تمدید پلن {tier_fa} ({_format_price(amount)} تومان):\n"
-            f"{result}\n\n"
-            "لطفا منتظر تأیید بمانید..."
-        )
-        asyncio.create_task(
-            verify_renewal_payment_polling(client, SubscriptionService(pool), authority, amount)
+            f"تمدید پلن {tier_fa} ({_format_price(amount)} تومان) از وب‌سایت انجام می‌شود:\n"
+            f"{_checkout_url(tier)}"
         )
     except Exception as e:
         logger.error(f"/renew error: {e}")

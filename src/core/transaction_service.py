@@ -9,7 +9,13 @@ class TransactionService:
         self.db = db
 
     async def insert_transaction(
-        self, user_id: int, amount: int, tier: str, status: str, reference_id: str
+        self,
+        user_id: str,
+        amount: int,
+        tier: str,
+        status: str,
+        reference_id: str,
+        authority: Optional[str] = None,
     ) -> int:
         """Insert transaction record.
 
@@ -25,17 +31,36 @@ class TransactionService:
         """
         result = await self.db.fetchrow(
             "INSERT INTO transactions "
-            "(user_id, amount, tier, status, reference_id) "
-            "VALUES ($1, $2, $3, $4, $5) RETURNING id",
+            "(user_id, amount, tier, status, reference_id, authority) "
+            "VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
             user_id,
             amount,
             tier,
             status,
             reference_id,
+            authority,
         )
 
         transaction_id = result["id"] if result and "id" in result else 0
         logger.info(f"Transaction created: {transaction_id} for user {user_id}")
+        return transaction_id
+
+    async def create_pending_transaction(
+        self, user_id: str, amount: int, tier: str, authority: str
+    ) -> int:
+        """Create a durable pending payment transaction."""
+        result = await self.db.fetchrow(
+            "INSERT INTO transactions "
+            "(user_id, amount, tier, status, authority) "
+            "VALUES ($1, $2, $3, $4, $5) RETURNING id",
+            user_id,
+            amount,
+            tier,
+            "pending",
+            authority,
+        )
+        transaction_id = result["id"] if result and "id" in result else 0
+        logger.info(f"Pending transaction created: {transaction_id} for user {user_id}")
         return transaction_id
 
     async def get_transactions(
@@ -88,6 +113,13 @@ class TransactionService:
 
         return dict(result) if result else None
 
+    async def get_transaction_by_authority(self, authority: str):
+        """Get transaction by Zarinpal authority."""
+        result = await self.db.fetchrow(
+            "SELECT * FROM transactions WHERE authority = $1", authority
+        )
+        return dict(result) if result else None
+
     async def update_transaction_status(self, transaction_id: int, status: str) -> None:
         """Update transaction status.
 
@@ -100,6 +132,16 @@ class TransactionService:
         )
 
         logger.info(f"Transaction {transaction_id} status updated to {status}")
+
+    async def complete_transaction(self, transaction_id: int, reference_id: str) -> None:
+        """Mark a transaction completed with its gateway reference."""
+        await self.db.execute(
+            "UPDATE transactions SET status = $1, reference_id = $2 WHERE id = $3",
+            "completed",
+            reference_id,
+            transaction_id,
+        )
+        logger.info(f"Transaction {transaction_id} completed with ref {reference_id}")
 
     async def get_revenue_stats(self) -> Dict[str, Any]:
         """Get revenue statistics for completed transactions.

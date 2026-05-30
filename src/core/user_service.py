@@ -1,5 +1,7 @@
 from typing import Optional
 from datetime import datetime, timedelta
+import re
+import bcrypt
 from src.models.user import User
 from src.config import TRIAL_DURATION_HOURS
 from src.logger import logger
@@ -11,6 +13,32 @@ class UserService:
 
     def __init__(self, db):
         self.db = db
+
+    @staticmethod
+    def normalize_phone(phone_number: str) -> str:
+        """Normalize and validate an Iranian mobile phone number."""
+        from src.utils import normalize_digits
+
+        normalized = normalize_digits((phone_number or "").strip()).replace(" ", "")
+        normalized = normalized.replace("-", "")
+        if not re.fullmatch(r"09\d{9}", normalized):
+            raise ValueError("phone_number must be an Iranian mobile number like 09123456789")
+        return normalized
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        if len(password or "") < 6:
+            raise ValueError("password must be at least 6 characters")
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    @staticmethod
+    def verify_password(password: str, password_hash: str) -> bool:
+        try:
+            return bcrypt.checkpw(
+                (password or "").encode("utf-8"), (password_hash or "").encode("utf-8")
+            )
+        except Exception:
+            return False
 
     async def get_or_create_user(
         self, user_id: str, username: Optional[str] = None
@@ -55,6 +83,63 @@ class UserService:
             raise ValueError("user_id must be positive")
         result = await self.db.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
         return User(**dict(result)) if result else None
+
+    async def set_web_credentials(
+        self, user_id: str, phone_number: str, password: str
+    ) -> User:
+        """Store website login credentials for a Rubika user."""
+        normalized_phone = self.normalize_phone(phone_number)
+        password_hash = self.hash_password(password)
+
+        result = await self.db.fetchrow(
+            """
+            UPDATE users
+            SET phone_number = $1,
+                password_hash = $2,
+                onboarding_completed_at = NOW(),
+                updated_at = NOW()
+            WHERE user_id = $3
+            RETURNING *
+            """,
+            normalized_phone,
+            password_hash,
+            user_id,
+        )
+        if result:
+            return User(**dict(result))
+
+        await self.db.execute(
+            """
+            UPDATE users
+            SET phone_number = $1,
+                password_hash = $2,
+                onboarding_completed_at = NOW(),
+                updated_at = NOW()
+            WHERE user_id = $3
+            """,
+            normalized_phone,
+            password_hash,
+            user_id,
+        )
+        user = await self.get_user(user_id)
+        return user or User(user_id=user_id, phone_number=normalized_phone, password_hash=password_hash)
+
+    async def get_user_by_phone(self, phone_number: str) -> Optional[User]:
+        normalized_phone = self.normalize_phone(phone_number)
+        result = await self.db.fetchrow(
+            "SELECT * FROM users WHERE phone_number = $1", normalized_phone
+        )
+        return User(**dict(result)) if result else None
+
+    async def authenticate_web_user(
+        self, phone_number: str, password: str
+    ) -> Optional[User]:
+        user = await self.get_user_by_phone(phone_number)
+        if not user or not user.password_hash:
+            return None
+        if not self.verify_password(password, user.password_hash):
+            return None
+        return user
 
     async def list_users(self, limit: int = 100, offset: int = 0):
         """List users with pagination.

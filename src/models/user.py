@@ -13,5 +13,8 @@ class User:
     trial_start_at: datetime = datetime.now()
     trial_end_at: Optional[datetime] = None
     is_trial_active: bool = True
+    phone_number: Optional[str] = None
+    password_hash: Optional[str] = None
+    onboarding_completed_at: Optional[datetime] = None
     created_at: datetime = datetime.now()
     updated_at: datetime = datetime.now()

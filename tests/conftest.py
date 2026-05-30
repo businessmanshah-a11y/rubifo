@@ -64,6 +64,9 @@ def sample_user_data():
         "trial_start_at": datetime.now(),
         "trial_end_at": datetime.now() + timedelta(hours=72),
         "is_trial_active": True,
+        "phone_number": None,
+        "password_hash": None,
+        "onboarding_completed_at": None,
         "created_at": datetime.now(),
         "updated_at": datetime.now(),
     }
@@ -137,6 +140,7 @@ def sample_transaction_data():
         "tier": "basic",
         "status": "completed",
         "reference_id": "ref_123456",
+        "authority": "auth_123456",
         "created_at": datetime.now(),
     }
 

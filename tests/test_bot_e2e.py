@@ -20,10 +20,37 @@ class TestBotStartCommand:
             "trial_start_at": datetime.now(),
             "trial_end_at": datetime.now() + timedelta(hours=72),
             "is_trial_active": True,
+            "phone_number": None,
+            "password_hash": None,
+            "onboarding_completed_at": None,
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
         }
         mock_db.execute.return_value = None
+
+        with patch("src.database.pool", mock_db):
+            await commands.handle_start(mock_bot_client, 123456789, "testuser")
+
+        assert mock_bot_client.send_message.called
+        message = mock_bot_client.send_message.call_args.args[1]
+        assert "شماره تماس" in message
+        assert commands.conversation_states[123456789]["command"] == "web_onboarding_phone"
+
+    async def test_start_command_existing_user_with_web_credentials(self, mock_bot_client, mock_db):
+        """Existing onboarded users see the regular welcome."""
+        mock_db.fetchrow.return_value = {
+            "id": 1,
+            "user_id": 123456789,
+            "username": "testuser",
+            "trial_start_at": datetime.now(),
+            "trial_end_at": datetime.now() + timedelta(hours=72),
+            "is_trial_active": True,
+            "phone_number": "09123456789",
+            "password_hash": "$2b$12$abcdefghijklmnopqrstuu4YlTEPm.yp3MB7Dd3UtDm5.86iA/5PS",
+            "onboarding_completed_at": datetime.now(),
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+        }
 
         with patch("src.database.pool", mock_db):
             await commands.handle_start(mock_bot_client, 123456789, "testuser")
@@ -47,6 +74,9 @@ class TestBotStartCommand:
             "trial_start_at": datetime.now(),
             "trial_end_at": datetime.now() + timedelta(hours=24),
             "is_trial_active": True,
+            "phone_number": "09123456789",
+            "password_hash": "$2b$12$abcdefghijklmnopqrstuu4YlTEPm.yp3MB7Dd3UtDm5.86iA/5PS",
+            "onboarding_completed_at": datetime.now(),
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
         }
@@ -60,13 +90,42 @@ class TestBotStartCommand:
         assert "تریال" in str(call_args)
         assert "برنامه انتشار" in str(call_args)
 
+    async def test_onboarding_rejects_invalid_phone_and_keeps_state(self, mock_bot_client):
+        """Invalid phone numbers keep the user in the phone step."""
+        user_id = 123456789
+        commands.conversation_states[user_id] = {"command": "web_onboarding_phone"}
+
+        await commands.handle_conversation_response(mock_bot_client, user_id, "12345")
+
+        assert commands.conversation_states[user_id]["command"] == "web_onboarding_phone"
+        assert "09" in mock_bot_client.send_message.call_args.args[1]
+
+    async def test_onboarding_password_completes_credentials(self, mock_bot_client, mock_db):
+        """A valid password stores hashed credentials and completes onboarding."""
+        user_id = 123456789
+        commands.conversation_states[user_id] = {
+            "command": "web_onboarding_password",
+            "phone_number": "09123456789",
+        }
+
+        with patch("src.database.pool", mock_db):
+            await commands.handle_conversation_response(mock_bot_client, user_id, "secret123")
+
+        assert user_id not in commands.conversation_states
+        query, saved_phone, saved_hash, saved_user_id = mock_db.execute.call_args.args
+        assert "phone_number" in query
+        assert saved_phone == "09123456789"
+        assert saved_hash != "secret123"
+        assert saved_user_id == user_id
+        assert "ثبت شد" in mock_bot_client.send_message.call_args.args[1]
+
 
 @pytest.mark.asyncio
 class TestBotBuyCommand:
     """Test /buy command E2E."""
 
     async def test_buy_command_shows_tiers(self, mock_bot_client, mock_db):
-        """Test /buy shows subscription tiers."""
+        """Test /buy sends the website checkout link."""
         mock_db.fetchrow.return_value = None
 
         with patch("src.database.pool", mock_db):
@@ -74,10 +133,8 @@ class TestBotBuyCommand:
 
         assert mock_bot_client.send_message.called
         message = mock_bot_client.send_message.call_args.args[1]
-        # Should show tier options
-        assert "شروع حرفه‌ای" in message
-        assert "1,998,000" in message
-        assert "حذف ادمین بارگذاری" in message
+        assert "/checkout" in message
+        assert "StartPay" not in message
 
     async def test_buy_command_existing_subscription(self, mock_bot_client, mock_db):
         """Test /buy with existing subscription."""

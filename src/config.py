@@ -16,6 +16,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_NAME = "rubifo"
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Tehran")
 RUBIKA_INLINE_WEBHOOK_URL = os.getenv("RUBIKA_INLINE_WEBHOOK_URL")
+RUBIKA_BOT_RETURN_URL = os.getenv("RUBIKA_BOT_RETURN_URL", "https://rubika.ir/rubifo")
+WEB_BASE_URL = os.getenv("WEB_BASE_URL", "http://localhost:8000")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 
 # Database
@@ -41,6 +43,7 @@ ZARINPAL_MERCHANT_ID = os.getenv("ZARINPAL_MERCHANT_ID")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH")
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
+USER_JWT_SECRET = os.getenv("USER_JWT_SECRET", JWT_SECRET)
 
 # Logging
 LOG_FILE = os.getenv("LOG_FILE", "rubifo.log")
