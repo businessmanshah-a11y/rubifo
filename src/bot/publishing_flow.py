@@ -227,7 +227,7 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
                 ch.channel_id == value
                 for ch in await DestinationService(pool).list_verified(user_id)
             )
-            if not forwarded_channel_id and not is_known_channel:
+            if not forwarded_channel_id and not is_known_channel and not value:
                 await client.send_message(
                     user_id,
                     "لطفاً یک پیام از کانال مقصد را اینجا فوروارد کنید.\n\n"

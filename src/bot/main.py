@@ -532,6 +532,23 @@ class RubikaClient:
 RubikaBotApiClient = RubikaClient
 
 
+def _trial_reminder_candidates_query() -> str:
+    return """
+        SELECT user_id, trial_end_at
+        FROM users
+        WHERE trial_end_at <= NOW() + interval '49 hours'
+          AND trial_end_at > NOW()
+          AND is_trial_active = true
+          AND NOT EXISTS (
+              SELECT 1
+              FROM subscriptions
+              WHERE subscriptions.user_id = users.user_id
+                AND subscriptions.is_active = true
+                AND subscriptions.end_date >= CURRENT_DATE
+          )
+    """
+
+
 class RufifoBot:
     """Main bot class."""
 
@@ -663,12 +680,7 @@ class RufifoBot:
         while self.running:
             try:
                 await asyncio.sleep(1800)  # check every 30 minutes
-                users = await fetch(
-                    "SELECT user_id, trial_end_at FROM users "
-                    "WHERE trial_end_at <= NOW() + interval '49 hours' "
-                    "AND trial_end_at > NOW() "
-                    "AND is_trial_active = true"
-                )
+                users = await fetch(_trial_reminder_candidates_query())
                 for user in users:
                     try:
                         user_id = user["user_id"]

@@ -3,7 +3,9 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 from datetime import date, datetime, timedelta
+from types import SimpleNamespace
 from src.bot import commands, handlers
+from src.bot import main as bot_main
 from src.bot.main import RubikaBotApiClient
 
 
@@ -89,6 +91,43 @@ class TestBotStartCommand:
         call_args = mock_bot_client.send_message.call_args
         assert "تریال" in str(call_args)
         assert "برنامه انتشار" in str(call_args)
+
+    async def test_start_command_paid_user_does_not_show_trial_warning(self, mock_bot_client, mock_db):
+        """Paid users should see paid subscription status on /start, not trial copy."""
+        user = SimpleNamespace(
+            phone_number="09123456789",
+            password_hash="$2b$12$abcdefghijklmnopqrstuu4YlTEPm.yp3MB7Dd3UtDm5.86iA/5PS",
+            onboarding_completed_at=datetime.now(),
+            is_trial_active=True,
+            trial_end_at=datetime.now() + timedelta(hours=2),
+        )
+        status = {
+            "status": "active",
+            "tier": "enterprise",
+            "end_date": date.today() + timedelta(days=90),
+            "days_left": 90,
+            "hours_left": 0,
+            "destinations_used": 1,
+            "destinations_limit": 10,
+        }
+
+        with patch("src.database.pool", mock_db):
+            with patch(
+                "src.core.user_service.UserService.get_or_create_user",
+                new_callable=AsyncMock,
+                return_value=user,
+            ):
+                with patch(
+                    "src.core.subscription_service.SubscriptionService.get_subscription_status",
+                    new_callable=AsyncMock,
+                    return_value=status,
+                ):
+                    await commands.handle_start(mock_bot_client, 123456789, "testuser")
+
+        message = mock_bot_client.send_message.call_args.args[1]
+        assert "پلن مقیاس" in message
+        assert "۹۰ روز باقیمانده" in message or "90 روز باقیمانده" in message
+        assert "تریال" not in message
 
     async def test_onboarding_rejects_invalid_phone_and_keeps_state(self, mock_bot_client):
         """Invalid phone numbers keep the user in the phone step."""
@@ -465,6 +504,58 @@ class TestBotUtilityCommands:
         message = mock_bot_client.send_message.await_args.args[1]
         assert "تاریخ پایان: ۱۴۰۵/۰۲/۳۰" in message
         assert "2026-05-20" not in message
+
+    async def test_active_subscription_status_has_action_buttons_and_no_trial_warning(self, mock_bot_client, mock_db):
+        """Paid users should not see trial warning copy and should get renewal/upgrade buttons."""
+        status = {
+            "status": "active",
+            "tier": "enterprise",
+            "end_date": date.today() + timedelta(days=90),
+            "days_left": 90,
+            "hours_left": 2160,
+            "destinations_used": 3,
+            "destinations_limit": 10,
+        }
+
+        with patch("src.database.pool", mock_db):
+            with patch(
+                "src.core.subscription_service.SubscriptionService.get_subscription_status",
+                new_callable=AsyncMock,
+                return_value=status,
+            ):
+                await commands.handle_subscription_status(mock_bot_client, 123456789)
+
+        message = mock_bot_client.send_message.await_args.args[1]
+        assert "تریال" not in message
+        assert "۹۰ روز باقیمانده" in message or "90 روز باقیمانده" in message
+        inline_keypad = mock_bot_client.send_message.await_args.kwargs["inline_keypad"]
+        button_texts = [
+            button.button_text
+            for row in inline_keypad.rows
+            for button in row.buttons
+        ]
+        button_ids = [
+            button.id
+            for row in inline_keypad.rows
+            for button in row.buttons
+        ]
+        assert "🔄 تمدید اشتراک" in button_texts
+        assert "⬆️ ارتقا / تغییر پلن" in button_texts
+        assert "/renew" in button_ids
+        assert "/buy" in button_ids
+
+    async def test_checkout_urls_use_public_site_not_localhost(self):
+        """Bot payment links must be useful to real Rubika users, not local developer URLs."""
+        assert commands._checkout_url("enterprise") == "https://rubifo.datayar.ir/checkout?tier=enterprise"
+        assert "localhost" not in commands._checkout_url("enterprise")
+
+    async def test_trial_reminder_query_excludes_paid_users(self):
+        """Trial reminder candidates must not include users with active paid subscriptions."""
+        query = bot_main._trial_reminder_candidates_query()
+
+        assert "NOT EXISTS" in query
+        assert "FROM subscriptions" in query
+        assert "is_active = true" in query
 
     async def test_logs_command(self, mock_bot_client, mock_db):
         """Test /logs command."""

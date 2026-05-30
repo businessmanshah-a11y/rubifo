@@ -53,10 +53,31 @@ def _tier_price(tier: str) -> int:
 
 
 def _checkout_url(tier: Optional[str] = None) -> str:
-    base = WEB_BASE_URL.rstrip("/")
+    base = (WEB_BASE_URL or "https://rubifo.datayar.ir").rstrip("/")
+    if "localhost" in base or "127.0.0.1" in base:
+        base = "https://rubifo.datayar.ir"
     if tier:
         return f"{base}/checkout?tier={tier}"
     return f"{base}/checkout"
+
+
+def _subscription_action_keypad(state: str):
+    if state == "active":
+        return _make_inline_keypad(
+            [
+                ("🔄 تمدید اشتراک", "/renew"),
+                ("⬆️ ارتقا / تغییر پلن", "/buy"),
+            ],
+            cols=1,
+        )
+    return _make_inline_keypad(
+        [
+            ("📦 شروع حرفه‌ای", "/buy_basic"),
+            ("⭐ رشد", "/buy_pro"),
+            ("👑 مقیاس", "/buy_enterprise"),
+        ],
+        cols=1,
+    )
 
 
 def _plan_type_menu() -> str:
@@ -125,7 +146,25 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
             )
             return
 
-        def _sub_line(u) -> str:
+        subscription_status = None
+        try:
+            from src.core.subscription_service import SubscriptionService
+            subscription_status = await SubscriptionService(pool).get_subscription_status(user_id)
+        except Exception as e:
+            logger.warning(f"Could not load subscription status for /start user {user_id}: {e}")
+
+        def _sub_line(u, status=None) -> str:
+            if status:
+                if status.get("status") == "active":
+                    return (
+                        f"✅ پلن {_tier_name(status.get('tier'))} — "
+                        f"{status.get('days_left', 0)} روز باقیمانده"
+                    )
+                if status.get("status") == "trial":
+                    return f"⏳ تریال: {status.get('hours_left', 0):.0f} ساعت باقیمانده"
+                if status.get("status") == "expired":
+                    return "⚠️ تریال تمام شده — /buy برای اشتراک"
+
             if u.is_trial_active:
                 hours_left = max(0, (u.trial_end_at - datetime.now()).total_seconds() / 3600)
                 return f"⏳ تریال: {hours_left:.0f} ساعت باقیمانده"
@@ -139,7 +178,7 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
             "2️⃣ پست‌های هم‌موضوع را داخل یک «دسته محتوا» می‌فرستید؛ مثل آموزشی، معرفی محصول یا رضایت مشتری.\n"
             "3️⃣ مشخص می‌کنید این دسته چه زمانی در کانال منتشر شود.\n\n"
             "اگر اولین‌بار است، می‌توانید قبل از برنامه واقعی یک آزمایش سه‌پستی انجام دهید.\n"
-            f"{_sub_line(user)}\n\n"
+            f"{_sub_line(user, subscription_status)}\n\n"
             "برای شروع دکمه «➕ ایجاد برنامه جدید انتشار محتوا» را بزنید:"
         )
         keypad = _make_inline_keypad([("➕ ایجاد برنامه جدید انتشار محتوا", "➕ ساخت برنامه جدید")], cols=1)
@@ -1161,10 +1200,10 @@ async def handle_subscription_status(client, user_id: int) -> None:
                 "💳 وضعیت اشتراک شما\n\n"
                 f"⏳ تریال: {hours_left:.0f} ساعت باقیمانده\n\n"
                 f"کانال‌های مقصد: {dest_used}/{dest_limit}\n\n"
-                "برای ادامه فعالیت بعد از تریال:\n"
-                f"📦 Basic — {_format_price(_tier_price('basic'))} تومان/ماه (1 کانال) /buy_basic\n"
-                f"⭐ Pro — {_format_price(_tier_price('pro'))} تومان/ماه (3 کانال) /buy_pro\n"
-                f"👑 Enterprise — {_format_price(_tier_price('enterprise'))} تومان/ماه (10 کانال) /buy_enterprise"
+                "برای ادامه فعالیت بعد از تریال یکی از پلن‌های زیر را انتخاب کنید:\n"
+                f"📦 شروع حرفه‌ای — {_format_price(_tier_price('basic'))} تومان/ماه (1 کانال)\n"
+                f"⭐ رشد — {_format_price(_tier_price('pro'))} تومان/ماه (3 کانال)\n"
+                f"👑 مقیاس — {_format_price(_tier_price('enterprise'))} تومان/ماه (10 کانال)"
             )
         elif state == "active":
             tier = status["tier"]
@@ -1188,20 +1227,25 @@ async def handle_subscription_status(client, user_id: int) -> None:
                 f"⏳ {days_left} روز باقیمانده\n\n"
                 f"کانال‌های مقصد: {dest_used}/{dest_limit}\n"
                 f"{slots_msg}\n\n"
-                f"🔄 /renew — تمدید\n"
-                f"⬆️ /buy — ارتقا به پلن بالاتر"
+                "برای تمدید یا تغییر پلن از دکمه‌های زیر استفاده کنید."
             )
         else:  # expired
             msg = (
                 "⚠️ اشتراک منقضی‌شده\n\n"
                 "تریال و اشتراک فعالی ندارید.\n"
                 "تمام پلن‌ها غیرفعال شده‌اند.\n\n"
-                f"📦 Basic — {_format_price(_tier_price('basic'))} تومان/ماه (1 کانال) /buy_basic\n"
-                f"⭐ Pro — {_format_price(_tier_price('pro'))} تومان/ماه (3 کانال) /buy_pro\n"
-                f"👑 Enterprise — {_format_price(_tier_price('enterprise'))} تومان/ماه (10 کانال) /buy_enterprise"
+                "برای فعال‌سازی دوباره یکی از پلن‌های زیر را انتخاب کنید:\n"
+                f"📦 شروع حرفه‌ای — {_format_price(_tier_price('basic'))} تومان/ماه (1 کانال)\n"
+                f"⭐ رشد — {_format_price(_tier_price('pro'))} تومان/ماه (3 کانال)\n"
+                f"👑 مقیاس — {_format_price(_tier_price('enterprise'))} تومان/ماه (10 کانال)"
             )
 
-        await client.send_message(user_id, msg, with_keypad=True)
+        await client.send_message(
+            user_id,
+            msg,
+            with_keypad=True,
+            inline_keypad=_subscription_action_keypad(state),
+        )
     except Exception as e:
         logger.error(f"/subscription_status error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
@@ -1219,7 +1263,8 @@ async def handle_buy(client, user_id: int) -> None:
                 user_id,
                 f"شما اشتراک {tier_fa} دارید.\n"
                 f"تاریخ پایان: {to_jalali_date(active_sub.end_date)}\n\n"
-                "/renew برای تمدید"
+                "برای تمدید یا تغییر پلن از دکمه‌های زیر استفاده کنید.",
+                inline_keypad=_subscription_action_keypad("active"),
             )
             return
 
