@@ -14,6 +14,7 @@ or:
 """
 import asyncio
 import os
+from html import escape
 from pathlib import Path
 from pydantic import BaseModel
 from jose import JWTError, jwt
@@ -31,7 +32,7 @@ from src.config import (
 from src.core.subscription_service import SubscriptionService
 from src.core.transaction_service import TransactionService
 from src.core.user_service import UserService
-from src.integrations.zarinpal import create_zarinpal_gateway
+from src.integrations.zibal_mock import create_zibal_mock_gateway
 from src.utils import to_jalali_date
 
 _STATIC_DIR = Path(__file__).parent / "src" / "admin" / "static"
@@ -120,7 +121,21 @@ async def _current_web_user(
     return user
 
 
-def _html_page(title: str, body: str) -> HTMLResponse:
+def _format_toman(amount: int) -> str:
+    return f"{amount:,}".replace(",", "،")
+
+
+def _tier_label(tier: str) -> str:
+    return SUBSCRIPTION_TIERS.get(tier, {}).get("display_name_fa", tier)
+
+
+def _safe_next_path(path: str) -> str:
+    if not path or not path.startswith("/") or path.startswith("//"):
+        return "/checkout"
+    return path
+
+
+def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
     return HTMLResponse(
         f"""<!doctype html>
 <html lang="fa" dir="rtl">
@@ -128,11 +143,225 @@ def _html_page(title: str, body: str) -> HTMLResponse:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{title}</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    @font-face {{ font-family: 'Morabba'; src: url('/fonts/Morabba-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }}
+    @font-face {{ font-family: 'Morabba'; src: url('/fonts/Morabba-SemiBold.woff2') format('woff2'); font-weight: 600; font-display: swap; }}
+    @font-face {{ font-family: 'Morabba'; src: url('/fonts/Morabba-ExtraBold.woff2') format('woff2'); font-weight: 800; font-display: swap; }}
+    @font-face {{ font-family: 'Vazirmatn'; src: url('/fonts/Vazirmatn-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }}
+    @font-face {{ font-family: 'Vazirmatn'; src: url('/fonts/Vazirmatn-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }}
+    :root {{
+      --bg: oklch(9% 0.012 52);
+      --surface: oklch(13% 0.015 52);
+      --surface-2: oklch(17% 0.015 52);
+      --surface-3: oklch(22% 0.015 52);
+      --text: oklch(95% 0.008 72);
+      --text-2: oklch(72% 0.010 70);
+      --text-3: oklch(50% 0.008 65);
+      --accent: oklch(70% 0.185 55);
+      --accent-dark: oklch(62% 0.185 55);
+      --accent-subtle: oklch(20% 0.060 55);
+      --ok: oklch(65% 0.150 145);
+      --err: oklch(63% 0.175 22);
+      --warn: oklch(73% 0.155 68);
+      --border: oklch(23% 0.015 52);
+      --border-soft: oklch(18% 0.012 52);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Morabba', 'Vazirmatn', system-ui, sans-serif;
+      background:
+        radial-gradient(ellipse 60% 45% at 70% 15%, oklch(20% 0.070 55 / 0.34), transparent 68%),
+        radial-gradient(ellipse 40% 38% at 12% 90%, oklch(16% 0.045 145 / 0.18), transparent 62%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.8;
+    }}
+    a {{ color: inherit; }}
+    .checkout-shell {{
+      width: min(1120px, calc(100% - 32px));
+      min-height: 100vh;
+      margin: 0 auto;
+      display: grid;
+      align-items: center;
+      padding: 40px 0;
+    }}
+    .checkout-frame {{
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+      gap: clamp(20px, 4vw, 48px);
+      align-items: stretch;
+    }}
+    .checkout-copy {{
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 22px;
+      min-width: 0;
+    }}
+    .brand-mark {{
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 15px;
+    }}
+    .brand-mark::before {{
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 5px oklch(70% 0.185 55 / 0.14);
+    }}
+    h1 {{
+      margin: 0;
+      max-width: 12ch;
+      font-size: clamp(38px, 7vw, 78px);
+      line-height: 1.12;
+      font-weight: 800;
+      letter-spacing: 0;
+    }}
+    .lead {{
+      max-width: 58ch;
+      margin: 0;
+      color: var(--text-2);
+      font-size: 16px;
+    }}
+    .checkout-panel {{
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: clamp(22px, 4vw, 34px);
+      box-shadow: 0 16px 60px oklch(4% 0.010 52 / 0.54);
+    }}
+    .panel-kicker {{
+      margin-bottom: 8px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .panel-title {{
+      margin: 0 0 16px;
+      font-size: 25px;
+      line-height: 1.35;
+      font-weight: 800;
+    }}
+    .field {{ margin: 0 0 14px; }}
+    label {{
+      display: block;
+      margin-bottom: 7px;
+      color: var(--text-2);
+      font-size: 13px;
+      font-weight: 700;
+    }}
+    input, select {{
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-2);
+      color: var(--text);
+      padding: 12px 13px;
+      font: inherit;
+      outline: none;
+    }}
+    input:focus, select:focus {{
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px oklch(70% 0.185 55 / 0.24);
+    }}
+    .button-row {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 18px;
+    }}
+    .btn {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 17px;
+      font: inherit;
+      font-weight: 800;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 150ms ease-out, background 150ms ease-out, border-color 150ms ease-out;
+    }}
+    .btn:hover {{ transform: translateY(-1px); }}
+    .btn-primary {{
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+    }}
+    .btn-primary:hover {{ background: var(--accent-dark); border-color: var(--accent-dark); }}
+    .btn-ghost {{ background: transparent; color: var(--text-2); }}
+    .btn-ghost:hover {{ background: var(--surface-2); color: var(--text); }}
+    .btn-danger {{ background: oklch(18% 0.060 22); border-color: oklch(28% 0.080 22); color: var(--err); }}
+    .btn-warn {{ background: oklch(18% 0.065 68); border-color: oklch(28% 0.090 68); color: var(--warn); }}
+    .summary {{
+      display: grid;
+      gap: 10px;
+      margin: 18px 0;
+      padding: 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--border-soft);
+      border-radius: 10px;
+    }}
+    .summary-row {{
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: var(--text-2);
+      font-size: 14px;
+    }}
+    .summary-row strong {{ color: var(--text); }}
+    .error-note {{
+      min-height: 24px;
+      margin: 12px 0 0;
+      color: var(--err);
+      font-size: 13px;
+      font-weight: 700;
+    }}
+    .hint-box {{
+      margin-top: 18px;
+      padding: 14px 15px;
+      border-radius: 10px;
+      background: var(--accent-subtle);
+      color: var(--text-2);
+      border: 1px solid oklch(70% 0.185 55 / 0.22);
+      font-size: 14px;
+    }}
+    .status-chip {{
+      display: inline-flex;
+      width: fit-content;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--text-2);
+      background: var(--surface-2);
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .success h1 {{ color: var(--ok); }}
+    .failure h1 {{ color: var(--err); }}
+    .canceled h1 {{ color: var(--warn); }}
+    @media (max-width: 820px) {{
+      .checkout-frame {{ grid-template-columns: 1fr; }}
+      h1 {{ max-width: 100%; font-size: 42px; }}
+      .checkout-shell {{ align-items: start; padding-top: 28px; }}
+    }}
+  </style>
 </head>
-<body>
-  <main class="container" style="max-width:760px;margin:40px auto;padding:24px;">
-    {body}
+<body class="{escape(page_class)}">
+  <main class="checkout-shell">
+    <section class="checkout-frame">
+      {body}
+    </section>
   </main>
 </body>
 </html>"""
@@ -141,20 +370,37 @@ def _html_page(title: str, body: str) -> HTMLResponse:
 
 @app.get("/login")
 async def web_login_page(next: str = "/checkout", tier: str = ""):
-    action_hint = f"{next}?tier={tier}" if tier else next
+    safe_next = _safe_next_path(next)
+    action_hint = f"{safe_next}?tier={tier}" if tier else safe_next
+    tier_name = _tier_label(tier) if tier else "پلن انتخابی"
     return _html_page(
         "ورود به Rubifo",
         f"""
-        <h1>ورود به Rubifo</h1>
-        <p>با شماره تماس و رمزی که داخل ربات ثبت کرده‌اید وارد شوید.</p>
-        <form id="login-form">
-          <label>شماره تماس</label>
-          <input name="phone_number" autocomplete="tel" placeholder="09123456789" required>
-          <label>رمز عبور</label>
-          <input name="password" type="password" autocomplete="current-password" required>
-          <button type="submit">ورود</button>
-        </form>
-        <p id="login-error" style="color:#b00020;"></p>
+        <div class="checkout-copy">
+          <div class="brand-mark">Rubifo checkout</div>
+          <h1>ورود کوتاه، خرید روشن.</h1>
+          <p class="lead">برای خرید {escape(tier_name)} با شماره تماس و رمزی وارد شوید که داخل ربات روبیفو ساخته‌اید.</p>
+          <div class="hint-box">اگر هنوز ثبت‌نام نکرده‌اید، اول وارد ربات شوید و حساب وب خود را بسازید. وب حساب روبیکا را از صفر نمی‌سازد.</div>
+        </div>
+        <div class="checkout-panel">
+          <div class="panel-kicker">ورود کاربر</div>
+          <h2 class="panel-title">ادامه خرید اشتراک</h2>
+          <form id="login-form">
+            <div class="field">
+              <label>شماره تماس</label>
+              <input name="phone_number" autocomplete="tel" inputmode="tel" placeholder="09123456789" required>
+            </div>
+            <div class="field">
+              <label>رمز عبور</label>
+              <input name="password" type="password" autocomplete="current-password" required>
+            </div>
+            <button class="btn btn-primary" type="submit">ورود و ادامه</button>
+          </form>
+          <p id="login-error" class="error-note"></p>
+          <div class="button-row">
+            <a class="btn btn-ghost" href="{RUBIKA_BOT_RETURN_URL}">ثبت‌نام در ربات</a>
+          </div>
+        </div>
         <script>
         document.getElementById('login-form').addEventListener('submit', async (event) => {{
           event.preventDefault();
@@ -168,7 +414,12 @@ async def web_login_page(next: str = "/checkout", tier: str = ""):
             }})
           }});
           if (!res.ok) {{
-            document.getElementById('login-error').textContent = 'شماره تماس یا رمز عبور اشتباه است.';
+            let message = 'ورود انجام نشد. اول داخل ربات ثبت‌نام کنید و رمز ورود بسازید.';
+            try {{
+              const data = await res.json();
+              if (data.detail) message = data.detail;
+            }} catch (error) {{}}
+            document.getElementById('login-error').textContent = message;
             return;
           }}
           const data = await res.json();
@@ -177,6 +428,7 @@ async def web_login_page(next: str = "/checkout", tier: str = ""):
         }});
         </script>
         """,
+        page_class="login-page",
     )
 
 
@@ -191,7 +443,7 @@ async def web_user_login(body: _UserLoginBody):
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="شماره تماس یا رمز عبور اشتباه است",
+            detail="ورود انجام نشد. اول داخل ربات ثبت‌نام کنید و رمز ورود بسازید.",
         )
 
     return {
@@ -210,23 +462,51 @@ async def checkout_page(tier: str = "basic"):
     if tier not in SUBSCRIPTION_TIERS:
         return _html_page(
             "پلن نامعتبر",
-            "<h1>پلن نامعتبر است</h1><p>لطفاً از داخل ربات دوباره گزینه خرید را انتخاب کنید.</p>",
+            f"""
+            <div class="checkout-copy">
+              <div class="brand-mark">Rubifo checkout</div>
+              <h1>این پلن را نمی‌شناسیم.</h1>
+              <p class="lead">برای انتخاب مطمئن، به بخش پلن‌های اشتراک برگردید و یکی از بسته‌های فعال روبیفو را انتخاب کنید.</p>
+            </div>
+            <div class="checkout-panel">
+              <div class="panel-kicker">پلن نامعتبر</div>
+              <h2 class="panel-title">پلن‌های اشتراک آماده‌اند</h2>
+              <p class="lead">شروع حرفه‌ای، رشد و مقیاس مسیرهای فعال خرید هستند.</p>
+              <div class="button-row">
+                <a class="btn btn-primary" href="/#plans">دیدن پلن‌های اشتراک</a>
+                <a class="btn btn-ghost" href="{RUBIKA_BOT_RETURN_URL}">رفتن به ربات</a>
+              </div>
+            </div>
+            """,
+            page_class="failure",
         )
 
-    options = "\n".join(
-        f"<option value='{key}' {'selected' if key == tier else ''}>"
-        f"{cfg['display_name_fa']} - {cfg['price_monthly']:,} تومان</option>"
-        for key, cfg in SUBSCRIPTION_TIERS.items()
-    )
+    cfg = SUBSCRIPTION_TIERS[tier]
+    tier_name = cfg["display_name_fa"]
+    price = _format_toman(cfg["price_monthly"])
+    destinations = cfg["max_destinations"]
     return _html_page(
         "خرید اشتراک Rubifo",
         f"""
-        <h1>خرید اشتراک Rubifo</h1>
-        <p>پلن را انتخاب کنید و پرداخت را در زرین‌پال ادامه دهید.</p>
-        <label>پلن</label>
-        <select id="tier">{options}</select>
-        <button id="pay">پرداخت</button>
-        <p id="checkout-error" style="color:#b00020;"></p>
+        <div class="checkout-copy">
+          <div class="brand-mark">Rubifo checkout</div>
+          <h1>پلن را ببندیم، ربات شروع کند.</h1>
+          <p class="lead">این مسیر پرداخت فعلاً موک سازگار با زیبال است تا موفق، ناموفق و لغو را کامل تست کنیم.</p>
+          <span class="status-chip">پرداخت تست زیبال</span>
+        </div>
+        <div class="checkout-panel">
+          <div class="panel-kicker">خلاصه سفارش</div>
+          <h2 class="panel-title">اشتراک {escape(tier_name)}</h2>
+          <div class="summary">
+            <div class="summary-row"><span>مبلغ ماهانه</span><strong>{price} تومان</strong></div>
+            <div class="summary-row"><span>کانال مقصد</span><strong>{destinations}</strong></div>
+            <div class="summary-row"><span>دسترسی</span><strong>همه قابلیت‌های انتشار</strong></div>
+          </div>
+          <input id="tier" type="hidden" value="{escape(tier)}">
+          <button id="pay" class="btn btn-primary" type="button">پرداخت تست زیبال</button>
+          <p id="checkout-error" class="error-note"></p>
+          <div class="hint-box">بعد از پرداخت موفق، همین صفحه اشتراک را فعال می‌کند و لینک مستقیم شروع در ربات را نشان می‌دهد.</div>
+        </div>
         <script>
         document.getElementById('pay').addEventListener('click', async () => {{
           const token = localStorage.getItem('rubifo_user_token');
@@ -255,6 +535,7 @@ async def checkout_page(tier: str = "basic"):
         }});
         </script>
         """,
+        page_class="checkout-page",
     )
 
 
@@ -266,30 +547,92 @@ async def checkout_start(body: _CheckoutStartBody, user=Depends(_current_web_use
     tier_config = SUBSCRIPTION_TIERS[body.tier]
     amount = tier_config["price_monthly"]
     callback_url = f"{WEB_BASE_URL.rstrip('/')}/payment/callback"
-    gateway = create_zarinpal_gateway(sandbox=True)
+    gateway = create_zibal_mock_gateway(WEB_BASE_URL)
     success, result = await gateway.request_payment(
         amount=amount,
         description=f"اشتراک {tier_config['display_name_fa']} - Rubifo",
         callback_url=callback_url,
     )
     if not success:
-        raise HTTPException(status_code=502, detail=result)
+        raise HTTPException(status_code=502, detail=result.get("message", "Payment failed"))
 
-    authority = result.split("/StartPay/")[-1]
+    authority = result["track_id"]
     await TransactionService(_web_db()).create_pending_transaction(
         user.user_id, amount, body.tier, authority
     )
-    return {"payment_url": result, "authority": authority}
+    return {
+        "payment_url": result["payment_url"],
+        "track_id": authority,
+        "authority": authority,
+        "provider": result["provider"],
+    }
 
 
-def _payment_result_page(title: str, message: str) -> HTMLResponse:
+@app.get("/mock/zibal/start/{track_id}")
+async def mock_zibal_payment_page(track_id: str):
+    safe_track = escape(track_id)
+    return _html_page(
+        "پرداخت تست زیبال",
+        f"""
+        <div class="checkout-copy">
+          <div class="brand-mark">Zibal mock</div>
+          <h1>اینجا درگاه تست است.</h1>
+          <p class="lead">برای QA مسیر خرید، یکی از سه نتیجه پرداخت را انتخاب کنید. هیچ پولی جابه‌جا نمی‌شود.</p>
+          <span class="status-chip">trackId: {safe_track}</span>
+        </div>
+        <div class="checkout-panel">
+          <div class="panel-kicker">شبیه‌ساز پرداخت</div>
+          <h2 class="panel-title">نتیجه تست را انتخاب کنید</h2>
+          <div class="summary">
+            <div class="summary-row"><span>درگاه</span><strong>زیبال موک</strong></div>
+            <div class="summary-row"><span>شناسه پرداخت</span><strong>{safe_track}</strong></div>
+          </div>
+          <div class="button-row">
+            <a class="btn btn-primary" href="/payment/callback?trackId={safe_track}&success=1">پرداخت موفق</a>
+            <a class="btn btn-danger" href="/payment/callback?trackId={safe_track}&success=0">پرداخت ناموفق</a>
+            <a class="btn btn-warn" href="/payment/callback?trackId={safe_track}&success=-1">لغو پرداخت</a>
+          </div>
+        </div>
+        """,
+        page_class="mock-payment-page",
+    )
+
+
+def _payment_result_page(
+    title: str,
+    message: str,
+    *,
+    ref_id: str = "",
+    page_class: str = "",
+    primary_label: str = "شروع در ربات",
+) -> HTMLResponse:
+    ref_markup = (
+        f"""<div class="summary-row"><span>کد رهگیری</span><strong>{escape(ref_id)}</strong></div>"""
+        if ref_id
+        else ""
+    )
     return _html_page(
         title,
         f"""
-        <h1>{title}</h1>
-        <p>{message}</p>
-        <a href="{RUBIKA_BOT_RETURN_URL}">بازگشت به ربات</a>
+        <div class="checkout-copy">
+          <div class="brand-mark">Rubifo checkout</div>
+          <h1>{escape(title)}</h1>
+          <p class="lead">{escape(message)}</p>
+        </div>
+        <div class="checkout-panel">
+          <div class="panel-kicker">نتیجه پرداخت</div>
+          <h2 class="panel-title">{escape(title)}</h2>
+          <div class="summary">
+            <div class="summary-row"><span>وضعیت</span><strong>{escape(title)}</strong></div>
+            {ref_markup}
+          </div>
+          <div class="button-row">
+            <a class="btn btn-primary" href="{RUBIKA_BOT_RETURN_URL}">{escape(primary_label)}</a>
+            <a class="btn btn-ghost" href="/#plans">بازگشت به پلن‌ها</a>
+          </div>
+        </div>
         """,
+        page_class=page_class,
     )
 
 
@@ -309,28 +652,81 @@ async def _notify_paid_user(user_id: str, tier: str, end_date) -> None:
 
 
 @app.get("/payment/callback")
-async def payment_callback(Authority: str = "", Status: str = ""):
-    if not Authority:
-        return _payment_result_page("پرداخت نامعتبر", "شناسه پرداخت از زرین‌پال دریافت نشد.")
+async def payment_callback(
+    trackId: str = "",
+    success: str = "",
+    Authority: str = "",
+    Status: str = "",
+):
+    payment_id = trackId or Authority
+    if not payment_id:
+        return _payment_result_page(
+            "پرداخت نامعتبر",
+            "شناسه پرداخت از زیبال دریافت نشد.",
+            page_class="failure",
+            primary_label="رفتن به ربات",
+        )
 
     transaction_service = TransactionService(_web_db())
-    transaction = await transaction_service.get_transaction_by_authority(Authority)
+    transaction = await transaction_service.get_transaction_by_authority(payment_id)
     if not transaction:
-        return _payment_result_page("پرداخت پیدا نشد", "این پرداخت در Rubifo ثبت نشده است.")
+        return _payment_result_page(
+            "پرداخت پیدا نشد",
+            "این پرداخت در Rubifo ثبت نشده است.",
+            page_class="failure",
+            primary_label="رفتن به ربات",
+        )
 
     if transaction.get("status") == "completed":
         ref = transaction.get("reference_id") or "ثبت‌شده"
-        return _payment_result_page("پرداخت قبلاً تأیید شده", f"کد رهگیری: {ref}")
+        return _payment_result_page(
+            "پرداخت قبلاً تأیید شده",
+            "اشتراک شما قبلاً فعال شده است.",
+            ref_id=ref,
+            page_class="success",
+        )
 
-    if Status and Status.upper() != "OK":
+    if success == "-1" or (Status and Status.upper() not in {"OK", "NOK"}):
         await transaction_service.update_transaction_status(transaction["id"], "canceled")
-        return _payment_result_page("پرداخت لغو شد", "پرداخت از سمت درگاه لغو شد.")
+        return _payment_result_page(
+            "پرداخت لغو شد",
+            "پرداخت از سمت درگاه لغو شد. هر وقت آماده بودید دوباره از پلن‌ها شروع کنید.",
+            ref_id=payment_id,
+            page_class="canceled",
+            primary_label="رفتن به ربات",
+        )
 
-    gateway = create_zarinpal_gateway(sandbox=True)
-    success, ref_id = await gateway.verify_payment(Authority, transaction["amount"])
-    if not success:
+    if success and success != "1":
         await transaction_service.update_transaction_status(transaction["id"], "failed")
-        return _payment_result_page("پرداخت ناموفق", "تأیید پرداخت انجام نشد. لطفاً دوباره تلاش کنید.")
+        return _payment_result_page(
+            "پرداخت ناموفق",
+            "تأیید پرداخت انجام نشد. اشتراک فعال نشد و می‌توانید دوباره تلاش کنید.",
+            ref_id=payment_id,
+            page_class="failure",
+            primary_label="رفتن به ربات",
+        )
+
+    if Authority and Status.upper() != "OK":
+        await transaction_service.update_transaction_status(transaction["id"], "failed")
+        return _payment_result_page(
+            "پرداخت ناموفق",
+            "تأیید پرداخت انجام نشد. اشتراک فعال نشد و می‌توانید دوباره تلاش کنید.",
+            ref_id=payment_id,
+            page_class="failure",
+            primary_label="رفتن به ربات",
+        )
+
+    gateway = create_zibal_mock_gateway(WEB_BASE_URL)
+    verified, ref_id = await gateway.verify_payment(payment_id, transaction["amount"], "1")
+    if not verified:
+        await transaction_service.update_transaction_status(transaction["id"], "failed")
+        return _payment_result_page(
+            "پرداخت ناموفق",
+            "تأیید پرداخت انجام نشد. اشتراک فعال نشد و می‌توانید دوباره تلاش کنید.",
+            ref_id=payment_id,
+            page_class="failure",
+            primary_label="رفتن به ربات",
+        )
 
     subscription = await SubscriptionService(_web_db()).create_subscription(
         transaction["user_id"], transaction["tier"], days=30
@@ -339,7 +735,9 @@ async def payment_callback(Authority: str = "", Status: str = ""):
     await _notify_paid_user(transaction["user_id"], transaction["tier"], subscription.end_date)
     return _payment_result_page(
         "پرداخت تأیید شد",
-        f"اشتراک شما فعال شد. کد رهگیری: {ref_id}",
+        f"اشتراک {_tier_label(transaction['tier'])} فعال شد. حالا روبیفو آماده شروع کار است.",
+        ref_id=ref_id,
+        page_class="success",
     )
 
 

@@ -1,7 +1,7 @@
-"""Tests for website login, checkout, and payment callback."""
+"""Tests for website login, checkout, and Zibal-compatible mock payment."""
 
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -102,7 +102,53 @@ def test_user_login_returns_user_token():
     assert payload["user"]["user_id"] == "rubika-guid-1"
 
 
-def test_checkout_start_creates_pending_transaction_and_returns_gateway_url():
+def test_landing_paid_plans_link_to_website_checkout():
+    client = TestClient(app)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'href="/login?next=/checkout&tier=basic"' in response.text
+    assert 'href="/login?next=/checkout&tier=pro"' in response.text
+    assert 'href="/login?next=/checkout&tier=enterprise"' in response.text
+    assert 'href="https://rubika.ir/rubifo_bot"' in response.text
+
+
+def test_user_login_failure_explains_robot_registration():
+    db = FakeCheckoutDb()
+    client = TestClient(app)
+
+    with patch("app.db_module.pool", db):
+        response = client.post(
+            "/api/auth/login",
+            json={"phone_number": "09120000000", "password": "secret123"},
+        )
+
+    assert response.status_code == 401
+    assert "اول داخل ربات ثبت‌نام" in response.json()["detail"]
+
+
+def test_checkout_page_routes_missing_token_to_login():
+    client = TestClient(app)
+
+    response = client.get("/checkout?tier=pro")
+
+    assert response.status_code == 200
+    assert "localStorage.getItem('rubifo_user_token')" in response.text
+    assert "/login?next=/checkout&tier=" in response.text
+
+
+def test_checkout_page_rejects_invalid_tier_with_clear_message():
+    client = TestClient(app)
+
+    response = client.get("/checkout?tier=unknown")
+
+    assert response.status_code == 200
+    assert "پلن نامعتبر" in response.text
+    assert "پلن‌های اشتراک" in response.text
+
+
+def test_checkout_start_creates_pending_transaction_and_returns_zibal_mock_url():
     db = FakeCheckoutDb()
     client = TestClient(app)
 
@@ -114,50 +160,100 @@ def test_checkout_start_creates_pending_transaction_and_returns_gateway_url():
         token = login.json()["access_token"]
 
     with patch("app.db_module.pool", db):
-        with patch("app.create_zarinpal_gateway") as gateway_factory:
-            gateway = AsyncMock()
-            gateway.request_payment.return_value = (
-                True,
-                "https://sandbox.zarinpal.com/pg/StartPay/AUTH123",
-            )
-            gateway_factory.return_value = gateway
-            response = client.post(
-                "/api/checkout/start",
-                json={"tier": "basic"},
-                headers={"Authorization": f"Bearer {token}"},
-            )
+        response = client.post(
+            "/api/checkout/start",
+            json={"tier": "basic"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
 
     assert response.status_code == 200
-    assert response.json()["payment_url"].endswith("/AUTH123")
-    assert db.transactions["AUTH123"]["status"] == "pending"
-    assert db.transactions["AUTH123"]["user_id"] == "rubika-guid-1"
+    payload = response.json()
+    assert payload["provider"] == "zibal_mock"
+    assert payload["track_id"].startswith("RUBIFO-")
+    assert payload["payment_url"].endswith(f"/mock/zibal/start/{payload['track_id']}")
+    assert db.transactions[payload["track_id"]]["status"] == "pending"
+    assert db.transactions[payload["track_id"]]["user_id"] == "rubika-guid-1"
+
+
+def test_mock_zibal_page_exposes_success_failure_and_cancel_paths():
+    client = TestClient(app)
+
+    response = client.get("/mock/zibal/start/RUBIFO-123")
+
+    assert response.status_code == 200
+    assert "/payment/callback?trackId=RUBIFO-123&success=1" in response.text
+    assert "/payment/callback?trackId=RUBIFO-123&success=0" in response.text
+    assert "/payment/callback?trackId=RUBIFO-123&success=-1" in response.text
 
 
 def test_payment_callback_completes_transaction_idempotently():
     db = FakeCheckoutDb()
-    db.transactions["AUTH123"] = {
+    db.transactions["RUBIFO-123"] = {
         "id": 10,
         "user_id": "rubika-guid-1",
         "amount": 1998000,
         "tier": "basic",
         "status": "pending",
-        "authority": "AUTH123",
+        "authority": "RUBIFO-123",
         "reference_id": None,
         "created_at": datetime.now(),
     }
     client = TestClient(app)
 
     with patch("app.db_module.pool", db):
-        with patch("app.create_zarinpal_gateway") as gateway_factory:
-            gateway = AsyncMock()
-            gateway.verify_payment.return_value = (True, "REF123")
-            gateway_factory.return_value = gateway
-            response = client.get("/payment/callback?Authority=AUTH123&Status=OK")
-            second = client.get("/payment/callback?Authority=AUTH123&Status=OK")
+        response = client.get("/payment/callback?trackId=RUBIFO-123&success=1")
+        second = client.get("/payment/callback?trackId=RUBIFO-123&success=1")
 
     assert response.status_code == 200
-    assert "REF123" in response.text
+    assert "RUBIFO-123" in response.text
+    assert "شروع در ربات" in response.text
     assert second.status_code == 200
-    assert db.transactions["AUTH123"]["status"] == "completed"
+    assert db.transactions["RUBIFO-123"]["status"] == "completed"
     assert db.subscriptions_created == 1
     assert db.completed_updates == 1
+
+
+def test_payment_callback_failure_marks_transaction_failed_without_subscription():
+    db = FakeCheckoutDb()
+    db.transactions["RUBIFO-FAIL"] = {
+        "id": 11,
+        "user_id": "rubika-guid-1",
+        "amount": 3998000,
+        "tier": "pro",
+        "status": "pending",
+        "authority": "RUBIFO-FAIL",
+        "reference_id": None,
+        "created_at": datetime.now(),
+    }
+    client = TestClient(app)
+
+    with patch("app.db_module.pool", db):
+        response = client.get("/payment/callback?trackId=RUBIFO-FAIL&success=0")
+
+    assert response.status_code == 200
+    assert "پرداخت ناموفق" in response.text
+    assert db.transactions["RUBIFO-FAIL"]["status"] == "failed"
+    assert db.subscriptions_created == 0
+
+
+def test_payment_callback_cancel_marks_transaction_canceled_without_subscription():
+    db = FakeCheckoutDb()
+    db.transactions["RUBIFO-CANCEL"] = {
+        "id": 12,
+        "user_id": "rubika-guid-1",
+        "amount": 9998000,
+        "tier": "enterprise",
+        "status": "pending",
+        "authority": "RUBIFO-CANCEL",
+        "reference_id": None,
+        "created_at": datetime.now(),
+    }
+    client = TestClient(app)
+
+    with patch("app.db_module.pool", db):
+        response = client.get("/payment/callback?trackId=RUBIFO-CANCEL&success=-1")
+
+    assert response.status_code == 200
+    assert "پرداخت لغو شد" in response.text
+    assert db.transactions["RUBIFO-CANCEL"]["status"] == "canceled"
+    assert db.subscriptions_created == 0
