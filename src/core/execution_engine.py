@@ -13,7 +13,7 @@ _FILE_TYPE_MAP = {
     "photo": ("Image", ".jpg"),
     "video": ("Video", ".mp4"),
     "video_message": ("Video", ".mp4"),
-    "voice": ("File", ".ogg"),   # Rubika upload API uses "File" slot for voice (same as rubpy send_voice)
+    "voice": ("Voice", ".ogg"),
     "music": ("File", ".mp3"),
     "gif":   ("Gif",  ".gif"),
 }
@@ -291,9 +291,7 @@ class ExecutionEngine:
             with open(temp_path, "wb") as f:
                 f.write(file_bytes)
             upload_url = await self.client._bot.request_send_file(rubpy_type)
-            new_fid = await self.client._bot.upload_file(
-                upload_url, f"media{ext}", temp_path
-            )
+            new_fid = await self.client._cdn_upload(upload_url, f"media{ext}", temp_path)
             await self.db.execute(
                 "UPDATE source_posts SET file_id = $1 WHERE id = $2",
                 new_fid, post_id,

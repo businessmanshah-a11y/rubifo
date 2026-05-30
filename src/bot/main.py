@@ -301,7 +301,7 @@ class RubikaClient:
             "photo": ("Image", ".jpg"),
             "video": ("Video", ".mp4"),
             "video_message": ("Video", ".mp4"),
-            "voice": ("File", ".ogg"),   # Rubika upload API uses "File" slot for voice (same as rubpy send_voice)
+            "voice": ("Voice", ".ogg"),
             "music": ("File", ".mp3"),
             "gif":   ("Gif",  ".gif"),
         }
@@ -340,7 +340,7 @@ class RubikaClient:
             logger.info(f"[REUPLOAD] Step 4: Requesting upload slot ({rubpy_type})...")
             upload_url = await self._bot.request_send_file(rubpy_type)
             logger.info(f"[REUPLOAD] Step 5: Uploading to bot CDN...")
-            new_fid = await self._bot.upload_file(upload_url, f"media{ext}", temp_path)
+            new_fid = await self._cdn_upload(upload_url, f"media{ext}", temp_path)
             logger.info(f"[REUPLOAD] Step 6: SUCCESS — new file_id={new_fid[:20]}...")
             return new_fid
         finally:
@@ -348,6 +348,29 @@ class RubikaClient:
                 os.unlink(temp_path)
             except Exception:
                 pass
+
+    async def _cdn_upload(self, url: str, filename: str, temp_path: str) -> str:
+        """Upload a file to Rubika CDN.
+
+        Rubika's upload endpoint returns {"data": {"file_id": "..."}} for most
+        types (File, Image, Video, …) but {"file_id": "..."} directly for Voice.
+        This helper handles both shapes.
+        """
+        import aiohttp
+        form = aiohttp.FormData()
+        form.add_field(
+            "file", open(temp_path, "rb"), filename=filename,
+            content_type="application/octet-stream",
+        )
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=form, ssl=False) as res:
+                if res.status != 200:
+                    text = await res.text()
+                    raise Exception(f"CDN upload failed: {res.status} {text[:200]}")
+                resp = await res.json()
+                if "data" in resp:
+                    return resp["data"]["file_id"]
+                return resp["file_id"]
 
     async def drain_old_updates(self) -> None:
         """Skip all pending messages on fresh start — just fast-forward the offset."""
