@@ -301,7 +301,7 @@ class RubikaClient:
             "photo": ("Image", ".jpg"),
             "video": ("Video", ".mp4"),
             "video_message": ("Video", ".mp4"),
-            "voice": ("Voice", ".ogg"),
+            "voice": ("Voice", ".mp3"),
             "music": ("File", ".mp3"),
             "gif":   ("Gif",  ".gif"),
         }
@@ -311,7 +311,7 @@ class RubikaClient:
         os.close(fd)
         try:
             import aiohttp
-            logger.info(f"[REUPLOAD] Step 1: getFile for file_id={file_id[:20]}...")
+            logger.info(f"[REUPLOAD] Step 1: getFile for file_id={file_id[:20]}... type={message_type}")
             cdn_url = await self._bot.get_file(file_id)
             logger.info(f"[REUPLOAD] Step 2: CDN url={cdn_url[:80]}")
 
@@ -339,8 +339,18 @@ class RubikaClient:
 
             logger.info(f"[REUPLOAD] Step 4: Requesting upload slot ({rubpy_type})...")
             upload_url = await self._bot.request_send_file(rubpy_type)
-            logger.info(f"[REUPLOAD] Step 5: Uploading to bot CDN...")
-            new_fid = await self._cdn_upload(upload_url, f"media{ext}", temp_path)
+            logger.info(f"[REUPLOAD] Step 5: Uploading to bot CDN (type={rubpy_type})...")
+            try:
+                new_fid = await self._cdn_upload(upload_url, f"media{ext}", temp_path)
+            except Exception as cdn_err:
+                # Voice CDN upload sometimes fails; fall back to generic File type
+                if message_type == "voice":
+                    logger.warning(f"[REUPLOAD] Voice CDN failed ({cdn_err}), retrying as File type...")
+                    upload_url2 = await self._bot.request_send_file("File")
+                    new_fid = await self._cdn_upload(upload_url2, f"media{ext}", temp_path)
+                    logger.info(f"[REUPLOAD] Voice→File fallback SUCCESS — new file_id={new_fid[:20]}...")
+                else:
+                    raise
             logger.info(f"[REUPLOAD] Step 6: SUCCESS — new file_id={new_fid[:20]}...")
             return new_fid
         finally:
@@ -368,9 +378,15 @@ class RubikaClient:
                     text = await res.text()
                     raise Exception(f"CDN upload failed: {res.status} {text[:200]}")
                 resp = await res.json()
-                if "data" in resp:
-                    return resp["data"]["file_id"]
-                return resp["file_id"]
+                logger.debug(f"[CDN-UPLOAD] response keys={list(resp.keys())} raw={str(resp)[:200]}")
+                if "data" in resp and resp["data"]:
+                    fid = resp["data"].get("file_id")
+                    if fid:
+                        return fid
+                fid = resp.get("file_id")
+                if fid:
+                    return fid
+                raise Exception(f"CDN upload: unexpected response shape: {str(resp)[:300]}")
 
     async def drain_old_updates(self) -> None:
         """Skip all pending messages on fresh start — just fast-forward the offset."""

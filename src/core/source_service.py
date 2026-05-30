@@ -16,14 +16,23 @@ def _detect_message_type(message: Dict[str, Any]):
     file_id = file_info.get("file_id") or sticker_info.get("sticker_id") or ""
     mime = (file_info.get("mime") or "").lower()
     fname = (file_info.get("file_name") or "").lower()
+    is_round = bool(file_info.get("is_round"))
+
+    # Log raw file info for diagnostics (helps debug voice/video detection issues)
+    if file_id:
+        logger.debug(f"[DETECT] file_id={file_id[:20]}... mime={mime!r} fname={fname!r} is_round={is_round} raw_file={dict(file_info)}")
 
     if mime.startswith("image") or fname.endswith((".jpg", ".jpeg", ".png", ".webp")):
         msg_type = "photo"
-    elif (mime.startswith("video") or fname.endswith((".mp4", ".mov", ".avi"))) and file_info.get("is_round"):
+    elif (mime.startswith("video") or fname.endswith((".mp4", ".mov", ".avi"))) and is_round:
         msg_type = "video_message"
     elif mime.startswith("video") or fname.endswith((".mp4", ".mov", ".avi")):
         msg_type = "video"
-    elif mime == "audio/ogg" or fname.endswith(".ogg"):
+    elif (
+        mime in ("audio/ogg", "audio/opus", "audio/mpeg", "audio/mp4", "audio/aac", "audio/x-m4a")
+        or fname.endswith((".ogg", ".oga", ".opus"))
+        or (fname.startswith(("ptt", "voice", "audio_")) and not fname.endswith((".mp3", ".m4a", ".flac")))
+    ):
         msg_type = "voice"
     elif mime.startswith("audio") or fname.endswith((".mp3", ".m4a", ".flac")):
         msg_type = "music"
