@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from src.utils import normalize_digits
+
 
 PlanKind = Literal[
     "interval",
@@ -46,14 +48,6 @@ LABEL_TO_CONTENT_TYPE = {
     "گیف": "gif",
 }
 TEHRAN_OFFSET = timedelta(hours=3, minutes=30)
-
-
-def normalize_digits(value: str) -> str:
-    persian = "۰۱۲۳۴۵۶۷۸۹"
-    arabic = "٠١٢٣٤٥٦٧٨٩"
-    table = {ord(ch): str(i) for i, ch in enumerate(persian)}
-    table.update({ord(ch): str(i) for i, ch in enumerate(arabic)})
-    return value.translate(table)
 
 
 def parse_hhmm(value: str) -> time:

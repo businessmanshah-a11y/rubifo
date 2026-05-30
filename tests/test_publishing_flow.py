@@ -233,3 +233,54 @@ async def test_edit_confirmation_updates_existing_program(mock_bot_client, mock_
     )
     text = mock_bot_client.send_message.await_args.args[1]
     assert "به‌روزرسانی" in text
+
+
+@pytest.mark.asyncio
+async def test_timing_value_accepts_persian_digits(mock_bot_client, mock_db):
+    publishing_flow.active_flows["u1"] = {
+        "step": "timing_value",
+        "flow_kind": "real",
+        "program_mode": "recurring",
+        "cadence": "interval",
+        "timing_start": "08:00",
+        "timing_end": "23:00",
+        "destination": SimpleNamespace(id=8, channel_id="@shop"),
+        "source": SimpleNamespace(id=4, name="رضایت مشتری"),
+    }
+
+    with patch("src.database.pool", mock_db):
+        with patch.object(publishing_flow.PublishingProgramService, "save_draft", new_callable=AsyncMock):
+            await publishing_flow.handle_text(mock_bot_client, "u1", "۶۰")
+
+    assert publishing_flow.active_flows["u1"]["config"]["interval_minutes"] == 60
+    assert publishing_flow.active_flows["u1"]["step"] == "confirm"
+
+
+@pytest.mark.asyncio
+async def test_exact_times_accepts_persian_digits(mock_bot_client, mock_db):
+    publishing_flow.active_flows["u1"] = {
+        "step": "timing",
+        "flow_kind": "real",
+        "program_mode": "recurring",
+        "cadence": "exact_times",
+        "destination": SimpleNamespace(id=8, channel_id="@shop"),
+        "source": SimpleNamespace(id=4, name="رضایت مشتری"),
+    }
+
+    with patch("src.database.pool", mock_db):
+        with patch.object(publishing_flow.PublishingProgramService, "save_draft", new_callable=AsyncMock):
+            await publishing_flow.handle_text(mock_bot_client, "u1", "۰۹:۰۰ ۱۴:۰۰ ۲۰:۰۰")
+
+    assert publishing_flow.active_flows["u1"]["config"]["times"] == ["09:00", "14:00", "20:00"]
+    assert publishing_flow.active_flows["u1"]["step"] == "confirm"
+
+
+@pytest.mark.asyncio
+async def test_compact_timing_accepts_persian_digits():
+    state = {"program_mode": "recurring", "cadence": "daily_count"}
+
+    config = publishing_flow._parse_timing(state, "۸ تا ۲۳ | ۶")
+
+    assert config["start_time"] == "08:00"
+    assert config["end_time"] == "23:00"
+    assert config["daily_count"] == 6

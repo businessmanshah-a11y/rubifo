@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from src.models.schedule import Schedule, ScheduleTime
 from src.logger import logger
 from src.core.professional_schedule import PlanSlotGenerator, describe_plan
+from src.utils import to_jalali_date
 
 
 class ScheduleService:
@@ -440,7 +441,7 @@ class ScheduleService:
     def preview_plan(self, plan_kind: str, config: Dict[str, Any], count: int = 5) -> str:
         """Return a concise Farsi preview for a professional plan."""
         slots = PlanSlotGenerator().next_slots(plan_kind, config, count=count)
-        times = "، ".join(slot.tehran_time.strftime("%m/%d %H:%M") for slot in slots) or "اجرای آینده ندارد"
+        times = "، ".join(to_jalali_date(slot.tehran_time, "%m/%d %H:%M") for slot in slots) or "اجرای آینده ندارد"
         return f"{describe_plan(plan_kind, config)}\n۵ اجرای بعدی: {times}"
 
     @staticmethod

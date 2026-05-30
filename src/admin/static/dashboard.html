@@ -309,12 +309,12 @@
                         <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${t.amount}</td>
                         <td>${t.tier || '—'}</td>
                         <td>${statusDot(t.status)}</td>
-                        <td class="mono">${new Date(t.created_at).toLocaleDateString('fa-IR')}</td>
+                        <td class="mono">${new Date(t.created_at).toLocaleDateString('fa-IR-u-ca-persian')}</td>
                     </tr>`
                 ).join('') || '<tr><td colspan="6" style="color:var(--text-3);padding:14px 0;">تراکنشی نیست</td></tr>';
 
                 document.getElementById('lastUpdate').textContent =
-                    'آخرین بروزرسانی: ' + new Date().toLocaleTimeString('fa-IR');
+                    'آخرین بروزرسانی: ' + new Date().toLocaleTimeString('fa-IR-u-ca-persian');
             } catch (e) {
                 console.error('Dashboard load error:', e);
             }

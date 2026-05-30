@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import asyncio
 from src.logger import logger
 from src.config import SUBSCRIPTION_TIERS
-from src.utils import fmt_tehran
+from src.utils import fmt_jalali_tehran, normalize_digits, to_jalali_date
 from src.integrations.zarinpal import create_zarinpal_gateway
 from src.core.professional_schedule import (
     CampaignPlanConfig,
@@ -897,7 +897,7 @@ async def handle_destination_plans(client, user_id: int, target_channel_id: str)
             import json
             cfg = p["config"] if isinstance(p["config"], dict) else json.loads(p["config"] or "{}")
             type_info = describe_plan(pk, cfg)
-            next_run = fmt_tehran(p["next_run"], "%d/%m %H:%M") if p["next_run"] else "—"
+            next_run = fmt_jalali_tehran(p["next_run"], "%m/%d %H:%M") if p["next_run"] else "—"
             paused = f"\n   وضعیت: {p['paused_reason']}" if p.get("paused_reason") else ""
             msg += (
                 f"{active_icon} {p['source_name'] or 'دسته محتوا'}\n"
@@ -1018,8 +1018,8 @@ async def handle_calendar_display(client, user_id: int, target_channel_id: str) 
             next_run = p["next_run"]
             if not next_run or next_run > week_end:
                 continue
-            day_key = fmt_tehran(next_run, "%Y/%m/%d")
-            time_str = fmt_tehran(next_run, "%H:%M")
+            day_key = fmt_jalali_tehran(next_run, "%Y/%m/%d")
+            time_str = fmt_jalali_tehran(next_run, "%H:%M")
             src = p["source_name"] or "دسته محتوا"
             pk = p["plan_kind"] or p["schedule_type"]
             cfg = p["config"] if isinstance(p["config"], dict) else json.loads(p["config"] or "{}")
@@ -1087,7 +1087,7 @@ async def handle_subscription_status(client, user_id: int) -> None:
             days_left = status["days_left"]
             dest_used = status["destinations_used"]
             dest_limit = status["destinations_limit"]
-            end_date = status["end_date"]
+            end_date = to_jalali_date(status["end_date"])
 
             slots_remaining = dest_limit - dest_used
             slots_msg = (
@@ -1133,7 +1133,7 @@ async def handle_buy(client, user_id: int) -> None:
             await client.send_message(
                 user_id,
                 f"شما اشتراک {tier_fa} دارید.\n"
-                f"تاریخ پایان: {active_sub.end_date}\n\n"
+                f"تاریخ پایان: {to_jalali_date(active_sub.end_date)}\n\n"
                 "/renew برای تمدید"
             )
             return
@@ -1215,7 +1215,7 @@ async def verify_payment_polling(client, subscription_service, authority: str, a
                     f"✅ پرداخت تأیید شد!\n\n"
                     f"اشتراک {_tier_name(tier)} فعال شد.\n"
                     "همه امکانات Rubifo برای شما باز است؛ محدودیت فقط تعداد کانال مقصد پلن شماست.\n"
-                    f"تاریخ پایان: {sub.end_date}"
+                    f"تاریخ پایان: {to_jalali_date(sub.end_date)}"
                 )
                 return
             await asyncio.sleep(10)
@@ -1296,7 +1296,7 @@ async def verify_renewal_payment_polling(client, subscription_service, authority
                 await client.send_message(
                     user_id,
                     f"✅ تمدید پلن {_tier_name(tier)} انجام شد!\n"
-                    f"تاریخ پایان جدید: {sub.end_date}"
+                    f"تاریخ پایان جدید: {to_jalali_date(sub.end_date)}"
                 )
                 return
             await asyncio.sleep(10)
@@ -1395,7 +1395,7 @@ async def handle_logs(client, user_id: int) -> None:
             msg += "\nآخرین رویدادها:\n"
             for log in logs:
                 emoji = "✅" if log["status"] == "sent" else ("⏳" if log["status"] == "pending" else "❌")
-                t = log["created_at"].strftime("%m/%d %H:%M")
+                t = fmt_jalali_tehran(log["created_at"], "%m/%d %H:%M")
                 src = log["source_name"] or "؟"
                 tgt = (log["target_channel_id"] or "؟")[:20]
                 msg += f"{emoji} {t} | {src} → {tgt}\n"
@@ -1469,7 +1469,7 @@ async def handle_addplan(client, user_id: int) -> None:
 async def handle_addplan_route_selection(client, user_id: int, text: str) -> None:
     state = conversation_states.get(user_id, {})
     route_map = state.get("route_map", {})
-    route_id = route_map.get(text.strip())
+    route_id = route_map.get(normalize_digits(text.strip()))
     if not route_id:
         await client.send_message(user_id, "❌ شماره نامعتبر. دوباره وارد کنید.")
         return
@@ -1481,7 +1481,7 @@ async def handle_addplan_route_selection(client, user_id: int, text: str) -> Non
 
 async def handle_addplan_type_selection(client, user_id: int, text: str) -> None:
     state = conversation_states.get(user_id, {})
-    choice = text.strip()
+    choice = normalize_digits(text.strip())
     if choice in {"3", "4", "5", "6", "7", "8"}:
         from src.database import pool
         from src.core.subscription_service import SubscriptionService
@@ -1554,7 +1554,7 @@ async def handle_addplan_type_selection(client, user_id: int, text: str) -> None
 
 async def handle_addplan_interval_input(client, user_id: int, text: str) -> None:
     try:
-        minutes = int(text.strip())
+        minutes = int(normalize_digits(text.strip()))
     except ValueError:
         await client.send_message(user_id, "❌ عدد وارد کنید.")
         return
@@ -1570,7 +1570,7 @@ async def handle_addplan_daily_count_input(client, user_id: int, text: str) -> N
 
     if sub_step == 1:
         try:
-            count = int(text.strip())
+            count = int(normalize_digits(text.strip()))
         except ValueError:
             await client.send_message(user_id, "❌ عدد وارد کنید.")
             return
@@ -1581,7 +1581,7 @@ async def handle_addplan_daily_count_input(client, user_id: int, text: str) -> N
     elif sub_step == 2:
         times = []
         try:
-            for part in text.strip().split():
+            for part in normalize_digits(text.strip()).split():
                 h, m = part.split(":")
                 times.append((int(h), int(m)))
         except Exception:
@@ -1608,7 +1608,7 @@ async def handle_addplan_interval(client, user_id: int, interval_minutes: int) -
         )
         await client.send_message(
             user_id,
-            f"✅ برنامه ساخته شد!\nنوع: هر {interval_minutes} دقیقه\nاجرای بعدی: {fmt_tehran(sched.next_run)}",
+            f"✅ برنامه ساخته شد!\nنوع: هر {interval_minutes} دقیقه\nاجرای بعدی: {fmt_jalali_tehran(sched.next_run)}",
             with_keypad=True,
         )
     except Exception as e:
@@ -1645,7 +1645,7 @@ async def handle_addplan_daily_count(
 
 
 def _parse_professional_plan(plan_kind: str, text: str) -> Tuple[str, Dict[str, Any]]:
-    raw = text.strip()
+    raw = normalize_digits(text.strip())
     if plan_kind == "quick":
         parsed = PersianQuickPlanParser().parse(raw)
         return parsed.plan_kind, parsed.config
@@ -1754,7 +1754,7 @@ async def handle_addplan_confirm(client, user_id: int, text: str) -> None:
         await client.send_message(
             user_id,
             f"✅ پلن حرفه‌ای #{sched.id} {action}!\n{describe_plan(plan_kind, config)}\n"
-            f"اجرای بعدی: {fmt_tehran(sched.next_run)}",
+            f"اجرای بعدی: {fmt_jalali_tehran(sched.next_run)}",
             with_keypad=True,
         )
     except Exception as e:
@@ -1781,7 +1781,7 @@ async def handle_listplans(client, user_id: int) -> None:
                     import json
                     config = json.loads(config)
                 type_info = describe_plan(p.get("plan_kind") or p.get("schedule_type"), config)
-                next_run = fmt_tehran(p.get("next_run"), "%d/%m %H:%M") if p.get("next_run") else "—"
+                next_run = fmt_jalali_tehran(p.get("next_run"), "%m/%d %H:%M") if p.get("next_run") else "—"
                 paused = f"\n   وضعیت: {p.get('paused_reason')}" if p.get("paused_reason") else ""
                 msg += f"{active} {source} → {channel}\n   {type_info}\n   اجرای بعدی: {next_run}{paused}\n\n"
 
@@ -1801,7 +1801,7 @@ async def handle_listplans(client, user_id: int) -> None:
                 type_info = f"هر {s.interval_minutes} دقیقه" if s.schedule_type == "interval" else f"{s.daily_count} پیام/روز"
             else:
                 type_info = describe_plan(s.plan_kind or s.schedule_type, s.config or {})
-            next_run = fmt_tehran(s.next_run, "%d/%m %H:%M") if s.next_run else "—"
+            next_run = fmt_jalali_tehran(s.next_run, "%m/%d %H:%M") if s.next_run else "—"
             paused = f"\n   دلیل توقف: {s.paused_reason}" if getattr(s, "paused_reason", None) else ""
             msg += f"{active} برنامه #{s.id}\n   {type_info}\n   بعدی: {next_run}{paused}\n\n"
 

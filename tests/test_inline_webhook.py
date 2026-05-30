@@ -11,6 +11,15 @@ from src.bot.main import RubikaClient
 from src.bot.text import format_rtl_message
 
 
+@pytest.fixture(autouse=True)
+def clear_inline_routing_state():
+    handlers.publishing_flow.active_flows.clear()
+    commands.conversation_states.clear()
+    yield
+    handlers.publishing_flow.active_flows.clear()
+    commands.conversation_states.clear()
+
+
 class FakeRequest:
     def __init__(self, payload):
         self.payload = payload
@@ -149,6 +158,17 @@ async def test_route_stable_source_button_ids(monkeypatch):
     with patch("src.bot.commands.handle_addpost", new_callable=AsyncMock) as addpost:
         await handlers.route_message(client, "u1", {"text": "addpost_5", "new_message": {}})
     addpost.assert_awaited_once_with(client, "u1", 5)
+
+
+@pytest.mark.asyncio
+async def test_route_stable_source_button_ids_accept_persian_digits(monkeypatch):
+    client = AsyncMock()
+    handlers.publishing_flow.active_flows.pop("u1", None)
+
+    with patch("src.bot.commands.handle_viewsource", new_callable=AsyncMock) as viewsource:
+        await handlers.route_message(client, "u1", {"text": "viewsource_۵", "new_message": {}})
+
+    viewsource.assert_awaited_once_with(client, "u1", 5)
 
 
 @pytest.mark.asyncio

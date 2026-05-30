@@ -289,7 +289,7 @@
                         ? `<span class="badge badge-warning">${tierLabel[user.current_tier] || user.current_tier}</span>`
                         : `<span style="color:var(--text-3)">—</span>`;
                     const subEnd = user.subscription_end
-                        ? new Date(user.subscription_end).toLocaleDateString('fa-IR')
+                        ? new Date(user.subscription_end).toLocaleDateString('fa-IR-u-ca-persian')
                         : '—';
                     const uname = user.username || `<em style="color:var(--text-3)">—</em>`;
 
@@ -301,7 +301,7 @@
                             <td>${trialBadge}</td>
                             <td>${tier}</td>
                             <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${subEnd}</td>
-                            <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${new Date(user.created_at).toLocaleDateString('fa-IR')}</td>
+                            <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${new Date(user.created_at).toLocaleDateString('fa-IR-u-ca-persian')}</td>
                             <td>
                                 <button class="btn btn-secondary btn-small" onclick="viewUserDetail(${user.id})">جزئیات</button>
                                 <button class="activity-btn" onclick="openActivity(${user.id}, '${user.username || user.user_id}')">📋 تاریخچه</button>
@@ -324,14 +324,14 @@
             document.getElementById('detailId').textContent         = user.id;
             document.getElementById('detailUserId').textContent     = user.user_id;
             document.getElementById('detailUsername').textContent    = user.username || '—';
-            document.getElementById('detailCreatedAt').textContent   = new Date(user.created_at).toLocaleDateString('fa-IR');
+            document.getElementById('detailCreatedAt').textContent   = new Date(user.created_at).toLocaleDateString('fa-IR-u-ca-persian');
             document.getElementById('detailTrialStatus').textContent = user.is_trial_active ? '✅ فعال' : '❌ منقضی';
 
             const subList = document.getElementById('detailSubscriptions');
             subList.innerHTML = (data.subscriptions || []).length === 0
                 ? '<li>ندارد</li>'
                 : data.subscriptions.map(s =>
-                    `<li><strong>${tierLabel[s.tier] || s.tier}</strong> — تا ${new Date(s.end_date).toLocaleDateString('fa-IR')} ${s.is_active ? '✅' : '❌'}</li>`
+                    `<li><strong>${tierLabel[s.tier] || s.tier}</strong> — تا ${new Date(s.end_date).toLocaleDateString('fa-IR-u-ca-persian')} ${s.is_active ? '✅' : '❌'}</li>`
                 ).join('');
 
             const routeList = document.getElementById('detailRoutes');
@@ -343,7 +343,7 @@
             txnList.innerHTML = (data.recent_transactions || []).length === 0
                 ? '<li>ندارد</li>'
                 : data.recent_transactions.map(t =>
-                    `<li>${Number(t.amount).toLocaleString('fa-IR')} تومان — ${t.status} — ${new Date(t.created_at).toLocaleDateString('fa-IR')}</li>`
+                    `<li>${Number(t.amount).toLocaleString('fa-IR-u-ca-persian')} تومان — ${t.status} — ${new Date(t.created_at).toLocaleDateString('fa-IR-u-ca-persian')}</li>`
                 ).join('');
 
             document.getElementById('userModal').style.display = 'flex';
@@ -374,7 +374,8 @@
                 });
                 if (res.success) {
                     const ok = document.getElementById('grantSuccess');
-                    ok.textContent = `✅ اشتراک ${tierLabel[tier] || tier} تا ${res.end_date} فعال شد. کاربر مطلع شد.`;
+                    const endDate = new Date(res.end_date).toLocaleDateString('fa-IR-u-ca-persian');
+                    ok.textContent = `✅ اشتراک ${tierLabel[tier] || tier} تا ${endDate} فعال شد. کاربر مطلع شد.`;
                     ok.style.display = 'block';
                     btn.textContent  = '✅ انجام شد';
                     loadUsers();
@@ -419,7 +420,7 @@
                 const levelBadge = { info: 'badge-info', warning: 'badge-warning', error: 'badge-danger' };
                 container.innerHTML = logs.map(log => `
                     <div class="act-log-row">
-                        <span class="act-time">${new Date(log.created_at).toLocaleString('fa-IR')}</span>
+                        <span class="act-time">${new Date(log.created_at).toLocaleString('fa-IR-u-ca-persian')}</span>
                         <span class="act-action">${log.action || '—'}</span>
                         <span class="act-msg">${log.message || '—'}</span>
                     </div>`).join('');

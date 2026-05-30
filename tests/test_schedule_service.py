@@ -2,7 +2,8 @@
 
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 from src.core.schedule_service import ScheduleService
 from src.models.schedule import Schedule
 
@@ -125,6 +126,22 @@ class TestScheduleService:
 
         assert isinstance(schedules, list)
         assert mock_db.fetch.called
+
+
+def test_preview_plan_uses_jalali_dates():
+    """Professional previews display upcoming slots in Jalali."""
+    slot = SimpleNamespace(tehran_time=datetime(2026, 5, 20, 12, 0))
+
+    with patch("src.core.schedule_service.PlanSlotGenerator") as generator_cls:
+        generator_cls.return_value.next_slots.return_value = [slot]
+        preview = ScheduleService(None).preview_plan(
+            "smart_queue",
+            {"daily_count": 1, "start_time": "09:00", "end_time": "23:00"},
+            count=1,
+        )
+
+    assert "۰۲/۳۰ ۱۲:۰۰" in preview
+    assert "05/20" not in preview
 
 
 @pytest.mark.asyncio

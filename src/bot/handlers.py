@@ -2,6 +2,7 @@ import re
 from src.logger import logger
 from src.bot import commands
 from src.bot import publishing_flow
+from src.utils import normalize_digits
 
 
 async def _log_action(user_id: str, action: str, message: str, level: str = "info") -> None:
@@ -67,16 +68,20 @@ _ADDPOST_BTN = re.compile(r"^➕ #(\d+) افزودن$")
 _CAL_SELECT_BTN = re.compile(r"^[1-9️⃣️]+\s+(@\S+)$")
 
 
+def _parse_user_int(value: str) -> int:
+    return int(normalize_digits(value))
+
+
 async def _route_inline_button(client, user_id: str, text: str) -> bool:
     """Try to route dynamic inline button text. Returns True if matched."""
     m = _STABLE_VIEWSOURCE_BTN.match(text)
     if m:
-        await commands.handle_viewsource(client, user_id, int(m.group(1)))
+        await commands.handle_viewsource(client, user_id, _parse_user_int(m.group(1)))
         return True
 
     m = _STABLE_ADDPOST_BTN.match(text)
     if m:
-        await commands.handle_addpost(client, user_id, int(m.group(1)))
+        await commands.handle_addpost(client, user_id, _parse_user_int(m.group(1)))
         return True
 
     m = _STABLE_DST_PLANS_BTN.match(text)
@@ -114,12 +119,12 @@ async def _route_inline_button(client, user_id: str, text: str) -> bool:
     # Mysources inline buttons
     m = _VIEWSOURCE_BTN.match(text)
     if m:
-        await commands.handle_viewsource(client, user_id, int(m.group(1)))
+        await commands.handle_viewsource(client, user_id, _parse_user_int(m.group(1)))
         return True
 
     m = _ADDPOST_BTN.match(text)
     if m:
-        await commands.handle_addpost(client, user_id, int(m.group(1)))
+        await commands.handle_addpost(client, user_id, _parse_user_int(m.group(1)))
         return True
 
     # Calendar channel selection buttons
@@ -213,17 +218,17 @@ async def route_message(client, user_id: str, message: dict) -> None:
         elif cmd == "/subscription_status":
             await commands.handle_subscription_status(client, user_id)
         elif cmd == "/viewsource" and len(parts) > 1:
-            await commands.handle_viewsource(client, user_id, int(parts[1]))
+            await commands.handle_viewsource(client, user_id, _parse_user_int(parts[1]))
         elif cmd == "/addpost" and len(parts) > 1:
-            await commands.handle_addpost(client, user_id, int(parts[1]))
+            await commands.handle_addpost(client, user_id, _parse_user_int(parts[1]))
         elif cmd == "/removepost" and len(parts) > 1:
-            await commands.handle_removepost(client, user_id, int(parts[1]))
+            await commands.handle_removepost(client, user_id, _parse_user_int(parts[1]))
         elif cmd == "/deletesource" and len(parts) > 1:
-            await commands.handle_deletesource(client, user_id, int(parts[1]))
+            await commands.handle_deletesource(client, user_id, _parse_user_int(parts[1]))
         elif cmd == "/listroutes":
             await commands.handle_listplans(client, user_id)
         elif cmd == "/removeroute" and len(parts) > 1:
-            await commands.handle_removeroute(client, user_id, int(parts[1]))
+            await commands.handle_removeroute(client, user_id, _parse_user_int(parts[1]))
         elif cmd == "/buy":
             await commands.handle_buy(client, user_id)
         elif cmd == "/buy_basic":
@@ -237,11 +242,11 @@ async def route_message(client, user_id: str, message: dict) -> None:
         elif cmd == "/listplans":
             await commands.handle_listplans(client, user_id)
         elif cmd == "/editplan" and len(parts) > 1:
-            await commands.handle_editplan(client, user_id, int(parts[1]))
+            await commands.handle_editplan(client, user_id, _parse_user_int(parts[1]))
         elif cmd == "/removeplan" and len(parts) > 1:
-            await commands.handle_removeplan(client, user_id, int(parts[1]))
+            await commands.handle_removeplan(client, user_id, _parse_user_int(parts[1]))
         elif cmd == "/toggleplan" and len(parts) > 1:
-            await commands.handle_toggleplan(client, user_id, int(parts[1]))
+            await commands.handle_toggleplan(client, user_id, _parse_user_int(parts[1]))
         elif cmd == "/logs":
             await commands.handle_logs(client, user_id)
         elif cmd == "/calendar":

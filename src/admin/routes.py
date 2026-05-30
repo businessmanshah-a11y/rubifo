@@ -10,6 +10,7 @@ import src.database as db_module
 from src.core.transaction_service import TransactionService
 from src.core.subscription_service import SubscriptionService
 from src.core.user_service import UserService
+from src.utils import to_jalali_date
 from src.logger import logger
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -787,8 +788,8 @@ async def grant_subscription(
                 rubika_user_id,
                 f"🎉 اشتراک شما توسط ادمین فعال شد!\n\n"
                 f"📦 پلن: {tier_fa.get(body.tier, body.tier)}\n"
-                f"📅 تاریخ شروع: {start}\n"
-                f"📅 تاریخ پایان: {end}\n"
+                f"📅 تاریخ شروع: {to_jalali_date(start)}\n"
+                f"📅 تاریخ پایان: {to_jalali_date(end)}\n"
                 f"⏳ مدت: {body.months} ماه\n\n"
                 f"از اعتماد شما ممنونیم 🙏",
             )

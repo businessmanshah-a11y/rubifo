@@ -248,7 +248,7 @@
         const payload = JSON.parse(atob(token.split('.')[1]));
         document.getElementById('currentUser').textContent = payload.sub || 'Admin';
         document.getElementById('sessionInfo').textContent =
-            `ورود به عنوان ${payload.sub || 'Admin'} — ${new Date((payload.iat || 0) * 1000).toLocaleString('fa-IR')}`;
+            `ورود به عنوان ${payload.sub || 'Admin'} — ${new Date((payload.iat || 0) * 1000).toLocaleString('fa-IR-u-ca-persian')}`;
         document.getElementById('zarinpalStatus').textContent  = '✅ متصل';
     </script>
 </body>

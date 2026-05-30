@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, patch
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from src.bot import commands, handlers
 from src.bot.main import RubikaBotApiClient
 
@@ -255,6 +255,32 @@ class TestBotPlanCommands:
         assert kwargs["times"] == [(9, 0), (13, 40), (18, 20)]
         assert user_id not in commands.conversation_states
 
+    async def test_addplan_route_selection_accepts_persian_digits(self, mock_bot_client):
+        """Route selection maps Persian digits to saved ASCII route keys."""
+        user_id = 123456789
+        commands.conversation_states[user_id] = {
+            "command": "addplan_route_select",
+            "route_map": {"1": 42},
+        }
+
+        await commands.handle_addplan_route_selection(mock_bot_client, user_id, "۱")
+
+        assert commands.conversation_states[user_id]["route_id"] == 42
+        assert commands.conversation_states[user_id]["command"] == "addplan_type_select"
+
+    async def test_addplan_type_selection_accepts_persian_digits(self, mock_bot_client):
+        """Plan type selection accepts Persian digits from Farsi keyboards."""
+        user_id = 123456789
+        commands.conversation_states[user_id] = {
+            "command": "addplan_type_select",
+            "route_id": 42,
+        }
+
+        await commands.handle_addplan_type_selection(mock_bot_client, user_id, "۲")
+
+        assert commands.conversation_states[user_id]["command"] == "addplan_daily_count"
+        assert commands.conversation_states[user_id]["sub_step"] == 1
+
     async def test_listplans_empty(self, mock_bot_client, mock_db):
         """Test /listplans with no plans."""
         mock_db.fetch.return_value = []
@@ -306,6 +332,82 @@ class TestBotUtilityCommands:
             await commands.handle_calendar(mock_bot_client, 123456789)
 
         assert mock_bot_client.send_message.called
+
+    async def test_calendar_display_uses_jalali_dates(self, mock_bot_client, mock_db):
+        """Calendar day headers and times use Jalali display with Persian digits."""
+        mock_db.fetch.side_effect = [
+            [{"id": 1}],
+            [
+                {
+                    "id": 9,
+                    "route_id": 1,
+                    "schedule_type": "publishing_program",
+                    "plan_kind": "publishing_program",
+                    "config": {"program_mode": "recurring", "cadence": "interval", "interval_minutes": 60},
+                    "interval_minutes": 60,
+                    "daily_count": None,
+                    "next_run": datetime(2026, 5, 20, 8, 30),
+                    "is_active": True,
+                    "paused_reason": None,
+                    "program_purpose": "real",
+                    "source_name": "رضایت مشتری",
+                }
+            ],
+        ]
+        mock_db.fetchval.return_value = 2
+
+        with patch("src.database.pool", mock_db):
+            await commands.handle_calendar_display(mock_bot_client, 123456789, "@shop")
+
+        message = mock_bot_client.send_message.await_args.args[1]
+        assert "۱۴۰۵/۰۲/۳۰" in message
+        assert "۱۲:۰۰" in message
+        assert "2026/05/20" not in message
+
+    async def test_destination_plans_use_jalali_next_run(self, mock_bot_client, mock_db):
+        """Destination plan summaries render next_run as Jalali."""
+        mock_db.fetch.return_value = [
+            {
+                "is_active": True,
+                "plan_kind": "publishing_program",
+                "schedule_type": "publishing_program",
+                "config": {"program_mode": "recurring", "cadence": "interval", "interval_minutes": 60},
+                "next_run": datetime(2026, 5, 20, 8, 30),
+                "paused_reason": None,
+                "source_name": "رضایت مشتری",
+            }
+        ]
+
+        with patch("src.database.pool", mock_db):
+            await commands.handle_destination_plans(mock_bot_client, 123456789, "@shop")
+
+        message = mock_bot_client.send_message.await_args.args[1]
+        assert "۰۲/۳۰ ۱۲:۰۰" in message
+        assert "05/20" not in message
+
+    async def test_subscription_status_uses_jalali_end_date(self, mock_bot_client, mock_db):
+        """Subscription end dates shown to users are Jalali."""
+        status = {
+            "status": "active",
+            "tier": "basic",
+            "end_date": date(2026, 5, 20),
+            "days_left": 10,
+            "hours_left": 240,
+            "destinations_used": 1,
+            "destinations_limit": 1,
+        }
+
+        with patch("src.database.pool", mock_db):
+            with patch(
+                "src.core.subscription_service.SubscriptionService.get_subscription_status",
+                new_callable=AsyncMock,
+                return_value=status,
+            ):
+                await commands.handle_subscription_status(mock_bot_client, 123456789)
+
+        message = mock_bot_client.send_message.await_args.args[1]
+        assert "تاریخ پایان: ۱۴۰۵/۰۲/۳۰" in message
+        assert "2026-05-20" not in message
 
     async def test_logs_command(self, mock_bot_client, mock_db):
         """Test /logs command."""
@@ -417,6 +519,16 @@ class TestMessageRouter:
 
         begin_program.assert_awaited_once_with(mock_bot_client, 123456789)
         add_plan.assert_not_awaited()
+
+    async def test_route_numeric_command_accepts_persian_digits(self, mock_bot_client, mock_db):
+        """Slash commands with numeric IDs accept Persian digits."""
+        message = {"text": "/editplan ۱۲"}
+
+        with patch("src.database.pool", mock_db):
+            with patch("src.bot.commands.handle_editplan", new_callable=AsyncMock) as edit_plan:
+                await handlers.route_message(mock_bot_client, 123456789, message)
+
+        edit_plan.assert_awaited_once_with(mock_bot_client, 123456789, 12)
 
     async def test_route_unknown_command(self, mock_bot_client):
         """Test routing unknown command."""

@@ -238,8 +238,8 @@
 
         function fmtTime(iso) {
             const d = new Date(iso);
-            return d.toLocaleDateString('fa-IR') + '<br>' +
-                   d.toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+            return d.toLocaleDateString('fa-IR-u-ca-persian') + '<br>' +
+                   d.toLocaleTimeString('fa-IR-u-ca-persian', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
         }
 
         function renderEntry(log, extraClass = '') {

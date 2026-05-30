@@ -1,5 +1,7 @@
 """Integration tests for admin dashboard (T62)."""
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from datetime import datetime
@@ -279,6 +281,16 @@ class TestAdminSecurity:
         """Test CORS headers are properly set."""
         response = client.options("/health")
         # This tests that the app is accessible
+
+
+def test_admin_static_pages_use_explicit_persian_calendar_locale():
+    """Admin-visible dates should request the Persian calendar explicitly."""
+    static_dir = Path("src/admin/static")
+    html = "\n".join(path.read_text(encoding="utf-8") for path in static_dir.glob("*.html"))
+
+    assert "fa-IR-u-ca-persian" in html
+    assert "toLocaleDateString('fa-IR')" not in html
+    assert "toLocaleString('fa-IR')" not in html
 
 
 if __name__ == "__main__":

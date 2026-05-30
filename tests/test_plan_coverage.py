@@ -26,6 +26,11 @@ from src.core.professional_schedule import (
     parse_jalali_date,
     persian_weekday_for_gregorian,
 )
+from src.utils import (
+    fmt_jalali_tehran,
+    normalize_digits as normalize_user_digits,
+    to_jalali_date,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -44,6 +49,15 @@ def test_normalize_digits_arabic():
 def test_normalize_digits_mixed_leaves_ascii_unchanged():
     result = normalize_digits("abc123۴۵۶")
     assert result == "abc123456"
+
+
+def test_shared_normalize_digits_handles_user_input_digits():
+    assert normalize_user_digits("زمان ۰۹:۳۰ و ١٢ پست") == "زمان 09:30 و 12 پست"
+
+
+def test_jalali_display_helpers_use_persian_digits():
+    assert to_jalali_date(date(2026, 5, 20)) == "۱۴۰۵/۰۲/۳۰"
+    assert fmt_jalali_tehran(datetime(2026, 5, 20, 8, 30)) == "۱۴۰۵/۰۲/۳۰ ۱۲:۰۰"
 
 
 def test_parse_hhmm_hour_only():

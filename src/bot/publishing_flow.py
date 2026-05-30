@@ -10,6 +10,7 @@ from src.core.professional_schedule import PublishingProgramConfig, describe_pla
 from src.core.publishing_program_service import PublishingProgramService
 from src.core.source_service import SourceService, _detect_message_type
 from src.logger import logger
+from src.utils import normalize_digits
 
 
 active_flows: Dict[str, Dict[str, Any]] = {}
@@ -226,7 +227,7 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
                 ch.channel_id == value
                 for ch in await DestinationService(pool).list_verified(user_id)
             )
-            if not forwarded_channel_id and not is_known_channel:
+            if not forwarded_channel_id and not is_known_channel and not value:
                 await client.send_message(
                     user_id,
                     "لطفاً یک پیام از کانال مقصد را اینجا فوروارد کنید.\n\n"
@@ -535,7 +536,7 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
 
         if state["step"] == "timing_value":
             try:
-                number = int(value.strip())
+                number = int(normalize_digits(value.strip()))
                 if number <= 0:
                     raise ValueError()
             except ValueError:
@@ -720,6 +721,7 @@ async def _repeat_step_prompt(client, user_id: str, state: Dict[str, Any]) -> No
 
 
 def _parse_timing(state: Dict[str, Any], value: str) -> Dict[str, Any]:
+    value = normalize_digits(value)
     config: Dict[str, Any] = {
         "program_mode": state["program_mode"],
         "cadence": state["cadence"],
