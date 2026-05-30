@@ -1771,22 +1771,33 @@ async def handle_listplans(client, user_id: int) -> None:
 
         programs = await PublishingProgramService(pool).list_programs(user_id)
         if programs:
-            msg = "📅 برنامه‌های انتشار شما:\n\n"
+            await client.send_message(user_id, f"📅 برنامه‌های انتشار شما ({len(programs)} برنامه):", with_keypad=True)
+            import json as _json
             for p in programs:
-                active = "✅" if p.get("is_active") else "⏳"
+                sched_id = p.get("schedule_id") or p.get("id")
+                is_active = p.get("is_active")
+                active = "✅" if is_active else "⏸"
                 source = p.get("source_name") or "دسته نامشخص"
                 channel = p.get("channel_id") or p.get("target_channel_id") or "کانال نامشخص"
                 config = p.get("config") or {}
                 if isinstance(config, str):
-                    import json
-                    config = json.loads(config)
+                    config = _json.loads(config)
                 type_info = describe_plan(p.get("plan_kind") or p.get("schedule_type"), config)
                 next_run = fmt_jalali_tehran(p.get("next_run"), "%m/%d %H:%M") if p.get("next_run") else "—"
-                paused = f"\n   وضعیت: {p.get('paused_reason')}" if p.get("paused_reason") else ""
-                msg += f"{active} {source} → {channel}\n   {type_info}\n   اجرای بعدی: {next_run}{paused}\n\n"
-
-            msg += "برای ساخت برنامه تازه، «➕ ساخت برنامه جدید» را بزنید."
-            await client.send_message(user_id, msg, with_keypad=True)
+                paused = f"\n⚠️ متوقف: {p.get('paused_reason')}" if p.get("paused_reason") else ""
+                msg = (
+                    f"{active} {source} ← {channel}\n"
+                    f"زمان‌بندی: {type_info}\n"
+                    f"اجرای بعدی: {next_run}{paused}"
+                )
+                toggle_label = "⏸ توقف" if is_active else "▶️ فعال‌سازی"
+                btns = [
+                    ("✏️ ویرایش زمانبندی", f"editplan_{sched_id}"),
+                    (toggle_label, f"toggleplan_{sched_id}"),
+                    ("🗑️ حذف برنامه", f"removeplan_{sched_id}"),
+                ]
+                keypad = _make_inline_keypad(btns, cols=2)
+                await client.send_message(user_id, msg, inline_keypad=keypad)
             return
 
         schedules = await ScheduleService(pool).get_user_schedules(user_id)

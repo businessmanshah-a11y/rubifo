@@ -227,7 +227,7 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
                 ch.channel_id == value
                 for ch in await DestinationService(pool).list_verified(user_id)
             )
-            if not forwarded_channel_id and not is_known_channel and not value:
+            if not forwarded_channel_id and not is_known_channel:
                 await client.send_message(
                     user_id,
                     "لطفاً یک پیام از کانال مقصد را اینجا فوروارد کنید.\n\n"
@@ -238,7 +238,8 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
                 )
                 return True
             try:
-                channel_id = forwarded_channel_id or DestinationService.normalize_channel_input(value)
+                # Known channels may be stored as GUIDs — use directly without normalization
+                channel_id = forwarded_channel_id or (value if is_known_channel else DestinationService.normalize_channel_input(value))
             except ValueError as exc:
                 await client.send_message(user_id, str(exc))
                 return True
@@ -535,6 +536,18 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
             return True
 
         if state["step"] == "timing_value":
+            if state["timing_start"] >= state["timing_end"]:
+                await client.send_message(
+                    user_id,
+                    "❌ ساعت پایان باید بعد از ساعت شروع باشد.\n"
+                    "مثلاً شروع ۸ صبح و پایان ۲۳ شب.\n"
+                    "اگر می‌خواهید از شب تا صبح پست بگذارید، دو برنامه جداگانه بسازید.\n\n"
+                    "دوباره از ساعت شروع وارد کنید:",
+                )
+                state["step"] = "timing_start"
+                await _persist(user_id, state)
+                await _prompt_timing_start(client, user_id)
+                return True
             try:
                 number = int(normalize_digits(value.strip()))
                 if number <= 0:
@@ -704,7 +717,27 @@ async def _prompt_timing_value(client, user_id: str, cadence: str) -> None:
         await client.send_message(user_id, "در طول این بازه زمانی چند پست روزانه منتشر شود؟")
 
 
+_STEP_LABELS: Dict[str, str] = {
+    "channel": "انتخاب کانال مقصد",
+    "content_choice": "انتخاب دسته محتوا",
+    "new_category_name": "نام‌گذاری دسته محتوا",
+    "existing_category": "انتخاب دسته موجود",
+    "real_posts": "افزودن پست‌های دسته",
+    "purpose": "هدف انتشار",
+    "dates": "بازه تاریخ کمپین",
+    "cadence": "روش زمان‌بندی",
+    "timing_start": "ساعت شروع انتشار",
+    "timing_end": "ساعت پایان انتشار",
+    "timing_value": "فاصله / تعداد پست",
+    "timing": "ساعت‌های انتشار",
+    "confirm": "تأیید نهایی برنامه",
+}
+
+
 async def _repeat_step_prompt(client, user_id: str, state: Dict[str, Any]) -> None:
+    step = state["step"]
+    label = _STEP_LABELS.get(step, step)
+    await client.send_message(user_id, f"ادامه ساخت برنامه — مرحله: {label}")
     prompts = {
         "channel": lambda: _prompt_channel(client, user_id, state),
         "content_choice": lambda: _prompt_content_choice(client, user_id),
@@ -714,10 +747,8 @@ async def _repeat_step_prompt(client, user_id: str, state: Dict[str, Any]) -> No
         "timing_end": lambda: _prompt_timing_end(client, user_id),
         "timing_value": lambda: _prompt_timing_value(client, user_id, state.get("cadence", "")),
     }
-    if state["step"] in prompts:
-        await prompts[state["step"]]()
-    else:
-        await client.send_message(user_id, "ساخت برنامه ادامه یافت؛ پاسخ مرحله قبلی را دوباره ارسال کنید.")
+    if step in prompts:
+        await prompts[step]()
 
 
 def _parse_timing(state: Dict[str, Any], value: str) -> Dict[str, Any]:

@@ -48,6 +48,9 @@ _STABLE_ADDPOST_BTN = re.compile(r"^addpost_(\d+)$")
 _STABLE_DST_PLANS_BTN = re.compile(r"^dst_plans_(.+)$")
 _STABLE_DST_CAL_BTN = re.compile(r"^dst_cal_(.+)$")
 _STABLE_CAL_BTN = re.compile(r"^cal_(.+)$")
+_STABLE_EDITPLAN_BTN = re.compile(r"^editplan_(\d+)$")
+_STABLE_TOGGLEPLAN_BTN = re.compile(r"^toggleplan_(\d+)$")
+_STABLE_REMOVEPLAN_BTN = re.compile(r"^removeplan_(\d+)$")
 
 # Legacy fallback for already-sent buttons on users' devices.
 # Older Rubifo messages used the visible label as the button ID.
@@ -97,6 +100,21 @@ async def _route_inline_button(client, user_id: str, text: str) -> bool:
     m = _STABLE_CAL_BTN.match(text)
     if m:
         await commands.handle_calendar_display(client, user_id, m.group(1))
+        return True
+
+    m = _STABLE_EDITPLAN_BTN.match(text)
+    if m:
+        await publishing_flow.begin_edit_program(client, user_id, _parse_user_int(m.group(1)))
+        return True
+
+    m = _STABLE_TOGGLEPLAN_BTN.match(text)
+    if m:
+        await commands.handle_toggleplan(client, user_id, _parse_user_int(m.group(1)))
+        return True
+
+    m = _STABLE_REMOVEPLAN_BTN.match(text)
+    if m:
+        await commands.handle_removeplan(client, user_id, _parse_user_int(m.group(1)))
         return True
 
     # Per-destination hub buttons
