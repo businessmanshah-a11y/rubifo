@@ -26,6 +26,7 @@ class ScheduleService:
         posts_per_run: int = 1,
         loop_mode: bool = False,
         ends_at: Optional[datetime] = None,
+        program_purpose: str = "real",
     ) -> Schedule:
         """Create a new schedule.
 
@@ -70,8 +71,8 @@ class ScheduleService:
             """
             INSERT INTO schedules
             (user_id, route_id, schedule_type, plan_kind, config, interval_minutes,
-             daily_count, posts_per_run, loop_mode, next_run, ends_at, is_active)
-            VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, true)
+             daily_count, posts_per_run, loop_mode, next_run, ends_at, is_active, program_purpose)
+            VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, true, $12)
             RETURNING *
             """,
             user_id,
@@ -85,6 +86,7 @@ class ScheduleService:
             loop_mode,
             next_run,
             ends_at,
+            program_purpose,
         )
 
         schedule = Schedule(**self._row_dict(result))
