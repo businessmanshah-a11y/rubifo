@@ -19,6 +19,8 @@ def _detect_message_type(message: Dict[str, Any]):
 
     if mime.startswith("image") or fname.endswith((".jpg", ".jpeg", ".png", ".webp")):
         msg_type = "photo"
+    elif (mime.startswith("video") or fname.endswith((".mp4", ".mov", ".avi"))) and file_info.get("is_round"):
+        msg_type = "video_message"
     elif mime.startswith("video") or fname.endswith((".mp4", ".mov", ".avi")):
         msg_type = "video"
     elif mime == "audio/ogg" or fname.endswith(".ogg"):

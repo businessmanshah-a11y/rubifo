@@ -253,6 +253,18 @@ class RubikaClient:
             logger.error(f"Failed to send_voice to {chat_id}: {e}")
             raise
 
+    async def send_video_message(self, chat_id: str, file_id: str) -> bool:
+        try:
+            await self._bot._make_request("sendFile", {
+                "chat_id": str(chat_id),
+                "file_id": file_id,
+                "is_round": True,
+            })
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send_video_message to {chat_id}: {e}")
+            raise
+
     async def send_music(self, chat_id: str, file_id: str) -> bool:
         try:
             await self._bot.send_music(chat_id=str(chat_id), file_id=file_id)
@@ -288,7 +300,8 @@ class RubikaClient:
         _type_map = {
             "photo": ("Image", ".jpg"),
             "video": ("Video", ".mp4"),
-            "voice": ("File", ".ogg"),
+            "video_message": ("Video", ".mp4"),
+            "voice": ("Voice", ".ogg"),
             "music": ("File", ".mp3"),
             "gif":   ("Gif",  ".gif"),
         }

@@ -12,7 +12,8 @@ FILE_ID_ERROR_KEYWORDS = ("not_found", "invalid", "file_id", "expired", "access"
 _FILE_TYPE_MAP = {
     "photo": ("Image", ".jpg"),
     "video": ("Video", ".mp4"),
-    "voice": ("File", ".ogg"),
+    "video_message": ("Video", ".mp4"),
+    "voice": ("Voice", ".ogg"),
     "music": ("File", ".mp3"),
     "gif":   ("Gif",  ".gif"),
 }
@@ -83,6 +84,23 @@ class ExecutionEngine:
         # Get next pending item; professional plans may constrain message type.
         queue_item = await self._get_next_queue_item(schedule, queue_service)
         if not queue_item:
+            is_tutorial = getattr(schedule, "program_purpose", "real") == "tutorial_test"
+            if is_tutorial:
+                # Tutorial finished — deactivate and notify user
+                await schedule_service.deactivate_schedule(schedule.id)
+                rubika_user_id = str(route.get("user_id", ""))
+                if rubika_user_id:
+                    try:
+                        await self.client.send_message(
+                            rubika_user_id,
+                            "✅ آزمایش با موفقیت انجام شد! سه پست در کانال منتشر شد.\n\n"
+                            "برای ساخت برنامه انتشار واقعی، دکمه «برنامه جدید» را بفرستید یا /new_program را تایپ کنید.",
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to notify user {rubika_user_id} after tutorial: {e}")
+                logger.info(f"Tutorial schedule {schedule.id} completed and deactivated")
+                return True
+
             filled = False
             if getattr(schedule, "loop_mode", False) or (getattr(schedule, "config", {}) or {}).get("loop_mode"):
                 filled = bool(await queue_service.rebuild_pending_from_source(schedule.route_id))
@@ -222,6 +240,8 @@ class ExecutionEngine:
             await self.client.send_file(target, file_id=file_id, file_type="Image", caption=cap)
         elif t == "video":
             await self.client.send_file(target, file_id=file_id, file_type="Video", caption=cap)
+        elif t == "video_message":
+            await self.client.send_video_message(target, file_id=file_id)
         elif t == "voice":
             await self.client.send_voice(target, file_id=file_id)
         elif t == "music":

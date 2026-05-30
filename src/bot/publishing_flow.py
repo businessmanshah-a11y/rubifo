@@ -487,7 +487,9 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
             return True
 
         if state["step"] == "dates":
-            dates = [part.strip() for part in value.split("تا")]
+            # Strip Unicode directional/invisible characters (e.g. U+2066 ⁦ inserted by some Rubika clients)
+            cleaned = re.sub(r"[​-‏‪- ⁦-⁩﻿]", "", value)
+            dates = [normalize_digits(part.strip()) for part in cleaned.split("تا")]
             if len(dates) == 1:
                 dates.append(dates[0])
             if len(dates) != 2:
