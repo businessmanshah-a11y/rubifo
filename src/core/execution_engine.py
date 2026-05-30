@@ -13,7 +13,7 @@ _FILE_TYPE_MAP = {
     "photo": ("Image", ".jpg"),
     "video": ("Video", ".mp4"),
     "video_message": ("Video", ".mp4"),
-    "voice": ("Voice", ".mp3"),
+    "voice": ("Voice", ".ogg"),
     "music": ("File", ".mp3"),
     "gif":   ("Gif",  ".gif"),
 }

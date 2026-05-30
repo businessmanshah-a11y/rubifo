@@ -377,7 +377,11 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
                 state["step"] = "new_category_name"
                 await _persist(user_id, state)
                 await client.send_message(
-                    user_id, "نام دسته محتوا را وارد کنید؛ مثلاً معرفی محصول، آموزشی یا رضایت مشتری."
+                    user_id,
+                    "نام دسته محتوا را وارد کنید؛ مثلاً معرفی محصول، آموزشی یا رضایت مشتری.\n\n"
+                    "نکته: اگر بعداً پست‌ها را به‌صورت فوروارد و با برچسب فرستنده بفرستید، "
+                    "ممکن است همان برچسب در انتشار هم دیده شود. برای ارسال بدون برچسب، "
+                    "در روبیکا گزینه پنهان کردن نام/فرستنده را بزنید یا محتوا را مستقیم و بدون فوروارد بفرستید.",
                 )
                 return True
             if value == EXISTING_CATEGORY:
@@ -445,6 +449,8 @@ async def handle_text(client, user_id: str, text: str, message: Optional[Dict[st
             await client.send_message(
                 user_id,
                 f"دسته «{name}» ساخته شد. پست‌های مربوط به همین موضوع را بفرستید.\n"
+                "اگر پستی را فوروارد می‌کنید و نمی‌خواهید برچسب فرستنده بماند، "
+                "قبل از ارسال به ربات گزینه پنهان کردن نام/فرستنده را در روبیکا بزنید.\n"
                 f"هر زمان آماده بودید «{SAVE_CATEGORY}» را بفرستید؛ دسته خالی هم قابل ذخیره است.",
                 inline_keypad=_inline_choices(SAVE_CATEGORY),
             )

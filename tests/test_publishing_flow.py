@@ -84,6 +84,21 @@ async def test_verified_real_channel_proceeds_to_content_choice(mock_bot_client,
 
 
 @pytest.mark.asyncio
+async def test_new_category_prompt_warns_about_forwarded_sender_labels(mock_bot_client, mock_db):
+    publishing_flow.active_flows["u1"] = {"step": "content_choice", "flow_kind": "real"}
+
+    with patch("src.database.pool", mock_db):
+        with patch.object(publishing_flow.PublishingProgramService, "save_draft", new_callable=AsyncMock):
+            await publishing_flow.handle_text(mock_bot_client, "u1", publishing_flow.NEW_CATEGORY)
+
+    text = mock_bot_client.send_message.await_args.args[1]
+    assert "فوروارد" in text
+    assert "برچسب" in text
+    assert "پنهان" in text
+    assert publishing_flow.active_flows["u1"]["step"] == "new_category_name"
+
+
+@pytest.mark.asyncio
 async def test_invalid_access_channel_asks_for_forwarded_post(mock_bot_client, mock_db):
     mock_bot_client.verify_destination_channel = AsyncMock(
         return_value={"status": "invalid_access", "verified": False, "error": "INVALID_ACCESS"}
