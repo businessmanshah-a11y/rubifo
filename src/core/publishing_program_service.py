@@ -175,6 +175,17 @@ class PublishingProgramService:
             interval_minutes=interval_minutes,
             program_purpose="tutorial_test",
         )
+        # Pre-fill the queue so the execution engine sends posts rather than
+        # immediately detecting an empty queue and declaring completion.
+        posts = await self.db.fetch(
+            "SELECT id FROM source_posts WHERE source_id = $1 ORDER BY order_index ASC",
+            source.id,
+        )
+        for post in posts:
+            await self.db.execute(
+                "INSERT INTO post_queue (route_id, source_post_id, status) VALUES ($1, $2, 'pending')",
+                route_id, post["id"],
+            )
         await self.clear_draft(user_id)
         return {"schedule": schedule, "route_id": route_id}
 

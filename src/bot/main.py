@@ -301,7 +301,7 @@ class RubikaClient:
             "photo": ("Image", ".jpg"),
             "video": ("Video", ".mp4"),
             "video_message": ("Video", ".mp4"),
-            "voice": ("Voice", ".ogg"),
+            "voice": ("File", ".ogg"),   # Rubika upload API uses "File" slot for voice (same as rubpy send_voice)
             "music": ("File", ".mp3"),
             "gif":   ("Gif",  ".gif"),
         }

@@ -13,7 +13,7 @@ _FILE_TYPE_MAP = {
     "photo": ("Image", ".jpg"),
     "video": ("Video", ".mp4"),
     "video_message": ("Video", ".mp4"),
-    "voice": ("Voice", ".ogg"),
+    "voice": ("File", ".ogg"),   # Rubika upload API uses "File" slot for voice (same as rubpy send_voice)
     "music": ("File", ".mp3"),
     "gif":   ("Gif",  ".gif"),
 }
@@ -91,10 +91,18 @@ class ExecutionEngine:
                 rubika_user_id = str(route.get("user_id", ""))
                 if rubika_user_id:
                     try:
+                        from rubpy.bot.models import Keypad, KeypadRow, Button
+                        from rubpy.bot.enums import ButtonTypeEnum
+                        inline_kb = Keypad(rows=[
+                            KeypadRow(buttons=[
+                                Button(id="new_program", type=ButtonTypeEnum.SIMPLE, button_text="➕ ساخت برنامه جدید"),
+                            ])
+                        ])
                         await self.client.send_message(
                             rubika_user_id,
                             "✅ آزمایش با موفقیت انجام شد! سه پست در کانال منتشر شد.\n\n"
-                            "برای ساخت برنامه انتشار واقعی، دکمه «برنامه جدید» را بفرستید یا /new_program را تایپ کنید.",
+                            "برای ساخت برنامه انتشار واقعی، روی دکمه زیر کلیک کنید:",
+                            inline_keypad=inline_kb,
                         )
                     except Exception as e:
                         logger.warning(f"Failed to notify user {rubika_user_id} after tutorial: {e}")
