@@ -17,7 +17,7 @@ BOT_NAME = "rubifo"
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Tehran")
 RUBIKA_INLINE_WEBHOOK_URL = os.getenv("RUBIKA_INLINE_WEBHOOK_URL")
 RUBIKA_BOT_RETURN_URL = os.getenv("RUBIKA_BOT_RETURN_URL", "https://rubika.ir/rubifo")
-WEB_BASE_URL = os.getenv("WEB_BASE_URL", "https://rubifo.datayar.ir")
+WEB_BASE_URL = os.getenv("WEB_BASE_URL", "https://rubifo.ir")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 
 # Database

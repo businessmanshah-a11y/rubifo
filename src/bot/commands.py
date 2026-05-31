@@ -53,12 +53,10 @@ def _tier_price(tier: str) -> int:
 
 
 def _checkout_url(tier: Optional[str] = None) -> str:
-    base = (WEB_BASE_URL or "https://rubifo.datayar.ir").rstrip("/")
-    if "localhost" in base or "127.0.0.1" in base:
-        base = "https://rubifo.datayar.ir"
-    if tier:
-        return f"{base}/checkout?tier={tier}"
-    return f"{base}/checkout"
+    base = (WEB_BASE_URL or "https://rubifo.ir").rstrip("/")
+    if any(dev_host in base for dev_host in ("localhost", "127.0.0.1", "rubifo.datayar.ir")):
+        base = "https://rubifo.ir"
+    return f"{base}/#plans"
 
 
 def _subscription_action_keypad(state: str):

@@ -545,9 +545,10 @@ class TestBotUtilityCommands:
         assert "/buy" in button_ids
 
     async def test_checkout_urls_use_public_site_not_localhost(self):
-        """Bot payment links must be useful to real Rubika users, not local developer URLs."""
-        assert commands._checkout_url("enterprise") == "https://rubifo.datayar.ir/checkout?tier=enterprise"
+        """Bot payment links must send real Rubika users to the public plans page."""
+        assert commands._checkout_url("enterprise") == "https://rubifo.ir/#plans"
         assert "localhost" not in commands._checkout_url("enterprise")
+        assert "rubifo.datayar.ir" not in commands._checkout_url("enterprise")
 
     async def test_trial_reminder_query_excludes_paid_users(self):
         """Trial reminder candidates must not include users with active paid subscriptions."""
