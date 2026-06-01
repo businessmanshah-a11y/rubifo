@@ -67,6 +67,7 @@ class _UserLoginBody(BaseModel):
 
 class _CheckoutStartBody(BaseModel):
     tier: str
+    months: int = 1
 
 
 @app.post("/admin/login")
@@ -128,6 +129,17 @@ def _format_toman(amount: int) -> str:
 
 def _tier_label(tier: str) -> str:
     return SUBSCRIPTION_TIERS.get(tier, {}).get("display_name_fa", tier)
+
+
+_CHECKOUT_MONTH_OPTIONS = (1, 3, 6, 12)
+
+
+def _checkout_months_from_amount(tier: str, amount: int) -> int:
+    monthly_price = SUBSCRIPTION_TIERS.get(tier, {}).get("price_monthly", 0)
+    if monthly_price <= 0 or amount % monthly_price != 0:
+        return 1
+    months = amount // monthly_price
+    return months if months in _CHECKOUT_MONTH_OPTIONS else 1
 
 
 def _safe_next_path(path: str) -> str:
@@ -390,6 +402,20 @@ def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
       border: 1px solid var(--border-s);
       font-size: 14px;
     }}
+    .status-box {{
+      margin: 14px 0 0;
+      padding: 13px 14px;
+      border-radius: 8px;
+      background: rgba(16,185,129,0.08);
+      border: 1px solid rgba(16,185,129,0.24);
+      color: var(--text-2);
+      font-size: 14px;
+    }}
+    .status-box[data-mode="change"] {{
+      background: rgba(245,158,11,0.08);
+      border-color: rgba(245,158,11,0.24);
+    }}
+    .status-box[hidden] {{ display: none; }}
     .status-chip {{
       display: inline-flex;
       width: fit-content;
@@ -511,6 +537,22 @@ async def web_user_login(body: _UserLoginBody):
     }
 
 
+@app.get("/api/me/subscription")
+async def web_user_subscription(user=Depends(_current_web_user)):
+    subscription = await SubscriptionService(_web_db()).get_active_subscription(user.user_id)
+    if not subscription:
+        return {"subscription": None}
+    return {
+        "subscription": {
+            "tier": subscription.tier,
+            "tier_label": _tier_label(subscription.tier),
+            "start_date": subscription.start_date.isoformat(),
+            "end_date": subscription.end_date.isoformat(),
+            "is_active": subscription.is_active,
+        }
+    }
+
+
 @app.get("/checkout")
 async def checkout_page(tier: str = "basic"):
     if tier not in SUBSCRIPTION_TIERS:
@@ -539,6 +581,10 @@ async def checkout_page(tier: str = "basic"):
     tier_name = cfg["display_name_fa"]
     price = _format_toman(cfg["price_monthly"])
     destinations = cfg["max_destinations"]
+    month_options = "".join(
+        f'<option value="{months}">{months} ماهه</option>'
+        for months in _CHECKOUT_MONTH_OPTIONS
+    )
     return _html_page(
         "خرید اشتراک Rubifo",
         f"""
@@ -553,19 +599,69 @@ async def checkout_page(tier: str = "basic"):
           <h2 class="panel-title">اشتراک {escape(tier_name)}</h2>
           <div class="summary">
             <div class="summary-row"><span>مبلغ ماهانه</span><strong>{price} تومان</strong></div>
+            <div class="summary-row"><span>مدت اشتراک</span><strong id="months-label">1 ماهه</strong></div>
+            <div class="summary-row"><span>مبلغ کل</span><strong id="total-amount">{price} تومان</strong></div>
             <div class="summary-row"><span>کانال مقصد</span><strong>{destinations}</strong></div>
             <div class="summary-row"><span>دسترسی</span><strong>همه قابلیت‌های انتشار</strong></div>
           </div>
           <input id="tier" type="hidden" value="{escape(tier)}">
+          <input id="monthly-price" type="hidden" value="{cfg["price_monthly"]}">
+          <div class="field">
+            <label for="months">مدت اشتراک</label>
+            <select id="months" name="months">
+              {month_options}
+            </select>
+          </div>
+          <div id="subscription-status" class="status-box" hidden
+               data-renew-text="اشتراک فعال دارید؛ این خرید تمدید می‌شود."
+               data-change-text="اشتراک فعال دارید؛ این خرید پلن شما را تغییر می‌دهد."></div>
           <button id="pay" class="btn btn-primary" type="button">پرداخت تست زیبال</button>
           <p id="checkout-error" class="error-note"></p>
           <div class="hint-box">بعد از پرداخت موفق، همین صفحه اشتراک را فعال می‌کند و لینک مستقیم شروع در ربات را نشان می‌دهد.</div>
         </div>
         <script>
+        const tierInput = document.getElementById('tier');
+        const monthsInput = document.getElementById('months');
+        const monthlyPrice = Number(document.getElementById('monthly-price').value);
+        const totalAmount = document.getElementById('total-amount');
+        const monthsLabel = document.getElementById('months-label');
+        const statusBox = document.getElementById('subscription-status');
+
+        function formatToman(value) {{
+          return new Intl.NumberFormat('fa-IR').format(value).replace(/٬/g, '،');
+        }}
+
+        function updateTotal() {{
+          const months = Number(monthsInput.value);
+          monthsLabel.textContent = months + ' ماهه';
+          totalAmount.textContent = formatToman(monthlyPrice * months) + ' تومان';
+        }}
+
+        async function loadSubscriptionStatus() {{
+          const token = localStorage.getItem('rubifo_user_token');
+          if (!token) {{
+            return;
+          }}
+          const res = await fetch('/api/me/subscription', {{
+            headers: {{'Authorization': 'Bearer ' + token}}
+          }});
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!data.subscription || !data.subscription.is_active) return;
+          const sameTier = data.subscription.tier === tierInput.value;
+          statusBox.textContent = sameTier ? statusBox.dataset.renewText : statusBox.dataset.changeText;
+          statusBox.dataset.mode = sameTier ? 'renew' : 'change';
+          statusBox.hidden = false;
+        }}
+
+        monthsInput.addEventListener('change', updateTotal);
+        updateTotal();
+        loadSubscriptionStatus();
+
         document.getElementById('pay').addEventListener('click', async () => {{
           const token = localStorage.getItem('rubifo_user_token');
           if (!token) {{
-            window.location.href = '/login?next=/checkout&tier=' + encodeURIComponent(document.getElementById('tier').value);
+            window.location.href = '/login?next=/checkout&tier=' + encodeURIComponent(tierInput.value);
             return;
           }}
           const res = await fetch('/api/checkout/start', {{
@@ -574,10 +670,10 @@ async def checkout_page(tier: str = "basic"):
               'Content-Type': 'application/json',
               'Authorization': 'Bearer ' + token
             }},
-            body: JSON.stringify({{tier: document.getElementById('tier').value}})
+            body: JSON.stringify({{tier: tierInput.value, months: Number(monthsInput.value)}})
           }});
           if (res.status === 401) {{
-            window.location.href = '/login?next=/checkout&tier=' + encodeURIComponent(document.getElementById('tier').value);
+            window.location.href = '/login?next=/checkout&tier=' + encodeURIComponent(tierInput.value);
             return;
           }}
           if (!res.ok) {{
@@ -597,9 +693,11 @@ async def checkout_page(tier: str = "basic"):
 async def checkout_start(body: _CheckoutStartBody, user=Depends(_current_web_user)):
     if body.tier not in SUBSCRIPTION_TIERS:
         raise HTTPException(status_code=400, detail="Invalid subscription tier")
+    if body.months not in _CHECKOUT_MONTH_OPTIONS:
+        raise HTTPException(status_code=400, detail="Invalid subscription duration")
 
     tier_config = SUBSCRIPTION_TIERS[body.tier]
-    amount = tier_config["price_monthly"]
+    amount = tier_config["price_monthly"] * body.months
     callback_url = f"{WEB_BASE_URL.rstrip('/')}/payment/callback"
     gateway = create_zibal_mock_gateway(WEB_BASE_URL)
     success, result = await gateway.request_payment(
@@ -707,6 +805,18 @@ async def _notify_paid_user(
     destinations = tier_config["max_destinations"]
     amount_text = _format_toman(amount)
     try:
+        from rubpy.bot.enums import ButtonTypeEnum
+        from rubpy.bot.models import Button, Keypad, KeypadRow
+
+        inline_keypad = Keypad(rows=[
+            KeypadRow(buttons=[
+                Button(
+                    id="new_program",
+                    type=ButtonTypeEnum.SIMPLE,
+                    button_text="➕ ساخت برنامه جدید",
+                )
+            ])
+        ])
         await client.send_message(
             user_id,
             "✅ پرداخت شما با موفقیت انجام شد.\n\n"
@@ -716,10 +826,21 @@ async def _notify_paid_user(
             f"کد رهگیری: {ref_id}\n"
             f"تاریخ پایان اشتراک: {to_jalali_date(end_date)}\n"
             f"ظرفیت پلن: {destinations} کانال مقصد\n\n"
-            "برای شروع کار داخل ربات /start را بفرستید."
+            "برای شروع انتشار، دکمه ساخت برنامه جدید را بزنید.",
+            inline_keypad=inline_keypad,
         )
     except Exception as exc:
         logger.warning(f"Paid user notification failed for {user_id}: {exc}")
+
+
+async def _activate_paid_subscription(user_id: str, tier: str, amount: int):
+    subscription_service = SubscriptionService(_web_db())
+    months = _checkout_months_from_amount(tier, amount)
+    days = months * 30
+    active_subscription = await subscription_service.get_active_subscription(user_id)
+    if active_subscription and active_subscription.tier == tier:
+        return await subscription_service.extend_subscription(user_id, days=days)
+    return await subscription_service.create_subscription(user_id, tier, days=days)
 
 
 @app.get("/payment/callback")
@@ -799,8 +920,8 @@ async def payment_callback(
             primary_label="رفتن به ربات",
         )
 
-    subscription = await SubscriptionService(_web_db()).create_subscription(
-        transaction["user_id"], transaction["tier"], days=30
+    subscription = await _activate_paid_subscription(
+        transaction["user_id"], transaction["tier"], transaction["amount"]
     )
     await transaction_service.complete_transaction(transaction["id"], ref_id)
     await _notify_paid_user(

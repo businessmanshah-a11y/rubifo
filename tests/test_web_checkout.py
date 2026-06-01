@@ -1,6 +1,6 @@
 """Tests for website login, checkout, and Zibal-compatible mock payment."""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -27,7 +27,10 @@ class FakeCheckoutDb:
             }
         }
         self.transactions = {}
+        self.subscriptions = {}
         self.subscriptions_created = 0
+        self.subscription_extensions = 0
+        self.subscription_deactivations = 0
         self.completed_updates = 0
 
     async def fetchrow(self, query: str, *args):
@@ -54,9 +57,17 @@ class FakeCheckoutDb:
             return {"id": 10}
         if "FROM transactions WHERE authority" in query:
             return self.transactions.get(args[0])
+        if "FROM subscriptions WHERE user_id" in query and "is_active = true" in query:
+            sub = self.subscriptions.get(args[0])
+            if sub and sub["is_active"]:
+                return sub
+            return None
         if "INSERT INTO subscriptions" in query:
             self.subscriptions_created += 1
-            return {
+            for row in self.subscriptions.values():
+                if row["user_id"] == args[0]:
+                    row["is_active"] = False
+            row = {
                 "id": self.subscriptions_created,
                 "user_id": args[0],
                 "tier": args[1],
@@ -65,6 +76,15 @@ class FakeCheckoutDb:
                 "is_active": True,
                 "created_at": datetime.now(),
             }
+            self.subscriptions[args[0]] = row
+            return row
+        if "UPDATE subscriptions SET end_date" in query:
+            for row in self.subscriptions.values():
+                if row["id"] == args[1]:
+                    row["end_date"] = args[0]
+                    self.subscription_extensions += 1
+                    return row
+            return None
         return None
 
     async def fetch(self, query: str, *args):
@@ -84,6 +104,11 @@ class FakeCheckoutDb:
             for row in self.transactions.values():
                 if row["id"] == args[1]:
                     row["status"] = args[0]
+        elif "UPDATE subscriptions SET is_active = false" in query:
+            for row in self.subscriptions.values():
+                if row["user_id"] == args[0]:
+                    row["is_active"] = False
+                    self.subscription_deactivations += 1
         return None
 
 
@@ -139,6 +164,22 @@ def test_checkout_page_routes_missing_token_to_login():
     assert "/login?next=/checkout&tier=" in response.text
 
 
+def test_checkout_page_exposes_duration_options_and_subscription_status_box():
+    client = TestClient(app)
+
+    response = client.get("/checkout?tier=enterprise")
+
+    assert response.status_code == 200
+    assert 'id="months"' in response.text
+    assert 'option value="1"' in response.text
+    assert 'option value="3"' in response.text
+    assert 'option value="6"' in response.text
+    assert 'option value="12"' in response.text
+    assert "/api/me/subscription" in response.text
+    assert "اشتراک فعال دارید؛ این خرید تمدید می‌شود" in response.text
+    assert "اشتراک فعال دارید؛ این خرید پلن شما را تغییر می‌دهد" in response.text
+
+
 def test_checkout_login_uses_landing_theme_tokens():
     client = TestClient(app)
 
@@ -189,6 +230,50 @@ def test_checkout_start_creates_pending_transaction_and_returns_zibal_mock_url()
     assert payload["payment_url"].endswith(f"/mock/zibal/start/{payload['track_id']}")
     assert db.transactions[payload["track_id"]]["status"] == "pending"
     assert db.transactions[payload["track_id"]]["user_id"] == "rubika-guid-1"
+
+
+def test_checkout_start_multiplies_amount_by_selected_months():
+    db = FakeCheckoutDb()
+    client = TestClient(app)
+
+    with patch("app.db_module.pool", db):
+        login = client.post(
+            "/api/auth/login",
+            json={"phone_number": "09123456789", "password": "secret123"},
+        )
+        token = login.json()["access_token"]
+
+    with patch("app.db_module.pool", db):
+        response = client.post(
+            "/api/checkout/start",
+            json={"tier": "enterprise", "months": 3},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert db.transactions[payload["track_id"]]["amount"] == 9998000 * 3
+
+
+def test_checkout_start_rejects_unsupported_month_count():
+    db = FakeCheckoutDb()
+    client = TestClient(app)
+
+    with patch("app.db_module.pool", db):
+        login = client.post(
+            "/api/auth/login",
+            json={"phone_number": "09123456789", "password": "secret123"},
+        )
+        token = login.json()["access_token"]
+
+    with patch("app.db_module.pool", db):
+        response = client.post(
+            "/api/checkout/start",
+            json={"tier": "enterprise", "months": 5},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 400
 
 
 def test_mock_zibal_page_exposes_success_failure_and_cancel_paths():
@@ -263,8 +348,81 @@ def test_payment_callback_sends_rich_bot_receipt_for_successful_payment():
     assert "MOCK-ZIBAL-RUBIFO-ENTERPRISE" in message
     assert "تاریخ پایان" in message
     assert "10" in message
-    assert "/start" in message
+    assert "/start" not in message
+    inline_keypad = bot_client.send_message.await_args.kwargs["inline_keypad"]
+    buttons = [button for row in inline_keypad.rows for button in row.buttons]
+    assert any(button.id == "new_program" for button in buttons)
+    assert any(button.button_text == "➕ ساخت برنامه جدید" for button in buttons)
     assert db.subscriptions_created == 1
+    assert db.completed_updates == 1
+
+
+def test_payment_callback_extends_same_active_tier_from_existing_end_date():
+    db = FakeCheckoutDb()
+    current_end = date.today() + timedelta(days=10)
+    db.subscriptions["rubika-guid-1"] = {
+        "id": 77,
+        "user_id": "rubika-guid-1",
+        "tier": "enterprise",
+        "start_date": date.today() - timedelta(days=20),
+        "end_date": current_end,
+        "is_active": True,
+        "created_at": datetime.now(),
+    }
+    db.transactions["RUBIFO-EXTEND"] = {
+        "id": 14,
+        "user_id": "rubika-guid-1",
+        "amount": 9998000 * 3,
+        "tier": "enterprise",
+        "status": "pending",
+        "authority": "RUBIFO-EXTEND",
+        "reference_id": None,
+        "created_at": datetime.now(),
+    }
+    client = TestClient(app)
+
+    with patch("app.db_module.pool", db):
+        response = client.get("/payment/callback?trackId=RUBIFO-EXTEND&success=1")
+
+    assert response.status_code == 200
+    assert db.subscriptions_created == 0
+    assert db.subscription_extensions == 1
+    assert db.subscriptions["rubika-guid-1"]["end_date"] == current_end + timedelta(days=90)
+    assert db.subscriptions["rubika-guid-1"]["is_active"] is True
+    assert db.completed_updates == 1
+
+
+def test_payment_callback_replaces_different_active_tier_immediately():
+    db = FakeCheckoutDb()
+    db.subscriptions["rubika-guid-1"] = {
+        "id": 88,
+        "user_id": "rubika-guid-1",
+        "tier": "pro",
+        "start_date": date.today() - timedelta(days=10),
+        "end_date": date.today() + timedelta(days=20),
+        "is_active": True,
+        "created_at": datetime.now(),
+    }
+    db.transactions["RUBIFO-UPGRADE"] = {
+        "id": 15,
+        "user_id": "rubika-guid-1",
+        "amount": 9998000 * 6,
+        "tier": "enterprise",
+        "status": "pending",
+        "authority": "RUBIFO-UPGRADE",
+        "reference_id": None,
+        "created_at": datetime.now(),
+    }
+    client = TestClient(app)
+
+    with patch("app.db_module.pool", db):
+        response = client.get("/payment/callback?trackId=RUBIFO-UPGRADE&success=1")
+
+    assert response.status_code == 200
+    assert db.subscription_deactivations >= 1
+    assert db.subscriptions_created == 1
+    assert db.subscriptions["rubika-guid-1"]["tier"] == "enterprise"
+    assert db.subscriptions["rubika-guid-1"]["end_date"] == date.today() + timedelta(days=180)
     assert db.completed_updates == 1
 
 
