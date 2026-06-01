@@ -284,7 +284,9 @@
                 }
 
                 (data.users || []).forEach(user => {
-                    const trialBadge = user.is_trial_active
+                    const trialBadge = user.current_tier
+                        ? '<span class="badge badge-warning">اشتراک فعال</span>'
+                        : user.is_trial_active
                         ? '<span class="badge badge-info">تریال</span>'
                         : '<span class="badge badge-danger">منقضی</span>';
                     const tier = user.current_tier

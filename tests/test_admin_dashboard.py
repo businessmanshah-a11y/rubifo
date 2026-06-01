@@ -179,6 +179,8 @@ class TestAdminUsersAPI:
 
             async def fetch(self, query: str, *args):
                 assert "u.phone_number" in query
+                assert "u.user_id = s.user_id" in query
+                assert "u.id::TEXT = s.user_id" not in query
                 assert "password_hash" not in query
                 return [
                     {
@@ -291,6 +293,8 @@ class TestAdminStaticFiles:
         assert "<th>شماره تماس</th>" in html
         assert "user.phone_number" in html
         assert "detailPhoneNumber" in html
+        assert "user.current_tier" in html
+        assert "اشتراک فعال" in html
         assert 'colspan="9"' in html
         assert 'colspan="8"' not in html
 

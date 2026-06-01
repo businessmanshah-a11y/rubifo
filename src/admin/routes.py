@@ -431,7 +431,7 @@ async def get_users(
                u.is_trial_active, u.phone_number, u.created_at,
                s.tier as current_tier, s.end_date as subscription_end
         FROM users u
-        LEFT JOIN subscriptions s ON u.id::TEXT = s.user_id AND s.is_active = true
+        LEFT JOIN subscriptions s ON u.user_id = s.user_id AND s.is_active = true
         ORDER BY u.created_at DESC
         LIMIT $1 OFFSET $2
     """

@@ -33,6 +33,7 @@ from src.core.subscription_service import SubscriptionService
 from src.core.transaction_service import TransactionService
 from src.core.user_service import UserService
 from src.integrations.zibal_mock import create_zibal_mock_gateway
+from src.logger import logger
 from src.utils import to_jalali_date
 
 _STATIC_DIR = Path(__file__).parent / "src" / "admin" / "static"
@@ -689,19 +690,36 @@ def _payment_result_page(
     )
 
 
-async def _notify_paid_user(user_id: str, tier: str, end_date) -> None:
+async def _notify_paid_user(
+    user_id: str,
+    tier: str,
+    end_date,
+    *,
+    amount: int,
+    ref_id: str,
+) -> None:
     client = _bot_ref.client if _bot_ref else None
     if not client:
+        logger.warning("Paid user notification skipped: bot client is unavailable")
         return
+    tier_config = SUBSCRIPTION_TIERS[tier]
+    tier_name = tier_config["display_name_fa"]
+    destinations = tier_config["max_destinations"]
+    amount_text = _format_toman(amount)
     try:
         await client.send_message(
             user_id,
-            f"✅ پرداخت تأیید شد!\n\n"
-            f"اشتراک {SUBSCRIPTION_TIERS[tier]['display_name_fa']} فعال شد.\n"
-            f"تاریخ پایان: {to_jalali_date(end_date)}"
+            "✅ پرداخت شما با موفقیت انجام شد.\n\n"
+            "رسید پرداخت روبیفو\n"
+            f"پلن: {tier_name}\n"
+            f"مبلغ: {amount_text} تومان\n"
+            f"کد رهگیری: {ref_id}\n"
+            f"تاریخ پایان اشتراک: {to_jalali_date(end_date)}\n"
+            f"ظرفیت پلن: {destinations} کانال مقصد\n\n"
+            "برای شروع کار داخل ربات /start را بفرستید."
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"Paid user notification failed for {user_id}: {exc}")
 
 
 @app.get("/payment/callback")
@@ -785,7 +803,13 @@ async def payment_callback(
         transaction["user_id"], transaction["tier"], days=30
     )
     await transaction_service.complete_transaction(transaction["id"], ref_id)
-    await _notify_paid_user(transaction["user_id"], transaction["tier"], subscription.end_date)
+    await _notify_paid_user(
+        transaction["user_id"],
+        transaction["tier"],
+        subscription.end_date,
+        amount=transaction["amount"],
+        ref_id=ref_id,
+    )
     return _payment_result_page(
         "پرداخت تأیید شد",
         f"اشتراک {_tier_label(transaction['tier'])} فعال شد. حالا روبیفو آماده شروع کار است.",

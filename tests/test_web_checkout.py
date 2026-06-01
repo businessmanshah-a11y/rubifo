@@ -1,7 +1,8 @@
 """Tests for website login, checkout, and Zibal-compatible mock payment."""
 
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -222,8 +223,47 @@ def test_payment_callback_completes_transaction_idempotently():
     assert response.status_code == 200
     assert "RUBIFO-123" in response.text
     assert "شروع در ربات" in response.text
+    assert 'href="https://rubika.ir/rubifo_bot"' in response.text
     assert second.status_code == 200
     assert db.transactions["RUBIFO-123"]["status"] == "completed"
+    assert db.subscriptions_created == 1
+    assert db.completed_updates == 1
+
+
+def test_payment_callback_sends_rich_bot_receipt_for_successful_payment():
+    db = FakeCheckoutDb()
+    db.transactions["RUBIFO-ENTERPRISE"] = {
+        "id": 13,
+        "user_id": "rubika-guid-1",
+        "amount": 9998000,
+        "tier": "enterprise",
+        "status": "pending",
+        "authority": "RUBIFO-ENTERPRISE",
+        "reference_id": None,
+        "created_at": datetime.now(),
+    }
+    bot_client = AsyncMock()
+    bot_client.send_message = AsyncMock(return_value=True)
+    client = TestClient(app)
+
+    with patch("app.db_module.pool", db), patch(
+        "app._bot_ref", SimpleNamespace(client=bot_client)
+    ):
+        response = client.get("/payment/callback?trackId=RUBIFO-ENTERPRISE&success=1")
+        second = client.get("/payment/callback?trackId=RUBIFO-ENTERPRISE&success=1")
+
+    assert response.status_code == 200
+    assert second.status_code == 200
+    bot_client.send_message.assert_awaited_once()
+    user_id, message = bot_client.send_message.await_args.args
+    assert user_id == "rubika-guid-1"
+    assert "پرداخت شما با موفقیت انجام شد" in message
+    assert "مقیاس" in message
+    assert "9،998،000" in message
+    assert "MOCK-ZIBAL-RUBIFO-ENTERPRISE" in message
+    assert "تاریخ پایان" in message
+    assert "10" in message
+    assert "/start" in message
     assert db.subscriptions_created == 1
     assert db.completed_updates == 1
 
