@@ -19,7 +19,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from jose import JWTError, jwt
 from fastapi import FastAPI, Depends, HTTPException, Request, status
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 import src.database as db_module
@@ -958,6 +958,11 @@ async def admin_page(page: str):
 # ─────────────────────────────────────────────────────────────
 # Landing page  /
 # ─────────────────────────────────────────────────────────────
+@app.get("/795459943.txt", response_class=PlainTextResponse)
+async def enamad_verification_file():
+    return ""
+
+
 @app.get("/")
 async def landing():
     return FileResponse(_STATIC_DIR / "index.html", media_type="text/html")

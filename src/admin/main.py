@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pathlib import Path
@@ -45,6 +45,11 @@ async def serve_html_page(page: str):
 @app.get("/")
 async def root():
     return FileResponse(static_dir / "index.html", media_type="text/html")
+
+
+@app.get("/795459943.txt", response_class=PlainTextResponse)
+async def enamad_verification_file():
+    return ""
 
 
 @app.get("/admin/")

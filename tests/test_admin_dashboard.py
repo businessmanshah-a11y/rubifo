@@ -47,6 +47,13 @@ class TestAdminAuthEndpoints:
         response = client.get("/", follow_redirects=True)
         assert response.status_code == 200
 
+    def test_enamad_verification_file(self, client):
+        """Test eNamad verification file is served from the domain root."""
+        response = client.get("/795459943.txt")
+        assert response.status_code == 200
+        assert response.text == ""
+        assert "text/plain" in response.headers.get("content-type", "")
+
 
 class TestAdminDashboardAPI:
     """Test dashboard API endpoints."""
@@ -269,6 +276,11 @@ class TestAdminStaticFiles:
         response = client.get("/static/login.html")
         assert response.status_code == 200
         assert "text/html" in response.headers.get("content-type", "")
+
+    def test_landing_page_has_enamad_meta_tag(self):
+        """Test landing page includes eNamad verification meta tag."""
+        html = Path("src/admin/static/index.html").read_text(encoding="utf-8")
+        assert '<meta name="enamad" content="795459943" />' in html
 
     def test_css_file_accessible(self, client):
         """Test CSS file is served."""
