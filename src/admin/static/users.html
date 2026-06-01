@@ -132,6 +132,7 @@
                         <th>#</th>
                         <th>شناسه روبیکا</th>
                         <th>نام کاربری</th>
+                        <th>شماره تماس</th>
                         <th>تریال</th>
                         <th>پلن</th>
                         <th>اشتراک تا</th>
@@ -140,7 +141,7 @@
                     </tr>
                 </thead>
                 <tbody id="usersTable">
-                    <tr><td colspan="8" style="color:var(--text-3);padding:20px 16px;">در حال بارگذاری…</td></tr>
+                    <tr><td colspan="9" style="color:var(--text-3);padding:20px 16px;">در حال بارگذاری…</td></tr>
                 </tbody>
             </table>
 
@@ -160,6 +161,7 @@
                         <p><strong>شماره ردیف:</strong> <span id="detailId" style="font-family:var(--font-mono);"></span></p>
                         <p><strong>شناسه روبیکا:</strong> <span id="detailUserId" style="font-family:var(--font-mono);font-size:var(--f-xs);color:var(--text-3);"></span></p>
                         <p><strong>نام کاربری:</strong> <span id="detailUsername"></span></p>
+                        <p><strong>شماره تماس:</strong> <span id="detailPhoneNumber" style="font-family:var(--font-mono);"></span></p>
                         <p><strong>عضو از:</strong> <span id="detailCreatedAt"></span></p>
                         <p><strong>وضعیت تریال:</strong> <span id="detailTrialStatus"></span></p>
                     </div>
@@ -270,14 +272,14 @@
             if (filter) endpoint += `&user_id=${encodeURIComponent(filter)}`;
 
             const tbody = document.getElementById('usersTable');
-            tbody.innerHTML = `<tr><td colspan="8" style="color:var(--text-3);padding:20px 16px;">در حال بارگذاری…</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9" style="color:var(--text-3);padding:20px 16px;">در حال بارگذاری…</td></tr>`;
 
             try {
                 const data = await fetchAPI(endpoint);
                 tbody.innerHTML = '';
 
                 if (!data.users || data.users.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--text-3);padding:20px 16px;">کاربری یافت نشد</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="9" style="color:var(--text-3);padding:20px 16px;">کاربری یافت نشد</td></tr>`;
                     return;
                 }
 
@@ -292,12 +294,14 @@
                         ? new Date(user.subscription_end).toLocaleDateString('fa-IR-u-ca-persian')
                         : '—';
                     const uname = user.username || `<em style="color:var(--text-3)">—</em>`;
+                    const phone = user.phone_number || `<span style="color:var(--text-3)">—</span>`;
 
                     tbody.innerHTML += `
                         <tr>
                             <td style="font-family:var(--font-mono);">${user.id}</td>
                             <td style="font-family:var(--font-mono);font-size:var(--f-xs);color:var(--text-3);">${user.user_id}</td>
                             <td>${uname}</td>
+                            <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${phone}</td>
                             <td>${trialBadge}</td>
                             <td>${tier}</td>
                             <td style="font-family:var(--font-mono);font-size:var(--f-xs);">${subEnd}</td>
@@ -313,7 +317,7 @@
                 document.getElementById('pageInfo').textContent =
                     `صفحه ${currentPage}  ·  ${data.total} کاربر`;
             } catch (e) {
-                tbody.innerHTML = `<tr><td colspan="8" style="color:var(--err-fg);padding:20px 16px;">خطا: ${e.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" style="color:var(--err-fg);padding:20px 16px;">خطا: ${e.message}</td></tr>`;
             }
         }
 
@@ -324,6 +328,7 @@
             document.getElementById('detailId').textContent         = user.id;
             document.getElementById('detailUserId').textContent     = user.user_id;
             document.getElementById('detailUsername').textContent    = user.username || '—';
+            document.getElementById('detailPhoneNumber').textContent = user.phone_number || '—';
             document.getElementById('detailCreatedAt').textContent   = new Date(user.created_at).toLocaleDateString('fa-IR-u-ca-persian');
             document.getElementById('detailTrialStatus').textContent = user.is_trial_active ? '✅ فعال' : '❌ منقضی';
 

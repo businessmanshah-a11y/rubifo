@@ -428,7 +428,7 @@ async def get_users(
 
     query = """
         SELECT u.id, u.user_id, u.username, u.trial_start_at, u.trial_end_at,
-               u.is_trial_active, u.created_at,
+               u.is_trial_active, u.phone_number, u.created_at,
                s.tier as current_tier, s.end_date as subscription_end
         FROM users u
         LEFT JOIN subscriptions s ON u.id::TEXT = s.user_id AND s.is_active = true

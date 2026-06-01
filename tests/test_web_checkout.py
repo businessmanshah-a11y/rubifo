@@ -138,6 +138,21 @@ def test_checkout_page_routes_missing_token_to_login():
     assert "/login?next=/checkout&tier=" in response.text
 
 
+def test_checkout_login_uses_landing_theme_tokens():
+    client = TestClient(app)
+
+    response = client.get("/login?next=/checkout&tier=pro")
+
+    assert response.status_code == 200
+    assert "rubifo-theme" in response.text
+    assert "data-theme" in response.text
+    assert "--black:" in response.text
+    assert "--purple:" in response.text
+    assert "--violet:" in response.text
+    assert 'html[data-theme="light"]' in response.text
+    assert "--accent: oklch(70% 0.185 55)" not in response.text
+
+
 def test_checkout_page_rejects_invalid_tier_with_clear_message():
     client = TestClient(app)
 

@@ -143,6 +143,12 @@ def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{title}</title>
+  <script>
+    (() => {{
+      const saved = localStorage.getItem('rubifo-theme');
+      document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
+    }})();
+  </script>
   <style>
     @font-face {{ font-family: 'Morabba'; src: url('/fonts/Morabba-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }}
     @font-face {{ font-family: 'Morabba'; src: url('/fonts/Morabba-SemiBold.woff2') format('woff2'); font-weight: 600; font-display: swap; }}
@@ -150,21 +156,57 @@ def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
     @font-face {{ font-family: 'Vazirmatn'; src: url('/fonts/Vazirmatn-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }}
     @font-face {{ font-family: 'Vazirmatn'; src: url('/fonts/Vazirmatn-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }}
     :root {{
-      --bg: oklch(9% 0.012 52);
-      --surface: oklch(13% 0.015 52);
-      --surface-2: oklch(17% 0.015 52);
-      --surface-3: oklch(22% 0.015 52);
-      --text: oklch(95% 0.008 72);
-      --text-2: oklch(72% 0.010 70);
-      --text-3: oklch(50% 0.008 65);
-      --accent: oklch(70% 0.185 55);
-      --accent-dark: oklch(62% 0.185 55);
-      --accent-subtle: oklch(20% 0.060 55);
-      --ok: oklch(65% 0.150 145);
-      --err: oklch(63% 0.175 22);
-      --warn: oklch(73% 0.155 68);
-      --border: oklch(23% 0.015 52);
-      --border-soft: oklch(18% 0.012 52);
+      --black:    #050507;
+      --black-2:  #09090f;
+      --black-3:  #0d0d18;
+      --black-4:  #111120;
+      --purple:   #5B2E8A;
+      --purple-m: #7B3FAE;
+      --purple-d: #3A1A5E;
+      --violet:   #A855F7;
+      --violet-l: #C084FC;
+      --violet-d: #8B5CF6;
+      --emerald:  #10B981;
+      --gold:     #F59E0B;
+      --t1:       #F3F0FF;
+      --t2:       #C4B5FD;
+      --t3:       #8B7EC8;
+      --t4:       rgba(139,126,200,0.45);
+      --border:   rgba(168,85,247,0.12);
+      --border-s: rgba(168,85,247,0.24);
+      --border-m: rgba(168,85,247,0.40);
+
+      --bg: var(--black);
+      --surface: rgba(13,13,24,0.82);
+      --surface-2: rgba(17,17,32,0.78);
+      --surface-3: rgba(31,25,51,0.78);
+      --text: var(--t1);
+      --text-2: var(--t2);
+      --text-3: var(--t3);
+      --accent: var(--violet);
+      --accent-dark: var(--violet-d);
+      --accent-subtle: rgba(168,85,247,0.10);
+      --ok: var(--emerald);
+      --err: #FB7185;
+      --warn: var(--gold);
+      --border-soft: var(--border);
+    }}
+    html[data-theme="light"] {{
+      --black:    #F5F2FF;
+      --black-2:  #EBE6FA;
+      --black-3:  #FFFFFF;
+      --black-4:  #DED6F5;
+      --t1:       #0D0820;
+      --t2:       #2A1D52;
+      --t3:       #5A4A8A;
+      --t4:       rgba(60,44,110,0.45);
+      --border:   rgba(100,50,200,0.16);
+      --border-s: rgba(100,50,200,0.30);
+      --border-m: rgba(100,50,200,0.52);
+      --surface: rgba(255,255,255,0.70);
+      --surface-2: rgba(255,255,255,0.54);
+      --surface-3: rgba(235,230,250,0.86);
+      --accent-subtle: rgba(123,58,237,0.08);
     }}
     * {{ box-sizing: border-box; }}
     body {{
@@ -172,11 +214,17 @@ def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
       min-height: 100vh;
       font-family: 'Morabba', 'Vazirmatn', system-ui, sans-serif;
       background:
-        radial-gradient(ellipse 60% 45% at 70% 15%, oklch(20% 0.070 55 / 0.34), transparent 68%),
-        radial-gradient(ellipse 40% 38% at 12% 90%, oklch(16% 0.045 145 / 0.18), transparent 62%),
+        radial-gradient(ellipse 64% 48% at 74% 14%, rgba(168,85,247,0.18), transparent 68%),
+        radial-gradient(ellipse 42% 38% at 12% 90%, rgba(91,46,138,0.22), transparent 62%),
         var(--bg);
       color: var(--text);
       line-height: 1.8;
+    }}
+    html[data-theme="light"] body {{
+      background:
+        radial-gradient(ellipse 64% 48% at 74% 14%, rgba(168,85,247,0.16), transparent 68%),
+        radial-gradient(ellipse 42% 38% at 12% 90%, rgba(91,46,138,0.10), transparent 62%),
+        var(--bg);
     }}
     a {{ color: inherit; }}
     .checkout-shell {{
@@ -214,7 +262,7 @@ def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
       height: 10px;
       border-radius: 999px;
       background: var(--accent);
-      box-shadow: 0 0 0 5px oklch(70% 0.185 55 / 0.14);
+      box-shadow: 0 0 0 5px rgba(168,85,247,0.14);
     }}
     h1 {{
       margin: 0;
@@ -235,7 +283,11 @@ def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: clamp(22px, 4vw, 34px);
-      box-shadow: 0 16px 60px oklch(4% 0.010 52 / 0.54);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 16px 60px rgba(0,0,0,0.42);
+      backdrop-filter: blur(22px);
+    }}
+    html[data-theme="light"] .checkout-panel {{
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 18px 56px rgba(91,46,138,0.14);
     }}
     .panel-kicker {{
       margin-bottom: 8px;
@@ -269,7 +321,7 @@ def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
     }}
     input:focus, select:focus {{
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px oklch(70% 0.185 55 / 0.24);
+      box-shadow: 0 0 0 3px rgba(168,85,247,0.24);
     }}
     .button-row {{
       display: flex;
@@ -296,13 +348,14 @@ def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
     .btn-primary {{
       background: var(--accent);
       border-color: var(--accent);
-      color: var(--bg);
+      color: #fff;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.20), 0 8px 24px rgba(91,46,138,0.36);
     }}
     .btn-primary:hover {{ background: var(--accent-dark); border-color: var(--accent-dark); }}
     .btn-ghost {{ background: transparent; color: var(--text-2); }}
     .btn-ghost:hover {{ background: var(--surface-2); color: var(--text); }}
-    .btn-danger {{ background: oklch(18% 0.060 22); border-color: oklch(28% 0.080 22); color: var(--err); }}
-    .btn-warn {{ background: oklch(18% 0.065 68); border-color: oklch(28% 0.090 68); color: var(--warn); }}
+    .btn-danger {{ background: rgba(244,63,94,0.10); border-color: rgba(244,63,94,0.32); color: var(--err); }}
+    .btn-warn {{ background: rgba(245,158,11,0.10); border-color: rgba(245,158,11,0.32); color: var(--warn); }}
     .summary {{
       display: grid;
       gap: 10px;
@@ -333,7 +386,7 @@ def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
       border-radius: 10px;
       background: var(--accent-subtle);
       color: var(--text-2);
-      border: 1px solid oklch(70% 0.185 55 / 0.22);
+      border: 1px solid var(--border-s);
       font-size: 14px;
     }}
     .status-chip {{

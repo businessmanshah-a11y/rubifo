@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from datetime import datetime
+from unittest.mock import patch
 from src.admin.main import app
 
 
@@ -167,6 +168,44 @@ class TestAdminUsersAPI:
             assert "users" in data
             assert isinstance(data["users"], list)
 
+    def test_users_list_includes_phone_number(self, client, valid_token):
+        """Test users list exposes phone number without password hash."""
+
+        class FakeAdminUsersDb:
+            async def fetchrow(self, query: str, *args):
+                if "COUNT(*)" in query:
+                    return {"count": 1}
+                return None
+
+            async def fetch(self, query: str, *args):
+                assert "u.phone_number" in query
+                assert "password_hash" not in query
+                return [
+                    {
+                        "id": 1,
+                        "user_id": "rubika-guid-1",
+                        "username": "testuser",
+                        "phone_number": "09123456789",
+                        "trial_start_at": datetime.now(),
+                        "trial_end_at": datetime.now(),
+                        "is_trial_active": True,
+                        "created_at": datetime.now(),
+                        "current_tier": "pro",
+                        "subscription_end": datetime.now(),
+                    }
+                ]
+
+        with patch("src.admin.routes.db_module.pool", FakeAdminUsersDb()):
+            response = client.get(
+                "/admin/users",
+                headers={"Authorization": f"Bearer {valid_token}"},
+            )
+
+        assert response.status_code == 200
+        user = response.json()["users"][0]
+        assert user["phone_number"] == "09123456789"
+        assert "password_hash" not in user
+
     def test_user_detail_unauthorized(self, client):
         """Test user detail endpoint without token."""
         response = client.get("/admin/users/1")
@@ -244,6 +283,16 @@ class TestAdminStaticFiles:
         """Test users page is served."""
         response = client.get("/static/users.html")
         assert response.status_code == 200
+
+    def test_users_page_renders_phone_number_column(self):
+        """Test users page includes the phone column and matching render hooks."""
+        html = Path("src/admin/static/users.html").read_text(encoding="utf-8")
+
+        assert "<th>شماره تماس</th>" in html
+        assert "user.phone_number" in html
+        assert "detailPhoneNumber" in html
+        assert 'colspan="9"' in html
+        assert 'colspan="8"' not in html
 
     def test_logs_page_accessible(self, client):
         """Test logs page is served."""
