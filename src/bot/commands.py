@@ -125,6 +125,77 @@ async def _db_uid(pool, user_id) -> Optional[int]:
 # /start
 # ─────────────────────────────────────────────
 
+def _subscription_start_line(user, status=None) -> str:
+    """Return the subscription/trial summary shown on the start screen."""
+    if status:
+        if status.get("status") == "active":
+            return (
+                f"✅ پلن {_tier_name(status.get('tier'))} — "
+                f"{status.get('days_left', 0)} روز باقیمانده"
+            )
+        if status.get("status") == "trial":
+            return f"⏳ تریال: {status.get('hours_left', 0):.0f} ساعت باقیمانده"
+        if status.get("status") == "expired":
+            return "⚠️ تریال تمام شده — /buy برای اشتراک"
+
+    if getattr(user, "is_trial_active", False) and getattr(user, "trial_end_at", None):
+        hours_left = max(0, (user.trial_end_at - datetime.now()).total_seconds() / 3600)
+        return f"⏳ تریال: {hours_left:.0f} ساعت باقیمانده"
+    return "⚠️ تریال تمام شده — /buy برای اشتراک"
+
+
+async def _send_start_home(client, user_id: int, user) -> None:
+    """Send the main post-onboarding start screen."""
+    subscription_status = None
+    try:
+        from src.database import pool
+        from src.core.subscription_service import SubscriptionService
+        subscription_status = await SubscriptionService(pool).get_subscription_status(user_id)
+    except Exception as e:
+        logger.warning(f"Could not load subscription status for /start user {user_id}: {e}")
+
+    msg = (
+        "👋 خوش آمدید به Rubifo!\n\n"
+        "Rubifo کمک می‌کند پست‌های کانالتان به‌صورت خودکار و طبق زمان‌بندی منتشر شوند.\n\n"
+        "برای شروع، یک «برنامه انتشار» می‌سازید:\n"
+        "1️⃣ کانال مقصد را معرفی می‌کنید و Rubifo را در آن کانال ادمین می‌کنید.\n"
+        "2️⃣ پست‌های هم‌موضوع را داخل یک «دسته محتوا» می‌فرستید؛ مثل آموزشی، معرفی محصول یا رضایت مشتری.\n"
+        "3️⃣ مشخص می‌کنید این دسته چه زمانی در کانال منتشر شود.\n\n"
+        "اگر اولین‌بار است، می‌توانید قبل از برنامه واقعی یک آزمایش سه‌پستی انجام دهید.\n"
+        f"{_subscription_start_line(user, subscription_status)}\n\n"
+        "برای شروع دکمه «➕ ایجاد برنامه جدید انتشار محتوا» را بزنید:"
+    )
+    keypad = _make_inline_keypad(
+        [
+            ("➕ ایجاد برنامه جدید انتشار محتوا", "➕ ساخت برنامه جدید"),
+            ("💳 خرید اشتراک", "/buy"),
+        ],
+        cols=1,
+    )
+    await client.send_message(user_id, msg, with_keypad=True, inline_keypad=keypad)
+
+
+async def _send_web_credentials_preview(client, user_id: int, user) -> None:
+    """Ask an onboarded user to confirm or edit website credentials."""
+    phone_number = getattr(user, "phone_number", None) or "ثبت نشده"
+    msg = (
+        "اطلاعات ورود وب‌سایت شما آماده است:\n\n"
+        f"آیدی روبیکا: {user_id}\n"
+        f"شماره تماس: {phone_number}\n"
+        "رمز ورود: تنظیم شده (قابل نمایش نیست)\n\n"
+        "اگر اطلاعات درست است، تایید کنید تا وارد مسیر اصلی شوید."
+    )
+    keypad = _make_inline_keypad(
+        [
+            ("✅ تایید و ادامه", "confirm_web_credentials"),
+            ("✏️ ویرایش شماره", "edit_web_phone"),
+            ("🔑 تغییر رمز", "edit_web_password"),
+        ],
+        cols=1,
+    )
+    await client.send_message(user_id, msg, with_keypad=True, inline_keypad=keypad)
+
+
 async def handle_start(client, user_id: int, username: Optional[str] = None) -> None:
     logger.info(f"/start for user {user_id}")
     try:
@@ -144,46 +215,46 @@ async def handle_start(client, user_id: int, username: Optional[str] = None) -> 
             )
             return
 
-        subscription_status = None
-        try:
-            from src.core.subscription_service import SubscriptionService
-            subscription_status = await SubscriptionService(pool).get_subscription_status(user_id)
-        except Exception as e:
-            logger.warning(f"Could not load subscription status for /start user {user_id}: {e}")
-
-        def _sub_line(u, status=None) -> str:
-            if status:
-                if status.get("status") == "active":
-                    return (
-                        f"✅ پلن {_tier_name(status.get('tier'))} — "
-                        f"{status.get('days_left', 0)} روز باقیمانده"
-                    )
-                if status.get("status") == "trial":
-                    return f"⏳ تریال: {status.get('hours_left', 0):.0f} ساعت باقیمانده"
-                if status.get("status") == "expired":
-                    return "⚠️ تریال تمام شده — /buy برای اشتراک"
-
-            if u.is_trial_active:
-                hours_left = max(0, (u.trial_end_at - datetime.now()).total_seconds() / 3600)
-                return f"⏳ تریال: {hours_left:.0f} ساعت باقیمانده"
-            return "⚠️ تریال تمام شده — /buy برای اشتراک"
-
-        msg = (
-            "👋 خوش آمدید به Rubifo!\n\n"
-            "Rubifo کمک می‌کند پست‌های کانالتان به‌صورت خودکار و طبق زمان‌بندی منتشر شوند.\n\n"
-            "برای شروع، یک «برنامه انتشار» می‌سازید:\n"
-            "1️⃣ کانال مقصد را معرفی می‌کنید و Rubifo را در آن کانال ادمین می‌کنید.\n"
-            "2️⃣ پست‌های هم‌موضوع را داخل یک «دسته محتوا» می‌فرستید؛ مثل آموزشی، معرفی محصول یا رضایت مشتری.\n"
-            "3️⃣ مشخص می‌کنید این دسته چه زمانی در کانال منتشر شود.\n\n"
-            "اگر اولین‌بار است، می‌توانید قبل از برنامه واقعی یک آزمایش سه‌پستی انجام دهید.\n"
-            f"{_sub_line(user, subscription_status)}\n\n"
-            "برای شروع دکمه «➕ ایجاد برنامه جدید انتشار محتوا» را بزنید:"
-        )
-        keypad = _make_inline_keypad([("➕ ایجاد برنامه جدید انتشار محتوا", "➕ ساخت برنامه جدید")], cols=1)
-        await client.send_message(user_id, msg, with_keypad=True, inline_keypad=keypad)
+        await _send_web_credentials_preview(client, user_id, user)
     except Exception as e:
         logger.error(f"/start error: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_confirm_web_credentials(client, user_id: int) -> None:
+    """Continue from the credentials preview to the regular start screen."""
+    try:
+        from src.database import pool
+        from src.core.user_service import UserService
+
+        user = await UserService(pool).get_user(user_id)
+        if not user:
+            await handle_start(client, user_id)
+            return
+        await _send_start_home(client, user_id, user)
+    except Exception as e:
+        logger.error(f"confirm web credentials error for user {user_id}: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_edit_web_phone(client, user_id: int) -> None:
+    """Start editing the website login phone number."""
+    conversation_states[user_id] = {"command": "web_edit_phone"}
+    await client.send_message(
+        user_id,
+        "شماره تماس جدید برای ورود به وب‌سایت را وارد کنید.\n\n"
+        "فرمت شماره: 09123456789"
+    )
+
+
+async def handle_edit_web_password(client, user_id: int) -> None:
+    """Start changing the website login password."""
+    conversation_states[user_id] = {"command": "web_edit_password"}
+    await client.send_message(
+        user_id,
+        "رمز عبور جدید وب‌سایت را وارد کنید.\n"
+        "رمز باید حداقل ۶ کاراکتر باشد."
+    )
 
 
 # ─────────────────────────────────────────────
@@ -815,6 +886,10 @@ async def handle_conversation_response(client, user_id: int, text: str) -> None:
         await handle_web_onboarding_phone(client, user_id, text)
     elif command == "web_onboarding_password":
         await handle_web_onboarding_password(client, user_id, text)
+    elif command == "web_edit_phone":
+        await handle_web_edit_phone(client, user_id, text)
+    elif command == "web_edit_password":
+        await handle_web_edit_password(client, user_id, text)
 
 
 async def handle_web_onboarding_phone(client, user_id: int, text: str) -> None:
@@ -865,15 +940,61 @@ async def handle_web_onboarding_password(client, user_id: int, text: str) -> Non
         from src.database import pool
         from src.core.user_service import UserService
 
-        await UserService(pool).set_web_credentials(user_id, phone_number, password)
+        user = await UserService(pool).set_web_credentials(user_id, phone_number, password)
         conversation_states.pop(user_id, None)
         await client.send_message(
             user_id,
             "✅ شماره تماس و رمز ورود وب‌سایت ثبت شد.\n\n"
-            "از این به بعد برای خرید یا تمدید اشتراک، /buy را بفرستید."
+            "برای ورود به سایت، از همین شماره و رمزی که انتخاب کردید استفاده کنید."
         )
+        await _send_start_home(client, user_id, user)
     except Exception as e:
         logger.error(f"web onboarding password error for user {user_id}: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_web_edit_phone(client, user_id: int, text: str) -> None:
+    """Update the website login phone number and show the confirmation screen."""
+    try:
+        from src.database import pool
+        from src.core.user_service import UserService
+
+        user = await UserService(pool).update_web_phone(user_id, text)
+        conversation_states.pop(user_id, None)
+        await client.send_message(user_id, "✅ شماره تماس به‌روزرسانی شد.")
+        await _send_web_credentials_preview(client, user_id, user)
+    except ValueError:
+        conversation_states[user_id] = {"command": "web_edit_phone"}
+        await client.send_message(
+            user_id,
+            "❌ شماره تماس معتبر نیست.\n"
+            "لطفاً شماره موبایل را با فرمت 09xxxxxxxxx وارد کنید."
+        )
+    except Exception as e:
+        logger.error(f"web phone edit error for user {user_id}: {e}")
+        await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
+
+
+async def handle_web_edit_password(client, user_id: int, text: str) -> None:
+    """Update the website login password and show the confirmation screen."""
+    password = (text or "").strip()
+    if len(password) < 6:
+        await client.send_message(
+            user_id,
+            "❌ رمز عبور کوتاه است. لطفاً رمزی با حداقل ۶ کاراکتر وارد کنید."
+        )
+        return
+
+    try:
+        from src.database import pool
+        from src.core.user_service import UserService
+
+        user = await UserService(pool).update_web_password(user_id, password)
+        conversation_states.pop(user_id, None)
+        await client.send_message(user_id, "✅ رمز ورود به‌روزرسانی شد.")
+        await _send_web_credentials_preview(client, user_id, user)
+    except Exception as e:
+        logger.error(f"web password edit error for user {user_id}: {e}")
         await client.send_message(user_id, "خطایی رخ داد. لطفا دوباره سعی کنید.")
 
 

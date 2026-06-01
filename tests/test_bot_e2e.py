@@ -39,7 +39,7 @@ class TestBotStartCommand:
         assert commands.conversation_states[123456789]["command"] == "web_onboarding_phone"
 
     async def test_start_command_existing_user_with_web_credentials(self, mock_bot_client, mock_db):
-        """Existing onboarded users see the regular welcome."""
+        """Existing onboarded users confirm saved website credentials first."""
         mock_db.fetchrow.return_value = {
             "id": 1,
             "user_id": 123456789,
@@ -59,13 +59,29 @@ class TestBotStartCommand:
 
         assert mock_bot_client.send_message.called
         message = mock_bot_client.send_message.call_args.args[1]
-        assert "برنامه انتشار" in message
-        assert "دسته محتوا" in message
-        assert "ادمین" in message
-        assert "➕ ایجاد برنامه جدید انتشار محتوا" in message
-        assert "مسیر" not in message
-        assert "سورس" not in message
-        assert mock_bot_client.send_message.call_args.kwargs["inline_keypad"] is not None
+        assert "اطلاعات ورود وب‌سایت" in message
+        assert "آیدی روبیکا: 123456789" in message
+        assert "شماره تماس: 09123456789" in message
+        assert "رمز ورود: تنظیم شده" in message
+        assert "$2b$12" not in message
+        inline_keypad = mock_bot_client.send_message.call_args.kwargs["inline_keypad"]
+        assert inline_keypad is not None
+        button_texts = [
+            button.button_text
+            for row in inline_keypad.rows
+            for button in row.buttons
+        ]
+        button_ids = [
+            button.id
+            for row in inline_keypad.rows
+            for button in row.buttons
+        ]
+        assert "✅ تایید و ادامه" in button_texts
+        assert "✏️ ویرایش شماره" in button_texts
+        assert "🔑 تغییر رمز" in button_texts
+        assert "confirm_web_credentials" in button_ids
+        assert "edit_web_phone" in button_ids
+        assert "edit_web_password" in button_ids
 
     async def test_start_command_existing_user(self, mock_bot_client, mock_db):
         """Test /start with existing user."""
@@ -89,11 +105,101 @@ class TestBotStartCommand:
 
         assert mock_bot_client.send_message.called
         call_args = mock_bot_client.send_message.call_args
-        assert "تریال" in str(call_args)
-        assert "برنامه انتشار" in str(call_args)
+        assert "شماره تماس" in str(call_args)
+        assert "تایید و ادامه" in str(call_args)
+
+    async def test_confirm_web_credentials_shows_regular_start_home(self, mock_bot_client, mock_db):
+        """Confirming saved credentials continues to the regular start screen."""
+        mock_db.fetchrow.return_value = {
+            "id": 1,
+            "user_id": 123456789,
+            "username": "testuser",
+            "trial_start_at": datetime.now(),
+            "trial_end_at": datetime.now() + timedelta(hours=24),
+            "is_trial_active": True,
+            "phone_number": "09123456789",
+            "password_hash": "$2b$12$abcdefghijklmnopqrstuu4YlTEPm.yp3MB7Dd3UtDm5.86iA/5PS",
+            "onboarding_completed_at": datetime.now(),
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+        }
+
+        with patch("src.database.pool", mock_db):
+            await commands.handle_confirm_web_credentials(mock_bot_client, 123456789)
+
+        message = mock_bot_client.send_message.call_args.args[1]
+        assert "برنامه انتشار" in message
+        assert "➕ ایجاد برنامه جدید انتشار محتوا" in message
+        inline_keypad = mock_bot_client.send_message.call_args.kwargs["inline_keypad"]
+        button_ids = [
+            button.id
+            for row in inline_keypad.rows
+            for button in row.buttons
+        ]
+        assert "➕ ساخت برنامه جدید" in button_ids
+        assert "/buy" in button_ids
+
+    async def test_edit_web_phone_updates_number_then_shows_confirmation(self, mock_bot_client, mock_db):
+        """Editing the website phone updates only the phone and returns to confirmation."""
+        user_id = 123456789
+        commands.conversation_states[user_id] = {"command": "web_edit_phone"}
+        mock_db.fetchrow.return_value = {
+            "id": 1,
+            "user_id": user_id,
+            "username": "testuser",
+            "trial_start_at": datetime.now(),
+            "trial_end_at": datetime.now() + timedelta(hours=24),
+            "is_trial_active": True,
+            "phone_number": "09120000000",
+            "password_hash": "$2b$12$abcdefghijklmnopqrstuu4YlTEPm.yp3MB7Dd3UtDm5.86iA/5PS",
+            "onboarding_completed_at": datetime.now(),
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+        }
+
+        with patch("src.database.pool", mock_db):
+            await commands.handle_conversation_response(mock_bot_client, user_id, "09120000000")
+
+        assert user_id not in commands.conversation_states
+        query, saved_phone, saved_user_id = mock_db.fetchrow.call_args.args
+        assert "phone_number" in query
+        assert saved_phone == "09120000000"
+        assert saved_user_id == user_id
+        assert "شماره تماس به‌روزرسانی شد" in mock_bot_client.send_message.await_args_list[0].args[1]
+        assert "شماره تماس: 09120000000" in mock_bot_client.send_message.await_args_list[1].args[1]
+
+    async def test_edit_web_password_updates_hash_then_shows_confirmation(self, mock_bot_client, mock_db):
+        """Changing the website password stores a hash and never echoes the raw password."""
+        user_id = 123456789
+        commands.conversation_states[user_id] = {"command": "web_edit_password"}
+        mock_db.fetchrow.return_value = {
+            "id": 1,
+            "user_id": user_id,
+            "username": "testuser",
+            "trial_start_at": datetime.now(),
+            "trial_end_at": datetime.now() + timedelta(hours=24),
+            "is_trial_active": True,
+            "phone_number": "09123456789",
+            "password_hash": "$2b$12$newhashabcdefghijklmnopqrstu4YlTEPm.yp3MB7Dd3UtDm5.86",
+            "onboarding_completed_at": datetime.now(),
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+        }
+
+        with patch("src.database.pool", mock_db):
+            await commands.handle_conversation_response(mock_bot_client, user_id, "newpass123")
+
+        assert user_id not in commands.conversation_states
+        query, saved_hash, saved_user_id = mock_db.fetchrow.call_args.args
+        assert "password_hash" in query
+        assert saved_hash != "newpass123"
+        assert saved_user_id == user_id
+        all_messages = "\n".join(call.args[1] for call in mock_bot_client.send_message.await_args_list)
+        assert "رمز ورود به‌روزرسانی شد" in all_messages
+        assert "newpass123" not in all_messages
 
     async def test_start_command_paid_user_does_not_show_trial_warning(self, mock_bot_client, mock_db):
-        """Paid users should see paid subscription status on /start, not trial copy."""
+        """Paid users see paid status after confirming saved website credentials."""
         user = SimpleNamespace(
             phone_number="09123456789",
             password_hash="$2b$12$abcdefghijklmnopqrstuu4YlTEPm.yp3MB7Dd3UtDm5.86iA/5PS",
@@ -123,6 +229,32 @@ class TestBotStartCommand:
                     return_value=status,
                 ):
                     await commands.handle_start(mock_bot_client, 123456789, "testuser")
+
+        message = mock_bot_client.send_message.call_args.args[1]
+        assert "اطلاعات ورود وب‌سایت" in message
+        assert "تریال" not in message
+
+        mock_bot_client.send_message.reset_mock()
+        mock_db.fetchrow.return_value = {
+            "id": 1,
+            "user_id": 123456789,
+            "username": "testuser",
+            "trial_start_at": datetime.now(),
+            "trial_end_at": datetime.now() + timedelta(hours=2),
+            "is_trial_active": True,
+            "phone_number": "09123456789",
+            "password_hash": "$2b$12$abcdefghijklmnopqrstuu4YlTEPm.yp3MB7Dd3UtDm5.86iA/5PS",
+            "onboarding_completed_at": datetime.now(),
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+        }
+        with patch("src.database.pool", mock_db):
+            with patch(
+                "src.core.subscription_service.SubscriptionService.get_subscription_status",
+                new_callable=AsyncMock,
+                return_value=status,
+            ):
+                await commands.handle_confirm_web_credentials(mock_bot_client, 123456789)
 
         message = mock_bot_client.send_message.call_args.args[1]
         assert "پلن مقیاس" in message
@@ -156,7 +288,25 @@ class TestBotStartCommand:
         assert saved_phone == "09123456789"
         assert saved_hash != "secret123"
         assert saved_user_id == user_id
-        assert "ثبت شد" in mock_bot_client.send_message.call_args.args[1]
+        assert mock_bot_client.send_message.await_count >= 2
+
+        first_message = mock_bot_client.send_message.await_args_list[0].args[1]
+        second_message = mock_bot_client.send_message.await_args_list[1].args[1]
+        all_messages = "\n".join(call.args[1] for call in mock_bot_client.send_message.await_args_list)
+
+        assert "ثبت شد" in first_message
+        assert "همین شماره و رمزی که انتخاب کردید" in first_message
+        assert "برنامه انتشار" in second_message
+        assert "➕ ایجاد برنامه جدید انتشار محتوا" in second_message
+        assert "secret123" not in all_messages
+
+        inline_keypad = mock_bot_client.send_message.await_args_list[1].kwargs["inline_keypad"]
+        button_texts = [
+            button.button_text
+            for row in inline_keypad.rows
+            for button in row.buttons
+        ]
+        assert "➕ ایجاد برنامه جدید انتشار محتوا" in button_texts
 
 
 @pytest.mark.asyncio
@@ -172,7 +322,7 @@ class TestBotBuyCommand:
 
         assert mock_bot_client.send_message.called
         message = mock_bot_client.send_message.call_args.args[1]
-        assert "/checkout" in message
+        assert commands._checkout_url() in message
         assert "StartPay" not in message
 
     async def test_buy_command_existing_subscription(self, mock_bot_client, mock_db):
@@ -608,6 +758,33 @@ class TestMessageRouter:
         with patch("src.database.pool", mock_db):
             with patch("src.bot.commands.handle_buy", new_callable=AsyncMock):
                 await handlers.route_message(mock_bot_client, 123456789, message)
+
+    async def test_route_web_credentials_confirm_button(self, mock_bot_client, mock_db):
+        """Saved-credentials confirmation button should continue to the start home."""
+        message = {"text": "confirm_web_credentials"}
+
+        with patch("src.database.pool", mock_db):
+            with patch(
+                "src.bot.commands.handle_confirm_web_credentials", new_callable=AsyncMock
+            ) as confirm:
+                await handlers.route_message(mock_bot_client, 123456789, message)
+
+        confirm.assert_awaited_once_with(mock_bot_client, 123456789)
+
+    async def test_route_web_credentials_edit_buttons(self, mock_bot_client, mock_db):
+        """Saved-credentials edit buttons should start the right edit conversations."""
+        with patch("src.database.pool", mock_db):
+            with patch("src.bot.commands.handle_edit_web_phone", new_callable=AsyncMock) as phone:
+                await handlers.route_message(
+                    mock_bot_client, 123456789, {"text": "edit_web_phone"}
+                )
+            with patch("src.bot.commands.handle_edit_web_password", new_callable=AsyncMock) as password:
+                await handlers.route_message(
+                    mock_bot_client, 123456789, {"text": "edit_web_password"}
+                )
+
+        phone.assert_awaited_once_with(mock_bot_client, 123456789)
+        password.assert_awaited_once_with(mock_bot_client, 123456789)
 
     async def test_old_route_keypad_button_opens_publishing_programs(self, mock_bot_client, mock_db):
         """Legacy route button should no longer expose the route-management UI."""

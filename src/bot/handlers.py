@@ -38,6 +38,12 @@ BUTTON_COMMAND_MAP = {
     "✏️ سورس جدید": "/new_program",
     "➕ مسیر جدید": "/new_program",
     "💳 خرید اشتراک": "/buy",
+    "confirm_web_credentials": "/confirm_web_credentials",
+    "✅ تایید و ادامه": "/confirm_web_credentials",
+    "edit_web_phone": "/edit_web_phone",
+    "✏️ ویرایش شماره": "/edit_web_phone",
+    "edit_web_password": "/edit_web_password",
+    "🔑 تغییر رمز": "/edit_web_password",
     "📅 برنامه‌ریزی": "/listplans",
     "📊 گزارش‌ها": "/logs",
 }
@@ -249,6 +255,12 @@ async def route_message(client, user_id: str, message: dict) -> None:
             await commands.handle_removeroute(client, user_id, _parse_user_int(parts[1]))
         elif cmd == "/buy":
             await commands.handle_buy(client, user_id)
+        elif cmd == "/confirm_web_credentials":
+            await commands.handle_confirm_web_credentials(client, user_id)
+        elif cmd == "/edit_web_phone":
+            await commands.handle_edit_web_phone(client, user_id)
+        elif cmd == "/edit_web_password":
+            await commands.handle_edit_web_password(client, user_id)
         elif cmd == "/buy_basic":
             await commands.handle_buy_basic(client, user_id)
         elif cmd == "/buy_pro":

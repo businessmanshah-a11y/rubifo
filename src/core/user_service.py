@@ -124,6 +124,70 @@ class UserService:
         user = await self.get_user(user_id)
         return user or User(user_id=user_id, phone_number=normalized_phone, password_hash=password_hash)
 
+    async def update_web_phone(self, user_id: str, phone_number: str) -> User:
+        """Update only the website login phone number for a Rubika user."""
+        normalized_phone = self.normalize_phone(phone_number)
+        result = await self.db.fetchrow(
+            """
+            UPDATE users
+            SET phone_number = $1,
+                onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()),
+                updated_at = NOW()
+            WHERE user_id = $2
+            RETURNING *
+            """,
+            normalized_phone,
+            user_id,
+        )
+        if result:
+            return User(**dict(result))
+
+        await self.db.execute(
+            """
+            UPDATE users
+            SET phone_number = $1,
+                onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()),
+                updated_at = NOW()
+            WHERE user_id = $2
+            """,
+            normalized_phone,
+            user_id,
+        )
+        user = await self.get_user(user_id)
+        return user or User(user_id=user_id, phone_number=normalized_phone)
+
+    async def update_web_password(self, user_id: str, password: str) -> User:
+        """Update only the website login password hash for a Rubika user."""
+        password_hash = self.hash_password(password)
+        result = await self.db.fetchrow(
+            """
+            UPDATE users
+            SET password_hash = $1,
+                onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()),
+                updated_at = NOW()
+            WHERE user_id = $2
+            RETURNING *
+            """,
+            password_hash,
+            user_id,
+        )
+        if result:
+            return User(**dict(result))
+
+        await self.db.execute(
+            """
+            UPDATE users
+            SET password_hash = $1,
+                onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()),
+                updated_at = NOW()
+            WHERE user_id = $2
+            """,
+            password_hash,
+            user_id,
+        )
+        user = await self.get_user(user_id)
+        return user or User(user_id=user_id, password_hash=password_hash)
+
     async def get_user_by_phone(self, phone_number: str) -> Optional[User]:
         normalized_phone = self.normalize_phone(phone_number)
         result = await self.db.fetchrow(
