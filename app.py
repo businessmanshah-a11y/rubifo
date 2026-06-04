@@ -38,6 +38,7 @@ from src.utils import to_jalali_date
 
 _STATIC_DIR = Path(__file__).parent / "src" / "admin" / "static"
 _ENAMAD_VERIFICATION_FILE = Path(__file__).parent / "795459943.txt"
+_ENAMAD_LEGACY_VERIFICATION_FILE = Path(__file__).parent / "79545943.txt"
 
 app = FastAPI(title="Rubifo", docs_url=None, redoc_url=None)
 
@@ -962,6 +963,11 @@ async def admin_page(page: str):
 @app.get("/795459943.txt", response_class=PlainTextResponse)
 async def enamad_verification_file():
     return FileResponse(_ENAMAD_VERIFICATION_FILE, media_type="text/plain")
+
+
+@app.get("/79545943.txt", response_class=PlainTextResponse)
+async def enamad_legacy_verification_file():
+    return FileResponse(_ENAMAD_LEGACY_VERIFICATION_FILE, media_type="text/plain")
 
 
 @app.get("/")

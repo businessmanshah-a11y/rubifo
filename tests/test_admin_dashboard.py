@@ -54,6 +54,13 @@ class TestAdminAuthEndpoints:
         assert response.text == ""
         assert "text/plain" in response.headers.get("content-type", "")
 
+    def test_enamad_legacy_verification_file(self, client):
+        """Test alternate eNamad verification filename is served from the domain root."""
+        response = client.get("/79545943.txt")
+        assert response.status_code == 200
+        assert response.text == ""
+        assert "text/plain" in response.headers.get("content-type", "")
+
 
 class TestAdminDashboardAPI:
     """Test dashboard API endpoints."""

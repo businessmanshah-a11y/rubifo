@@ -27,6 +27,7 @@ async def shutdown_event():
 # Serve static files
 static_dir = Path(__file__).parent / "static"
 enamad_verification_path = Path(__file__).parents[2] / "795459943.txt"
+enamad_legacy_verification_path = Path(__file__).parents[2] / "79545943.txt"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Import and include routers
@@ -51,6 +52,11 @@ async def root():
 @app.get("/795459943.txt", response_class=PlainTextResponse)
 async def enamad_verification_file():
     return FileResponse(enamad_verification_path, media_type="text/plain")
+
+
+@app.get("/79545943.txt", response_class=PlainTextResponse)
+async def enamad_legacy_verification_file():
+    return FileResponse(enamad_legacy_verification_path, media_type="text/plain")
 
 
 @app.get("/admin/")
