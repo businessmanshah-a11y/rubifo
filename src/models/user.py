@@ -9,6 +9,7 @@ class User:
 
     id: int = 0
     user_id: str = ""
+    rubika_user_id: Optional[str] = None
     username: Optional[str] = None
     trial_start_at: datetime = datetime.now()
     trial_end_at: Optional[datetime] = None
