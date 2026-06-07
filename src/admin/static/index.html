@@ -893,6 +893,28 @@
     }
     .faq-outer.open .faq-a { max-height: 340px; padding: 0 24px 26px; }
 
+    /* ── LICENSES ── */
+    .licenses-section { padding: 6rem 0 4rem; }
+    .licenses-grid {
+      display: flex; justify-content: center; align-items: center;
+      gap: 2rem; flex-wrap: wrap; margin-top: 2.5rem;
+    }
+    .license-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 2rem 2.5rem;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 1rem; min-width: 180px;
+      transition: border-color 0.4s, box-shadow 0.4s;
+    }
+    .license-card:hover { border-color: rgba(168,85,247,0.25); box-shadow: 0 0 32px rgba(168,85,247,0.08); }
+    .license-card-label { font-size: .875rem; color: var(--t3); font-weight: 500; }
+    #enamad-placeholder {
+      width: 100px; height: 100px; border-radius: var(--r-md);
+      background: var(--surface-2);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #enamad-placeholder img { width: 100px; height: auto; border-radius: var(--r-md); }
+
     /* ── FOOTER ── */
     footer {
       background: var(--black-2); border-top: 1px solid var(--border);
@@ -1886,6 +1908,24 @@
   </div>
 </section>
 
+<!-- LICENSES -->
+<section class="licenses-section" id="licenses">
+  <div class="container">
+    <div style="text-align:center">
+      <div class="section-eyebrow reveal">مجوزها و نمادها</div>
+      <h2 class="section-h2 reveal reveal-d1">فعالیت قانونی و معتبر</h2>
+    </div>
+    <div class="licenses-grid">
+      <div class="license-card reveal reveal-d2">
+        <div id="enamad-placeholder">
+          <!-- eNamad badge injected after scroll-into-view for performance -->
+        </div>
+        <span class="license-card-label">نماد اعتماد الکترونیکی</span>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- FOOTER -->
 <footer>
   <div class="footer-mark">روبی<em>فو</em></div>
@@ -1928,6 +1968,10 @@
   <a class="bnav-item" href="#faq"      data-section="faq">
     <span class="bnav-num">07</span>
     <span class="bnav-label">سوالات</span>
+  </a>
+  <a class="bnav-item" href="#licenses" data-section="licenses">
+    <span class="bnav-num">08</span>
+    <span class="bnav-label">مجوزها</span>
   </a>
 </nav>
 
@@ -2272,7 +2316,7 @@ document.addEventListener('DOMContentLoaded', () => {
 (function() {
   const nav    = document.getElementById('bottom-nav');
   const items  = nav.querySelectorAll('.bnav-item');
-  const ids    = ['hero','features','unique','how','plans','trial','faq'];
+  const ids    = ['hero','features','unique','how','plans','trial','faq','licenses'];
 
   /* Show nav after brief delay */
   setTimeout(() => nav.classList.add('visible'), 600);
@@ -2347,6 +2391,25 @@ document.addEventListener('DOMContentLoaded', () => {
   btn.addEventListener('click', () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
+})();
+
+/* ── ENAMAD — lazy load on scroll-into-view ──── */
+(function() {
+  function loadEnamad() {
+    const el = document.getElementById('enamad-placeholder');
+    if (!el || el.dataset.loaded) return;
+    el.dataset.loaded = '1';
+    el.innerHTML = "<a referrerpolicy='origin' target='_blank' href='https://trustseal.enamad.ir/?id=739713&Code=VhidtVcA4Cr6c9HegLUEHr9ztg230cjs'><img referrerpolicy='origin' src='https://trustseal.enamad.ir/logo.aspx?id=739713&Code=VhidtVcA4Cr6c9HegLUEHr9ztg230cjs' alt='نماد اعتماد الکترونیکی' style='cursor:pointer' code='VhidtVcA4Cr6c9HegLUEHr9ztg230cjs'></a>";
+  }
+  const target = document.getElementById('enamad-placeholder');
+  if (target && 'IntersectionObserver' in window) {
+    const io = new IntersectionObserver(function(entries) {
+      if (entries[0].isIntersecting) { loadEnamad(); io.disconnect(); }
+    }, { rootMargin: '200px' });
+    io.observe(target);
+  } else {
+    window.addEventListener('load', loadEnamad);
+  }
 })();
 </script>
 
