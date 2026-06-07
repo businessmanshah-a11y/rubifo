@@ -1466,6 +1466,19 @@
       <button class="theme-toggle" id="themeToggle" aria-label="تغییر تم">
         <svg id="themeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
+      <div class="auth-btn-wrap" id="authBtnWrap">
+        <button id="authIconBtn" class="auth-icon-btn" aria-label="حساب کاربری" onclick="authDropdownToggle()">
+          <svg id="authIconSvg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+          <span id="authIconLetter" style="display:none"></span>
+        </button>
+        <div class="auth-dropdown" id="authDropdown">
+          <!-- filled by JS -->
+        </div>
+      </div>
       <a href="https://rubika.ir/rubifo_bot" class="nav-cta" target="_blank" rel="noopener">
         <span class="nav-cta-text">شروع تریال</span>
         <span class="nav-cta-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M7.5 2L3.5 6L7.5 10" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
