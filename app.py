@@ -458,7 +458,7 @@ def _html_page(title: str, body: str, page_class: str = "") -> HTMLResponse:
 
 
 @app.get("/login")
-async def web_login_page(next: str = "/checkout", tier: str = ""):
+async def web_login_page(next: str = "/checkout", tier: str = "", tab: str = "login"):
     safe_next = _safe_next_path(next)
     action_hint = f"{safe_next}?tier={tier}" if tier else safe_next
     tier_name = _tier_label(tier) if tier else "پلن انتخابی"
@@ -541,6 +541,7 @@ async def web_login_page(next: str = "/checkout", tier: str = ""):
           document.getElementById('tab-register').style.background = isLogin ? 'transparent' : '#a855f7';
           document.getElementById('tab-register').style.color = isLogin ? '#888' : 'white';
         }}
+        switchTab({tab!r});
 
         document.getElementById('login-form').addEventListener('submit', async (e) => {{
           e.preventDefault();
