@@ -585,7 +585,7 @@ async def web_login_page(next: str = "/checkout", tier: str = "", tab: str = "lo
           }}
           const data = await res.json();
           localStorage.setItem('rubifo_user_token', data.access_token);
-          window.location.href = '/plans';
+          window.location.href = {action_hint!r};
         }});
         </script>
         """,
