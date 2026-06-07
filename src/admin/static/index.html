@@ -2505,5 +2505,116 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 
+<script>
+(function () {
+  var TOKEN_KEY = 'rubifo_user_token';
+
+  function jwtPayload(token) {
+    try {
+      var b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(b64));
+    } catch (e) { return null; }
+  }
+
+  function clearAuth() {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+
+  function renderUnauthDropdown() {
+    document.getElementById('authDropdown').innerHTML =
+      '<div class="auth-dd-header">حساب کاربری</div>' +
+      '<a class="auth-dd-item" href="/login?next=/%23plans">🔑  ورود به حساب</a>' +
+      '<a class="auth-dd-item" href="/login?tab=register&next=/%23plans">✨  ثبت‌نام رایگان</a>' +
+      '<div class="auth-dd-sep"></div>' +
+      '<a class="auth-dd-item" href="/#plans">📦  مشاهده پلن‌ها</a>';
+  }
+
+  function subscriptionStatusLabel(sub) {
+    if (!sub) return 'حساب سایتی — خرید برای شروع';
+    if (sub.is_active === false) return '⚠️ اشتراک منقضی شده';
+    var end = new Date(sub.end_date);
+    var now = new Date();
+    var diffMs = end - now;
+    var diffDays = Math.floor(diffMs / 86400000);
+    var diffHours = Math.floor(diffMs / 3600000);
+    if (sub.tier === 'trial') return '⏳ تریال — ' + diffHours + ' ساعت مانده';
+    return '✅ پلن ' + (sub.tier_label || sub.tier) + ' — ' + diffDays + ' روز مانده';
+  }
+
+  function renderAuthDropdown(phone, sub) {
+    var statusLabel = subscriptionStatusLabel(sub);
+    document.getElementById('authDropdown').innerHTML =
+      '<div class="auth-dd-phone">' + phone + '</div>' +
+      '<div class="auth-dd-status">' + statusLabel + '</div>' +
+      '<a class="auth-dd-item" href="/checkout?tier=basic">📦  خرید اشتراک</a>' +
+      '<a class="auth-dd-item" href="/#plans">📋  مشاهده پلن‌ها</a>' +
+      '<div class="auth-dd-sep"></div>' +
+      '<button class="auth-dd-item danger" onclick="authLogout()">🚪  خروج</button>';
+  }
+
+  function setAuthenticatedIcon(letter) {
+    var btn = document.getElementById('authIconBtn');
+    btn.classList.add('authenticated');
+    document.getElementById('authIconSvg').style.display = 'none';
+    var span = document.getElementById('authIconLetter');
+    span.textContent = letter;
+    span.style.display = '';
+  }
+
+  function initAuth() {
+    var token = localStorage.getItem(TOKEN_KEY);
+    if (!token) { renderUnauthDropdown(); return; }
+
+    var payload = jwtPayload(token);
+    if (!payload || !payload.exp || Date.now() / 1000 > payload.exp) {
+      clearAuth();
+      renderUnauthDropdown();
+      return;
+    }
+
+    var phone = payload.phone || '';
+    setAuthenticatedIcon(phone ? phone.charAt(0) : '?');
+
+    fetch('/api/me/subscription', {
+      headers: { Authorization: 'Bearer ' + token }
+    }).then(function (res) {
+      if (res.status === 401) { clearAuth(); renderUnauthDropdown(); return; }
+      if (!res.ok) { renderAuthDropdown(phone, null); return; }
+      res.json().then(function (data) {
+        renderAuthDropdown(phone, data.subscription);
+      });
+    }).catch(function () {
+      renderAuthDropdown(phone, null);
+    });
+  }
+
+  window.authDropdownToggle = function () {
+    document.getElementById('authDropdown').classList.toggle('open');
+  };
+
+  window.authLogout = function () {
+    clearAuth();
+    window.location.reload();
+  };
+
+  document.addEventListener('click', function (e) {
+    var wrap = document.getElementById('authBtnWrap');
+    if (wrap && !wrap.contains(e.target)) {
+      var dd = document.getElementById('authDropdown');
+      if (dd) dd.classList.remove('open');
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      var dd = document.getElementById('authDropdown');
+      if (dd) dd.classList.remove('open');
+    }
+  });
+
+  initAuth();
+})();
+</script>
+
 </body>
 </html>
