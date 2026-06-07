@@ -67,6 +67,12 @@ class _UserLoginBody(BaseModel):
     password: str
 
 
+class _UserRegisterBody(BaseModel):
+    phone_number: str
+    password: str
+    confirm_password: str
+
+
 class _CheckoutStartBody(BaseModel):
     tier: str
     months: int = 1
@@ -456,37 +462,88 @@ async def web_login_page(next: str = "/checkout", tier: str = ""):
     action_hint = f"{safe_next}?tier={tier}" if tier else safe_next
     tier_name = _tier_label(tier) if tier else "پلن انتخابی"
     return _html_page(
-        "ورود به Rubifo",
+        "ورود / ثبت‌نام — Rubifo",
         f"""
         <div class="checkout-copy">
-          <div class="brand-mark">Rubifo checkout</div>
-          <h1>ورود کوتاه، خرید روشن.</h1>
-          <p class="lead">برای خرید {escape(tier_name)} با شماره تماس و رمزی وارد شوید که داخل ربات روبیفو ساخته‌اید.</p>
-          <div class="hint-box">اگر هنوز ثبت‌نام نکرده‌اید، اول وارد ربات شوید و حساب وب خود را بسازید. وب حساب روبیکا را از صفر نمی‌سازد.</div>
+          <div class="brand-mark">Rubifo</div>
+          <h1>حساب روبیفو</h1>
+          <p class="lead">برای خرید {escape(tier_name)} وارد شوید یا حساب جدید بسازید.</p>
         </div>
         <div class="checkout-panel">
-          <div class="panel-kicker">ورود کاربر</div>
-          <h2 class="panel-title">ادامه خرید اشتراک</h2>
-          <form id="login-form">
-            <div class="field">
-              <label>شماره تماس</label>
-              <input name="phone_number" autocomplete="tel" inputmode="tel" placeholder="09123456789" required>
+          <!-- Tabs -->
+          <div class="tab-bar" style="display:flex;background:rgba(255,255,255,0.04);
+               border-radius:10px;padding:4px;margin-bottom:24px;
+               border:1px solid rgba(255,255,255,0.06);">
+            <button id="tab-login" onclick="switchTab('login')"
+              style="flex:1;padding:9px;border-radius:7px;border:none;cursor:pointer;
+                     font-size:13px;font-weight:600;background:#a855f7;color:white;
+                     transition:all 0.2s;">ورود</button>
+            <button id="tab-register" onclick="switchTab('register')"
+              style="flex:1;padding:9px;border-radius:7px;border:none;cursor:pointer;
+                     font-size:13px;font-weight:600;background:transparent;color:#888;
+                     transition:all 0.2s;">ثبت‌نام</button>
+          </div>
+
+          <!-- Login Form -->
+          <div id="panel-login">
+            <div class="panel-kicker">ورود کاربر</div>
+            <h2 class="panel-title">خوش برگشتی</h2>
+            <form id="login-form">
+              <div class="field">
+                <label>شماره تماس</label>
+                <input name="phone_number" autocomplete="tel" inputmode="tel"
+                       placeholder="09123456789" required>
+              </div>
+              <div class="field">
+                <label>رمز عبور</label>
+                <input name="password" type="password" autocomplete="current-password" required>
+              </div>
+              <button class="btn btn-primary" type="submit">ورود به حساب</button>
+            </form>
+            <p id="login-error" class="error-note"></p>
+            <div class="button-row">
+              <a class="btn btn-ghost" href="{RUBIKA_BOT_RETURN_URL}">ثبت‌نام در ربات</a>
             </div>
-            <div class="field">
-              <label>رمز عبور</label>
-              <input name="password" type="password" autocomplete="current-password" required>
-            </div>
-            <button class="btn btn-primary" type="submit">ورود و ادامه</button>
-          </form>
-          <p id="login-error" class="error-note"></p>
-          <div class="button-row">
-            <a class="btn btn-ghost" href="{RUBIKA_BOT_RETURN_URL}">ثبت‌نام در ربات</a>
+          </div>
+
+          <!-- Register Form -->
+          <div id="panel-register" style="display:none">
+            <div class="panel-kicker">ثبت‌نام</div>
+            <h2 class="panel-title">ساخت حساب رایگان</h2>
+            <form id="register-form">
+              <div class="field">
+                <label>شماره موبایل</label>
+                <input name="phone_number" autocomplete="tel" inputmode="tel"
+                       placeholder="09123456789" required>
+              </div>
+              <div class="field">
+                <label>رمز عبور (حداقل ۶ کاراکتر)</label>
+                <input name="password" type="password" autocomplete="new-password" required>
+              </div>
+              <div class="field">
+                <label>تکرار رمز عبور</label>
+                <input name="confirm_password" type="password" autocomplete="new-password" required>
+              </div>
+              <button class="btn btn-primary" type="submit">ساخت حساب و شروع</button>
+            </form>
+            <p id="register-error" class="error-note"></p>
           </div>
         </div>
+
         <script>
-        document.getElementById('login-form').addEventListener('submit', async (event) => {{
-          event.preventDefault();
-          const form = new FormData(event.currentTarget);
+        function switchTab(tab) {{
+          const isLogin = tab === 'login';
+          document.getElementById('panel-login').style.display = isLogin ? '' : 'none';
+          document.getElementById('panel-register').style.display = isLogin ? 'none' : '';
+          document.getElementById('tab-login').style.background = isLogin ? '#a855f7' : 'transparent';
+          document.getElementById('tab-login').style.color = isLogin ? 'white' : '#888';
+          document.getElementById('tab-register').style.background = isLogin ? 'transparent' : '#a855f7';
+          document.getElementById('tab-register').style.color = isLogin ? '#888' : 'white';
+        }}
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {{
+          e.preventDefault();
+          const form = new FormData(e.currentTarget);
           const res = await fetch('/api/auth/login', {{
             method: 'POST',
             headers: {{'Content-Type': 'application/json'}},
@@ -496,17 +553,37 @@ async def web_login_page(next: str = "/checkout", tier: str = ""):
             }})
           }});
           if (!res.ok) {{
-            let message = 'ورود انجام نشد. اول داخل ربات ثبت‌نام کنید و رمز ورود بسازید.';
-            try {{
-              const data = await res.json();
-              if (data.detail) message = data.detail;
-            }} catch (error) {{}}
-            document.getElementById('login-error').textContent = message;
+            let msg = 'ورود انجام نشد.';
+            try {{ msg = (await res.json()).detail || msg; }} catch {{}}
+            document.getElementById('login-error').textContent = msg;
             return;
           }}
           const data = await res.json();
           localStorage.setItem('rubifo_user_token', data.access_token);
           window.location.href = {action_hint!r};
+        }});
+
+        document.getElementById('register-form').addEventListener('submit', async (e) => {{
+          e.preventDefault();
+          const form = new FormData(e.currentTarget);
+          const res = await fetch('/api/auth/register', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{
+              phone_number: form.get('phone_number'),
+              password: form.get('password'),
+              confirm_password: form.get('confirm_password')
+            }})
+          }});
+          if (!res.ok) {{
+            let msg = 'خطا در ثبت‌نام.';
+            try {{ msg = (await res.json()).detail || msg; }} catch {{}}
+            document.getElementById('register-error').textContent = msg;
+            return;
+          }}
+          const data = await res.json();
+          localStorage.setItem('rubifo_user_token', data.access_token);
+          window.location.href = '/plans';
         }});
         </script>
         """,
@@ -534,6 +611,45 @@ async def web_user_login(body: _UserLoginBody):
         "user": {
             "user_id": user.user_id,
             "username": user.username,
+            "phone_number": user.phone_number,
+        },
+    }
+
+
+@app.post("/api/auth/register")
+async def web_user_register(body: _UserRegisterBody):
+    if body.password != body.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="رمز عبور و تکرار آن یکسان نیستند.",
+        )
+    svc = UserService(_web_db())
+    try:
+        phone = UserService.normalize_phone(body.phone_number)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="فرمت شماره موبایل صحیح نیست. مثال: 09123456789",
+        )
+    existing = await svc.get_user_by_phone(phone)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="این شماره قبلاً ثبت‌نام کرده. از تب ورود وارد شوید.",
+        )
+    try:
+        UserService.hash_password(body.password)  # validates length >= 6
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="رمز عبور باید حداقل ۶ کاراکتر باشد.",
+        )
+    user = await svc.create_web_user(body.phone_number, body.password)
+    return {
+        "access_token": _create_user_token(user.user_id),
+        "token_type": "bearer",
+        "user": {
+            "user_id": user.user_id,
             "phone_number": user.phone_number,
         },
     }
