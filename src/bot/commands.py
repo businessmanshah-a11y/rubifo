@@ -886,17 +886,20 @@ async def handle_conversation_response(client, user_id: int, text: str) -> None:
         await handle_web_onboarding_phone(client, user_id, text)
     elif command == "web_onboarding_password":
         await handle_web_onboarding_password(client, user_id, text)
+    elif command == "web_linking_password_verify":
+        await handle_web_linking_password_verify(client, user_id, text)
     elif command == "web_edit_phone":
         await handle_web_edit_phone(client, user_id, text)
     elif command == "web_edit_password":
         await handle_web_edit_password(client, user_id, text)
 
 
-async def handle_web_onboarding_phone(client, user_id: int, text: str) -> None:
-    """Collect and validate the website login phone number."""
-    try:
-        from src.core.user_service import UserService
+async def handle_web_onboarding_phone(client, user_id: str, text: str) -> None:
+    """Collect phone number. Detects web-registered accounts and routes to linking."""
+    from src.database import pool
+    from src.core.user_service import UserService
 
+    try:
         phone_number = UserService.normalize_phone(text)
     except ValueError:
         conversation_states[user_id] = {"command": "web_onboarding_phone"}
@@ -907,6 +910,34 @@ async def handle_web_onboarding_phone(client, user_id: int, text: str) -> None:
         )
         return
 
+    svc = UserService(pool)
+    existing = await svc.get_user_by_phone(phone_number)
+
+    if existing and existing.rubika_user_id is None:
+        # Web-registered user — must verify password before linking
+        conversation_states[user_id] = {
+            "command": "web_linking_password_verify",
+            "web_user_id": existing.user_id,
+            "attempts": 0,
+        }
+        await client.send_message(
+            user_id,
+            "🔗 این شماره یک حساب سایتی دارد.\n\n"
+            "برای اتصال ربات به حسابت، رمز عبور سایت را وارد کن:"
+        )
+        return
+
+    if existing and existing.rubika_user_id is not None:
+        # Phone already linked to another bot account
+        conversation_states[user_id] = {"command": "web_onboarding_phone"}
+        await client.send_message(
+            user_id,
+            "❌ این شماره به حساب دیگری متصل است.\n"
+            "لطفاً شماره دیگری وارد کنید."
+        )
+        return
+
+    # Normal flow — new user, ask for password
     conversation_states[user_id] = {
         "command": "web_onboarding_password",
         "phone_number": phone_number,
@@ -914,9 +945,73 @@ async def handle_web_onboarding_phone(client, user_id: int, text: str) -> None:
     await client.send_message(
         user_id,
         "✅ شماره تماس ثبت شد.\n\n"
-        "حالا یک رمز عبور ثابت برای ورود به وب‌سایت انتخاب کنید.\n"
+        "حالا یک رمز عبور برای ورود به وب‌سایت انتخاب کنید.\n"
         "رمز باید حداقل ۶ کاراکتر باشد."
     )
+
+
+async def handle_web_linking_password_verify(
+    client, user_id: str, text: str
+) -> None:
+    """Verify web account password before linking bot to it."""
+    from src.database import pool
+    from src.core.user_service import UserService
+
+    state = conversation_states.get(user_id, {})
+    web_user_id = state.get("web_user_id")
+    attempts = state.get("attempts", 0)
+
+    if not web_user_id:
+        conversation_states[user_id] = {"command": "web_onboarding_phone"}
+        await client.send_message(user_id, "خطا. لطفاً دوباره شماره را وارد کنید.")
+        return
+
+    svc = UserService(pool)
+    web_user = await svc.get_user(web_user_id)
+
+    if not web_user or not web_user.password_hash:
+        conversation_states.pop(user_id, None)
+        await client.send_message(user_id, "خطایی رخ داد. لطفاً دوباره /start بفرستید.")
+        return
+
+    password = (text or "").strip()
+    if not UserService.verify_password(password, web_user.password_hash):
+        attempts += 1
+        if attempts >= 3:
+            conversation_states.pop(user_id, None)
+            await client.send_message(
+                user_id,
+                "❌ سه بار اشتباه وارد کردید. لطفاً دوباره /start بفرستید."
+            )
+            return
+        conversation_states[user_id] = {
+            "command": "web_linking_password_verify",
+            "web_user_id": web_user_id,
+            "attempts": attempts,
+        }
+        remaining = 3 - attempts
+        await client.send_message(
+            user_id,
+            f"❌ رمز اشتباه است. {remaining} بار دیگر فرصت دارید."
+        )
+        return
+
+    # Password correct — merge accounts
+    try:
+        merged_user = await svc.merge_web_account(web_user_id, str(user_id))
+        conversation_states.pop(user_id, None)
+        await client.send_message(
+            user_id,
+            f"✅ حسابت با شماره {merged_user.phone_number} به ربات وصل شد!\n\n"
+            "تریال ۷۲ ساعته‌ات از همین الان شروع شد. 🎉\n\n"
+            "⚠️ اگر قبلاً در سایت وارد بودی، لطفاً یک‌بار دیگر لاگین کن.",
+            with_keypad=True,
+        )
+        await _send_start_home(client, str(user_id), merged_user)
+    except Exception as e:
+        logger.error(f"merge_web_account failed for {user_id}: {e}")
+        conversation_states.pop(user_id, None)
+        await client.send_message(user_id, "خطا در اتصال حساب. لطفاً دوباره /start بفرستید.")
 
 
 async def handle_web_onboarding_password(client, user_id: int, text: str) -> None:
