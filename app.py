@@ -101,12 +101,13 @@ def _web_db():
     return db_module.pool
 
 
-def _create_user_token(user_id: str) -> str:
+def _create_user_token(user_id: str, phone_number: str = "") -> str:
     from datetime import datetime, timedelta
 
     payload = {
         "scope": "web_user",
         "sub": user_id,
+        "phone": phone_number,
         "exp": datetime.utcnow() + timedelta(hours=_USER_TOKEN_EXP_HOURS),
         "iat": datetime.utcnow(),
     }
@@ -606,7 +607,7 @@ async def web_user_login(body: _UserLoginBody):
         )
 
     return {
-        "access_token": _create_user_token(user.user_id),
+        "access_token": _create_user_token(user.user_id, user.phone_number or ""),
         "token_type": "bearer",
         "user": {
             "user_id": user.user_id,
@@ -646,7 +647,7 @@ async def web_user_register(body: _UserRegisterBody):
         )
     user = await svc.create_web_user(body.phone_number, body.password)
     return {
-        "access_token": _create_user_token(user.user_id),
+        "access_token": _create_user_token(user.user_id, user.phone_number or ""),
         "token_type": "bearer",
         "user": {
             "user_id": user.user_id,
