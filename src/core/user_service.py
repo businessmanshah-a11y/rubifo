@@ -205,6 +205,78 @@ class UserService:
             return None
         return user
 
+    async def create_web_user(self, phone_number: str, password: str) -> User:
+        """Create a new user from web registration (no Rubika bot link yet).
+
+        user_id is a stable synthetic key prefixed 'web_'.
+        Trial does NOT start here — it starts when the bot is linked.
+        """
+        import secrets
+        normalized = self.normalize_phone(phone_number)
+        hashed = self.hash_password(password)
+        web_id = "web_" + secrets.token_hex(12)
+
+        await self.db.execute(
+            """
+            INSERT INTO users (user_id, phone_number, password_hash, is_trial_active)
+            VALUES ($1, $2, $3, FALSE)
+            """,
+            web_id,
+            normalized,
+            hashed,
+        )
+        user = await self.get_user(web_id)
+        logger.info(f"Web user created: {web_id} phone={normalized}")
+        return user
+
+    async def merge_web_account(
+        self, web_user_id: str, rubika_guid: str
+    ) -> User:
+        """Merge a web-registered user into an existing bot user.
+
+        Transfers all FK data (subscriptions, transactions, logs) from the
+        web placeholder user to the rubika_guid user, then deletes the placeholder.
+        Trial starts on the rubika_guid user upon merge.
+        JWT tokens for web_user_id become invalid after this call.
+        """
+        web_user = await self.get_user(web_user_id)
+        if not web_user:
+            raise ValueError(f"Web user {web_user_id} not found")
+
+        async with self.db.acquire() as conn:
+            async with conn.transaction():
+                for table in ("subscriptions", "transactions", "logs"):
+                    await conn.execute(
+                        f"UPDATE {table} SET user_id = $1 WHERE user_id = $2",
+                        rubika_guid,
+                        web_user_id,
+                    )
+                await conn.execute(
+                    "DELETE FROM users WHERE user_id = $1", web_user_id
+                )
+                result = await conn.fetchrow(
+                    """
+                    UPDATE users SET
+                        phone_number         = $1,
+                        password_hash        = $2,
+                        rubika_user_id       = $3,
+                        onboarding_completed_at = NOW(),
+                        is_trial_active      = TRUE,
+                        trial_start_at       = NOW(),
+                        trial_end_at         = NOW() + INTERVAL '72 hours',
+                        updated_at           = NOW()
+                    WHERE user_id = $3
+                    RETURNING *
+                    """,
+                    web_user.phone_number,
+                    web_user.password_hash,
+                    rubika_guid,
+                )
+
+        merged = User(**dict(result))
+        logger.info(f"Merged web account {web_user_id} → bot user {rubika_guid}")
+        return merged
+
     async def list_users(self, limit: int = 100, offset: int = 0):
         """List users with pagination.
 
