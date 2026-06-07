@@ -65,6 +65,7 @@ skills-lock.json
 .agents/
 .claude/
 .codex/
+.superpowers/
 
 # Logs
 *.log
