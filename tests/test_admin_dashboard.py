@@ -275,6 +275,52 @@ class TestAdminPerformanceAPI:
             assert "subscription_distribution" in data
 
 
+class TestAdminOutboundIPAPI:
+    """Test outbound IP monitor admin endpoints."""
+
+    def test_outbound_ip_status_unauthorized(self, client):
+        response = client.get("/admin/outbound-ip-status")
+
+        assert response.status_code == 403
+
+    def test_outbound_ip_status_structure(self, client, valid_token):
+        class FakeOutboundIPDb:
+            async def fetchrow(self, query: str, *args):
+                if "SELECT * FROM outbound_ip_monitor" in query:
+                    return {
+                        "id": 1,
+                        "current_ip": "185.19.201.63",
+                        "previous_ip": None,
+                        "status": "ok",
+                        "last_checked_at": datetime.now(),
+                        "last_changed_at": None,
+                        "last_error": None,
+                        "alert_sent_at": None,
+                        "updated_at": datetime.now(),
+                    }
+                return None
+
+            async def execute(self, query: str, *args):
+                return "OK"
+
+        with patch("src.admin.routes.db_module.pool", FakeOutboundIPDb()):
+            response = client.get(
+                "/admin/outbound-ip-status",
+                headers={"Authorization": f"Bearer {valid_token}"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["current_ip"] == "185.19.201.63"
+        assert data["status"] == "ok"
+        assert "alerting_enabled" in data
+
+    def test_outbound_ip_manual_check_requires_token(self, client):
+        response = client.post("/admin/outbound-ip-check")
+
+        assert response.status_code == 403
+
+
 class TestAdminStaticFiles:
     """Test static file serving."""
 
@@ -331,6 +377,13 @@ class TestAdminStaticFiles:
         """Test settings page is served."""
         response = client.get("/static/settings.html")
         assert response.status_code == 200
+
+    def test_settings_page_includes_outbound_ip_monitor(self):
+        html = Path("src/admin/static/settings.html").read_text(encoding="utf-8")
+
+        assert "مانیتور IP خروجی" in html
+        assert "/admin/outbound-ip-status" in html
+        assert "/admin/outbound-ip-check" in html
 
 
 class TestAdminSecurity:

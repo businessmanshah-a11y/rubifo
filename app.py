@@ -24,11 +24,13 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 import src.database as db_module
 from src.config import (
+    OUTBOUND_IP_CHECK_ENABLED,
     RUBIKA_BOT_RETURN_URL,
     SUBSCRIPTION_TIERS,
     USER_JWT_SECRET,
     WEB_BASE_URL,
 )
+from src.core.outbound_ip_monitor import OutboundIPMonitor
 from src.core.subscription_service import SubscriptionService
 from src.core.transaction_service import TransactionService
 from src.core.user_service import UserService
@@ -1282,6 +1284,17 @@ async def _startup():
         logger.info("Migration: logs table ensured")
     except Exception as e:
         logger.warning(f"Migration check failed: {e}")
+
+    try:
+        outbound_monitor = OutboundIPMonitor(_db_mod.pool)
+        await outbound_monitor.ensure_table()
+        if OUTBOUND_IP_CHECK_ENABLED:
+            asyncio.create_task(outbound_monitor.run_forever())
+            logger.info("Outbound IP monitor scheduled")
+        else:
+            logger.info("Outbound IP monitor disabled by config")
+    except Exception as e:
+        logger.warning(f"Outbound IP monitor startup failed: {e}")
 
     from src.config import BOT_TOKEN, RUBIKA_INLINE_WEBHOOK_URL
     from src.bot.main import RufifoBot, RubikaClient

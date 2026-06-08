@@ -27,6 +27,34 @@
             gap: 8px;
         }
         .sysinfo strong { color: var(--text-3); min-width: 120px; font-weight: 600; }
+        .ip-monitor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 10px;
+            width: 100%;
+        }
+        .ip-monitor-field {
+            border: 1px solid var(--border-soft);
+            border-radius: var(--r-md);
+            padding: 10px 12px;
+            background: var(--surface-2);
+        }
+        .ip-monitor-field span {
+            display: block;
+            color: var(--text-3);
+            font-size: var(--f-xs);
+            margin-bottom: 5px;
+        }
+        .ip-monitor-field strong {
+            display: block;
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: var(--f-sm);
+            overflow-wrap: anywhere;
+        }
+        .ip-monitor-status-ok { color: var(--ok-fg) !important; }
+        .ip-monitor-status-changed { color: var(--warn-fg) !important; }
+        .ip-monitor-status-error { color: var(--err-fg) !important; }
     </style>
 </head>
 <body>
@@ -89,6 +117,41 @@
                             <strong style="color:var(--text-3);">وضعیت:</strong>
                             <span id="zarinpalStatus">در حال بررسی…</span>
                         </p>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <h3>مانیتور IP خروجی</h3>
+                    <p>بررسی دوره‌ای IP خروجی سرور برای جلوگیری از خطای IP غیرمجاز در درگاه پرداخت</p>
+                    <div class="setting-controls" style="align-items:stretch;">
+                        <div class="ip-monitor-grid">
+                            <div class="ip-monitor-field">
+                                <span>IP فعلی</span>
+                                <strong id="outboundCurrentIp">—</strong>
+                            </div>
+                            <div class="ip-monitor-field">
+                                <span>IP قبلی</span>
+                                <strong id="outboundPreviousIp">—</strong>
+                            </div>
+                            <div class="ip-monitor-field">
+                                <span>وضعیت</span>
+                                <strong id="outboundStatus">در حال بارگذاری…</strong>
+                            </div>
+                            <div class="ip-monitor-field">
+                                <span>آخرین بررسی</span>
+                                <strong id="outboundLastChecked">—</strong>
+                            </div>
+                            <div class="ip-monitor-field">
+                                <span>آخرین تغییر</span>
+                                <strong id="outboundLastChanged">—</strong>
+                            </div>
+                            <div class="ip-monitor-field">
+                                <span>تلگرام</span>
+                                <strong id="outboundTelegram">—</strong>
+                            </div>
+                        </div>
+                        <p id="outboundLastError" style="font-size:var(--f-xs);color:var(--err-fg);display:none;margin-top:10px;"></p>
+                        <button class="btn btn-secondary" onclick="runOutboundIpCheck()">بررسی دستی IP</button>
                     </div>
                 </div>
             </div>
@@ -216,6 +279,65 @@
         function optimizeDB()  { showMessage('بهینه‌سازی پایگاه داده انجام شد.', 'success'); }
         function editTier(t)   { showMessage(`ویرایش پلن ${t} به‌زودی اضافه می‌شود.`, 'info'); }
 
+        function formatDateTime(value) {
+            if (!value) return '—';
+            return new Date(value).toLocaleString('fa-IR-u-ca-persian');
+        }
+
+        function statusLabel(status) {
+            if (status === 'ok') return 'عادی';
+            if (status === 'changed') return 'تغییر کرده';
+            if (status === 'error') return 'خطا';
+            return 'نامشخص';
+        }
+
+        function renderOutboundIpStatus(data) {
+            document.getElementById('outboundCurrentIp').textContent = data.current_ip || '—';
+            document.getElementById('outboundPreviousIp').textContent = data.previous_ip || '—';
+            document.getElementById('outboundLastChecked').textContent = formatDateTime(data.last_checked_at);
+            document.getElementById('outboundLastChanged').textContent = formatDateTime(data.last_changed_at);
+            document.getElementById('outboundTelegram').textContent = data.alerting_enabled ? 'فعال' : 'غیرفعال';
+
+            const statusEl = document.getElementById('outboundStatus');
+            statusEl.textContent = statusLabel(data.status);
+            statusEl.className = `ip-monitor-status-${data.status || 'unknown'}`;
+
+            const errorEl = document.getElementById('outboundLastError');
+            if (data.last_error) {
+                errorEl.textContent = `آخرین خطا: ${data.last_error}`;
+                errorEl.style.display = 'block';
+            } else {
+                errorEl.style.display = 'none';
+            }
+        }
+
+        async function loadOutboundIpStatus() {
+            try {
+                const response = await fetch('/admin/outbound-ip-status', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('status request failed');
+                renderOutboundIpStatus(await response.json());
+            } catch (error) {
+                document.getElementById('outboundStatus').textContent = 'خطا در دریافت';
+                document.getElementById('outboundStatus').className = 'ip-monitor-status-error';
+            }
+        }
+
+        async function runOutboundIpCheck() {
+            try {
+                const response = await fetch('/admin/outbound-ip-check', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('manual check failed');
+                renderOutboundIpStatus(await response.json());
+                showMessage('بررسی IP خروجی انجام شد.', 'success');
+            } catch (error) {
+                showMessage('بررسی IP خروجی ناموفق بود.', 'error');
+            }
+        }
+
         function saveTrialSettings() {
             const d = document.getElementById('trialDuration').value;
             showMessage(`مدت تریال به ${d} ساعت تنظیم شد.`, 'success');
@@ -250,6 +372,7 @@
         document.getElementById('sessionInfo').textContent =
             `ورود به عنوان ${payload.sub || 'Admin'} — ${new Date((payload.iat || 0) * 1000).toLocaleString('fa-IR-u-ca-persian')}`;
         document.getElementById('zarinpalStatus').textContent  = '✅ متصل';
+        loadOutboundIpStatus();
     </script>
 </body>
 </html>

@@ -284,7 +284,12 @@ async def test_startup_defers_inline_webhook_registration_until_after_server_rea
     await app._startup()
 
     assert fake_client.register_called is False
-    assert len(scheduled) == 2
+    scheduled_names = {coro.cr_code.co_name for coro in scheduled}
+    assert scheduled_names == {
+        "run_forever",
+        "_register_inline_webhook_after_startup",
+        "start_webhook_mode",
+    }
 
 
 def test_format_rtl_message_wraps_ltr_fragments_without_changing_visible_text():

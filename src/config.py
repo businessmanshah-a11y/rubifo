@@ -39,6 +39,17 @@ if not DATABASE_URL:
 # Payment Gateway
 ZARINPAL_MERCHANT_ID = os.getenv("ZARINPAL_MERCHANT_ID")
 
+# Outbound IP Monitor
+OUTBOUND_IP_CHECK_ENABLED = os.getenv("OUTBOUND_IP_CHECK_ENABLED", "true").lower() not in {
+    "0",
+    "false",
+    "no",
+}
+OUTBOUND_IP_CHECK_INTERVAL_SECONDS = int(os.getenv("OUTBOUND_IP_CHECK_INTERVAL_SECONDS", "600"))
+OUTBOUND_IP_CHECK_URL = os.getenv("OUTBOUND_IP_CHECK_URL", "https://api.ipify.org")
+TELEGRAM_ALERT_BOT_TOKEN = os.getenv("TELEGRAM_ALERT_BOT_TOKEN", "")
+TELEGRAM_ALERT_CHAT_ID = os.getenv("TELEGRAM_ALERT_CHAT_ID", "")
+
 # Admin Panel
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH")

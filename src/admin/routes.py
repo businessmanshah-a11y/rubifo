@@ -10,6 +10,7 @@ import src.database as db_module
 from src.core.transaction_service import TransactionService
 from src.core.subscription_service import SubscriptionService
 from src.core.user_service import UserService
+from src.core.outbound_ip_monitor import OutboundIPMonitor
 from src.utils import to_jalali_date
 from src.logger import logger
 
@@ -49,6 +50,22 @@ async def db_health(username: str = Depends(verify_token)) -> dict:
     except Exception:
         connected = False
     return {"connected": connected, "pool_available": db_module.pool is not None}
+
+
+@router.get("/outbound-ip-status")
+async def outbound_ip_status(username: str = Depends(verify_token)) -> dict:
+    """Return the latest outbound IP monitor state."""
+    monitor = OutboundIPMonitor(_db())
+    await monitor.ensure_table()
+    return await monitor.get_status()
+
+
+@router.post("/outbound-ip-check")
+async def outbound_ip_check(username: str = Depends(verify_token)) -> dict:
+    """Run an immediate outbound IP check from the admin panel."""
+    monitor = OutboundIPMonitor(_db())
+    await monitor.ensure_table()
+    return await monitor.check_once()
 
 
 @router.get("/transactions")
