@@ -34,6 +34,7 @@ from src.core.outbound_ip_monitor import OutboundIPMonitor
 from src.core.subscription_service import SubscriptionService
 from src.core.transaction_service import TransactionService
 from src.core.user_service import UserService
+from src.integrations.zibal import create_zibal_gateway
 from src.integrations.zibal_mock import create_zibal_mock_gateway
 from src.logger import logger
 from src.utils import to_jalali_date
@@ -821,7 +822,7 @@ async def checkout_start(body: _CheckoutStartBody, user=Depends(_current_web_use
     tier_config = SUBSCRIPTION_TIERS[body.tier]
     amount = tier_config["price_monthly"] * body.months
     callback_url = f"{WEB_BASE_URL.rstrip('/')}/payment/callback"
-    gateway = create_zibal_mock_gateway(WEB_BASE_URL)
+    gateway = create_zibal_gateway()
     success, result = await gateway.request_payment(
         amount=amount,
         description=f"اشتراک {tier_config['display_name_fa']} - Rubifo",
@@ -1030,8 +1031,8 @@ async def payment_callback(
             primary_label="رفتن به ربات",
         )
 
-    gateway = create_zibal_mock_gateway(WEB_BASE_URL)
-    verified, ref_id = await gateway.verify_payment(payment_id, transaction["amount"], "1")
+    gateway = create_zibal_gateway()
+    verified, ref_id = await gateway.verify_payment(payment_id, transaction["amount"])
     if not verified:
         await transaction_service.update_transaction_status(transaction["id"], "failed")
         return _payment_result_page(

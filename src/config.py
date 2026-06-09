@@ -38,6 +38,7 @@ if not DATABASE_URL:
 
 # Payment Gateway
 ZARINPAL_MERCHANT_ID = os.getenv("ZARINPAL_MERCHANT_ID")
+ZIBAL_MERCHANT_ID = os.getenv("ZIBAL_MERCHANT_ID", "")
 
 # Outbound IP Monitor
 OUTBOUND_IP_CHECK_ENABLED = os.getenv("OUTBOUND_IP_CHECK_ENABLED", "true").lower() not in {
