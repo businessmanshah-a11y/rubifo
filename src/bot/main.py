@@ -621,6 +621,9 @@ class RufifoBot:
             await self.client.drain_old_updates()
 
         consecutive_errors = 0
+        # Dedup /start per user: (user_id, "/start") → timestamp of last processing
+        _start_seen: Dict[str, float] = {}
+        _START_DEDUP_SECS = 15
 
         while self.running:
             try:
@@ -637,6 +640,15 @@ class RufifoBot:
                     )
                     has_forwarded = bool((update.get("new_message") or {}).get("forwarded_from"))
                     if user_id and (text or has_media or has_forwarded):
+                        # Skip duplicate /start events arriving within dedup window
+                        if text == "/start":
+                            import time
+                            now_ts = time.monotonic()
+                            last = _start_seen.get(user_id, 0)
+                            if now_ts - last < _START_DEDUP_SECS:
+                                logger.info(f"Skipping duplicate /start from {user_id} (within {_START_DEDUP_SECS}s)")
+                                continue
+                            _start_seen[user_id] = now_ts
                         logger.info(f"New message from {user_id}: {text[:80]}")
                         try:
                             await route_message(self.client, user_id, update)

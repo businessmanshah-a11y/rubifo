@@ -62,7 +62,8 @@ class UserService:
         trial_end = now_tehran() + timedelta(hours=TRIAL_DURATION_HOURS)
 
         await self.db.execute(
-            "INSERT INTO users (user_id, username, trial_end_at) VALUES ($1, $2, $3)",
+            "INSERT INTO users (user_id, username, trial_end_at) VALUES ($1, $2, $3) "
+            "ON CONFLICT (user_id) DO NOTHING",
             user_id,
             username,
             trial_end,
