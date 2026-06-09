@@ -990,3 +990,69 @@ async def get_channels(
         "destinations": destinations,
         "sources": sources,
     }
+
+
+# ─────────────────────────────────────────────────────────────
+# Settings: Trial & Plan Management
+# ─────────────────────────────────────────────────────────────
+
+from src.core.settings_service import SettingsService
+
+
+class _TrialSettingsBody(BaseModel):
+    trial_duration_hours: int
+
+
+class _PlanUpdateBody(BaseModel):
+    name: str
+    price: int
+    routes: int
+
+
+@router.get("/settings/trial")
+async def get_trial_settings(username: str = Depends(verify_token)) -> dict:
+    svc = SettingsService(_db())
+    return {
+        "trial_duration_hours": await svc.get_int("trial_duration_hours", 48),
+        "trial_reminder_hours": await svc.get_int("trial_reminder_hours", 24),
+    }
+
+
+@router.post("/settings/trial")
+async def save_trial_settings(
+    body: _TrialSettingsBody,
+    username: str = Depends(verify_token),
+) -> dict:
+    if not (1 <= body.trial_duration_hours <= 720):
+        raise HTTPException(status_code=400, detail="مدت تریال باید بین ۱ تا ۷۲۰ ساعت باشد")
+    svc = SettingsService(_db())
+    await svc.set("trial_duration_hours", str(body.trial_duration_hours))
+    logger.info(f"Trial duration updated to {body.trial_duration_hours}h by admin")
+    return {"ok": True, "trial_duration_hours": body.trial_duration_hours}
+
+
+@router.get("/settings/plans")
+async def get_plans(username: str = Depends(verify_token)) -> dict:
+    svc = SettingsService(_db())
+    plans = await svc.get_plans()
+    return {"plans": plans}
+
+
+@router.put("/settings/plans/{tier}")
+async def update_plan(
+    tier: str,
+    body: _PlanUpdateBody,
+    username: str = Depends(verify_token),
+) -> dict:
+    if tier not in ("basic", "pro", "enterprise"):
+        raise HTTPException(status_code=400, detail="پلن نامعتبر است")
+    if body.price < 0:
+        raise HTTPException(status_code=400, detail="قیمت نمی‌تواند منفی باشد")
+    if body.routes < 1:
+        raise HTTPException(status_code=400, detail="حداقل ۱ مسیر لازم است")
+    svc = SettingsService(_db())
+    await svc.set(f"plan_{tier}_name", body.name)
+    await svc.set(f"plan_{tier}_price", str(body.price))
+    await svc.set(f"plan_{tier}_routes", str(body.routes))
+    logger.info(f"Plan {tier} updated by admin: price={body.price}, routes={body.routes}")
+    return {"ok": True, "tier": tier, "name": body.name, "price": body.price, "routes": body.routes}

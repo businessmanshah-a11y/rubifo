@@ -230,7 +230,7 @@ class UserService:
         return user
 
     async def merge_web_account(
-        self, web_user_id: str, rubika_guid: str
+        self, web_user_id: str, rubika_guid: str, trial_hours: int = None
     ) -> User:
         """Merge a web-registered user into an existing bot user.
 
@@ -239,6 +239,8 @@ class UserService:
         Trial starts on the rubika_guid user upon merge.
         JWT tokens for web_user_id become invalid after this call.
         """
+        if trial_hours is None:
+            trial_hours = TRIAL_DURATION_HOURS
         web_user = await self.get_user(web_user_id)
         if not web_user:
             raise ValueError(f"Web user {web_user_id} not found")
@@ -263,7 +265,7 @@ class UserService:
                         onboarding_completed_at = NOW(),
                         is_trial_active      = TRUE,
                         trial_start_at       = NOW(),
-                        trial_end_at         = NOW() + INTERVAL '72 hours',
+                        trial_end_at         = NOW() + ($4 * INTERVAL '1 hour'),
                         updated_at           = NOW()
                     WHERE user_id = $3
                     RETURNING *
@@ -271,6 +273,7 @@ class UserService:
                     web_user.phone_number,
                     web_user.password_hash,
                     rubika_guid,
+                    trial_hours,
                 )
 
         merged = User(**dict(result))

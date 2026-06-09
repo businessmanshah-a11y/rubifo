@@ -32,6 +32,7 @@ from src.config import (
 )
 from src.core.outbound_ip_monitor import OutboundIPMonitor
 from src.core.subscription_service import SubscriptionService
+from src.core.settings_service import SettingsService
 from src.core.transaction_service import TransactionService
 from src.core.user_service import UserService
 from src.integrations.zibal import create_zibal_gateway
@@ -814,12 +815,13 @@ async def checkout_page(tier: str = "basic"):
 
 @app.post("/api/checkout/start")
 async def checkout_start(body: _CheckoutStartBody, user=Depends(_current_web_user)):
-    if body.tier not in SUBSCRIPTION_TIERS:
+    tiers = await SettingsService(_web_db()).get_plans()
+    if body.tier not in tiers:
         raise HTTPException(status_code=400, detail="Invalid subscription tier")
     if body.months not in _CHECKOUT_MONTH_OPTIONS:
         raise HTTPException(status_code=400, detail="Invalid subscription duration")
 
-    tier_config = SUBSCRIPTION_TIERS[body.tier]
+    tier_config = tiers[body.tier]
     amount = tier_config["price_monthly"] * body.months
     callback_url = f"{WEB_BASE_URL.rstrip('/')}/payment/callback"
     gateway = create_zibal_gateway()

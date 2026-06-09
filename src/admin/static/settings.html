@@ -170,40 +170,6 @@
                 <h2>تنظیمات اشتراک</h2>
 
                 <div class="setting-item">
-                    <h3>پیکربندی پلن‌ها</h3>
-                    <table class="settings-table">
-                        <thead>
-                            <tr>
-                                <th>پلن</th>
-                                <th>محدودیت مسیر</th>
-                                <th>قیمت ماهانه</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>🥈 شروع حرفه‌ای</td>
-                                <td style="font-family:var(--font-mono);">1</td>
-                                <td style="font-family:var(--font-mono);color:var(--accent);">1,998,000 تومان</td>
-                                <td><button class="btn btn-secondary btn-small" onclick="editTier('basic')">ویرایش</button></td>
-                            </tr>
-                            <tr>
-                                <td>🥇 رشد</td>
-                                <td style="font-family:var(--font-mono);">3</td>
-                                <td style="font-family:var(--font-mono);color:var(--accent);">3,998,000 تومان</td>
-                                <td><button class="btn btn-secondary btn-small" onclick="editTier('pro')">ویرایش</button></td>
-                            </tr>
-                            <tr>
-                                <td>💎 مقیاس</td>
-                                <td style="font-family:var(--font-mono);">10</td>
-                                <td style="font-family:var(--font-mono);color:var(--accent);">9,998,000 تومان</td>
-                                <td><button class="btn btn-secondary btn-small" onclick="editTier('enterprise')">ویرایش</button></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="setting-item">
                     <h3>تنظیمات تریال</h3>
                     <div class="setting-controls">
                         <label>
@@ -212,6 +178,24 @@
                         </label>
                         <button class="btn btn-primary" onclick="saveTrialSettings()">ذخیره</button>
                     </div>
+                </div>
+
+                <div class="setting-item">
+                    <h3>پیکربندی پلن‌ها</h3>
+                    <table class="settings-table" id="plansTable">
+                        <thead>
+                            <tr>
+                                <th>پلن</th>
+                                <th>نام</th>
+                                <th>مسیر</th>
+                                <th>قیمت ماهانه (تومان)</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="plansBody">
+                            <tr><td colspan="5" style="text-align:center;color:var(--text-3);">در حال بارگذاری…</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -286,7 +270,62 @@
 
         function runBackup()   { showMessage('پشتیبان‌گیری با موفقیت انجام شد.', 'success'); }
         function optimizeDB()  { showMessage('بهینه‌سازی پایگاه داده انجام شد.', 'success'); }
-        function editTier(t)   { showMessage(`ویرایش پلن ${t} به‌زودی اضافه می‌شود.`, 'info'); }
+
+        // ── Trial Settings ─────────────────────────────────────────────────
+        async function loadTrialSettings() {
+            try {
+                const res = await fetch('/admin/settings/trial', { headers: { Authorization: 'Bearer ' + token } });
+                const data = await res.json();
+                document.getElementById('trialDuration').value = data.trial_duration_hours ?? 48;
+            } catch(e) {}
+        }
+
+        async function saveTrialSettings() {
+            const hours = parseInt(document.getElementById('trialDuration').value);
+            if (!hours || hours < 1 || hours > 720) { showMessage('مدت باید بین ۱ تا ۷۲۰ ساعت باشد.', 'error'); return; }
+            const res = await fetch('/admin/settings/trial', {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trial_duration_hours: hours })
+            });
+            if (res.ok) showMessage(`مدت تریال به ${hours} ساعت تنظیم شد.`, 'success');
+            else showMessage('خطا در ذخیره.', 'error');
+        }
+
+        // ── Plan Management ────────────────────────────────────────────────
+        const TIER_EMOJI = { basic: '🥈', pro: '🥇', enterprise: '💎' };
+        const TIER_LABEL = { basic: 'شروع حرفه‌ای', pro: 'رشد', enterprise: 'مقیاس' };
+
+        async function loadPlans() {
+            const res = await fetch('/admin/settings/plans', { headers: { Authorization: 'Bearer ' + token } });
+            const data = await res.json();
+            const tbody = document.getElementById('plansBody');
+            tbody.innerHTML = '';
+            for (const [tier, plan] of Object.entries(data.plans)) {
+                tbody.innerHTML += `
+                <tr id="row-${tier}">
+                    <td>${TIER_EMOJI[tier] || ''} ${TIER_LABEL[tier] || tier}</td>
+                    <td><input type="text" id="name-${tier}" value="${plan.display_name_fa}" style="width:120px;"></td>
+                    <td><input type="number" id="routes-${tier}" value="${plan.max_destinations}" min="1" style="width:60px;"></td>
+                    <td><input type="number" id="price-${tier}" value="${plan.price_monthly}" min="0" style="width:130px;"></td>
+                    <td><button class="btn btn-primary btn-small" onclick="savePlan('${tier}')">ذخیره</button></td>
+                </tr>`;
+            }
+        }
+
+        async function savePlan(tier) {
+            const name   = document.getElementById(`name-${tier}`).value.trim();
+            const price  = parseInt(document.getElementById(`price-${tier}`).value);
+            const routes = parseInt(document.getElementById(`routes-${tier}`).value);
+            if (!name || isNaN(price) || isNaN(routes)) { showMessage('مقادیر نامعتبر', 'error'); return; }
+            const res = await fetch(`/admin/settings/plans/${tier}`, {
+                method: 'PUT',
+                headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, price, routes })
+            });
+            if (res.ok) showMessage(`پلن ${tier} ذخیره شد.`, 'success');
+            else showMessage('خطا در ذخیره پلن.', 'error');
+        }
 
         function copyCurrentIp() {
             const ip = document.getElementById('outboundCurrentIp').textContent.trim();
@@ -395,6 +434,8 @@
             `ورود به عنوان ${payload.sub || 'Admin'} — ${new Date((payload.iat || 0) * 1000).toLocaleString('fa-IR-u-ca-persian')}`;
         document.getElementById('zarinpalStatus').textContent  = '✅ متصل';
         loadOutboundIpStatus();
+        loadTrialSettings();
+        loadPlans();
     </script>
 </body>
 </html>
