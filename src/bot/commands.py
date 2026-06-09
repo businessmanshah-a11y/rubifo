@@ -1003,7 +1003,7 @@ async def handle_web_linking_password_verify(
         await client.send_message(
             user_id,
             f"✅ حسابت با شماره {merged_user.phone_number} به ربات وصل شد!\n\n"
-            "تریال ۷۲ ساعته‌ات از همین الان شروع شد. 🎉\n\n"
+            "تریال رایگانت از همین الان شروع شد. 🎉\n\n"
             "⚠️ اگر قبلاً در سایت وارد بودی، لطفاً یک‌بار دیگر لاگین کن.",
             with_keypad=True,
         )
@@ -1414,10 +1414,8 @@ async def handle_subscription_status(client, user_id: int) -> None:
                 "💳 وضعیت اشتراک شما\n\n"
                 f"⏳ تریال: {hours_left:.0f} ساعت باقیمانده\n\n"
                 f"کانال‌های مقصد: {dest_used}/{dest_limit}\n\n"
-                "برای ادامه فعالیت بعد از تریال یکی از پلن‌های زیر را انتخاب کنید:\n"
-                f"📦 شروع حرفه‌ای — {_format_price(_tier_price('basic'))} تومان/ماه (1 کانال)\n"
-                f"⭐ رشد — {_format_price(_tier_price('pro'))} تومان/ماه (3 کانال)\n"
-                f"👑 مقیاس — {_format_price(_tier_price('enterprise'))} تومان/ماه (10 کانال)"
+                "برای مشاهده پلن‌ها و خرید اشتراک به سایت مراجعه کنید:\n"
+                f"{_checkout_url()}"
             )
         elif state == "active":
             tier = status["tier"]
@@ -1448,10 +1446,8 @@ async def handle_subscription_status(client, user_id: int) -> None:
                 "⚠️ اشتراک منقضی‌شده\n\n"
                 "تریال و اشتراک فعالی ندارید.\n"
                 "تمام پلن‌ها غیرفعال شده‌اند.\n\n"
-                "برای فعال‌سازی دوباره یکی از پلن‌های زیر را انتخاب کنید:\n"
-                f"📦 شروع حرفه‌ای — {_format_price(_tier_price('basic'))} تومان/ماه (1 کانال)\n"
-                f"⭐ رشد — {_format_price(_tier_price('pro'))} تومان/ماه (3 کانال)\n"
-                f"👑 مقیاس — {_format_price(_tier_price('enterprise'))} تومان/ماه (10 کانال)"
+                "برای فعال‌سازی دوباره به سایت مراجعه کنید:\n"
+                f"{_checkout_url()}"
             )
 
         await client.send_message(
@@ -1484,13 +1480,9 @@ async def handle_buy(client, user_id: int) -> None:
 
         await client.send_message(
             user_id,
-            "💳 اشتراک‌های Rubifo\n\n"
-            "خرید و تمدید اشتراک از وب‌سایت انجام می‌شود تا پرداخت، رسید و فعال‌سازی "
-            "روی همین حساب روبیکا ثبت شود.\n\n"
-            f"لینک خرید:\n{_checkout_url()}\n\n"
-            f"📦 شروع حرفه‌ای: {_format_price(_tier_price('basic'))} تومان/ماه\n"
-            f"⭐ رشد: {_format_price(_tier_price('pro'))} تومان/ماه\n"
-            f"👑 مقیاس: {_format_price(_tier_price('enterprise'))} تومان/ماه"
+            "💳 خرید اشتراک Rubifo\n\n"
+            "خرید و تمدید اشتراک از وب‌سایت انجام می‌شود.\n\n"
+            f"{_checkout_url()}"
         )
     except Exception as e:
         logger.error(f"/buy error: {e}")
@@ -1502,12 +1494,9 @@ async def handle_buy_tier(client, user_id: int, tier: str) -> None:
     if tier not in SUBSCRIPTION_TIERS:
         await client.send_message(user_id, "سطح اشتراک نامعتبر است.")
         return
-    amount = SUBSCRIPTION_TIERS[tier]["price_monthly"]
-    tier_fa = _tier_name(tier)
     await client.send_message(
         user_id,
-        f"برای خرید پلن {tier_fa} ({_format_price(amount)} تومان)، وارد وب‌سایت شوید:\n"
-        f"{_checkout_url(tier)}"
+        f"برای خرید اشتراک وارد وب‌سایت شوید:\n{_checkout_url()}"
     )
 
 
@@ -1567,13 +1556,9 @@ async def handle_renew(client, user_id: int) -> None:
             await client.send_message(user_id, "اشتراک فعالی ندارید.\n/buy برای خرید.")
             return
 
-        tier = sub.tier
-        amount = SUBSCRIPTION_TIERS.get(tier, {}).get("price_monthly", 0)
-        tier_fa = _tier_name(tier)
         await client.send_message(
             user_id,
-            f"تمدید پلن {tier_fa} ({_format_price(amount)} تومان) از وب‌سایت انجام می‌شود:\n"
-            f"{_checkout_url(tier)}"
+            f"برای تمدید یا تغییر پلن وارد وب‌سایت شوید:\n{_checkout_url()}"
         )
     except Exception as e:
         logger.error(f"/renew error: {e}")

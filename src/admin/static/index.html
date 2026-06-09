@@ -2618,9 +2618,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <script>
 (function loadPlanPrices() {
-  function formatToman(rial) {
-    // Convert rial to toman and format as X.XXX م.ت
-    const toman = Math.round(rial / 10);
+  function formatToman(toman) {
     if (toman >= 1000000) {
       const m = (toman / 1000000).toFixed(3).replace(/\.?0+$/, '');
       return m + '<span class="unit"> م.ت</span>';
