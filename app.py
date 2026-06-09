@@ -837,11 +837,12 @@ async def checkout_start(body: _CheckoutStartBody, user=Depends(_current_web_use
         raise HTTPException(status_code=400, detail="Invalid subscription duration")
 
     tier_config = tiers[body.tier]
-    amount = tier_config["price_monthly"] * body.months
+    amount_toman = tier_config["price_monthly"] * body.months
+    amount_rial = amount_toman * 10  # Zibal requires rials
     callback_url = f"{WEB_BASE_URL.rstrip('/')}/payment/callback"
     gateway = create_zibal_gateway()
     success, result = await gateway.request_payment(
-        amount=amount,
+        amount=amount_rial,
         description=f"اشتراک {tier_config['display_name_fa']} - Rubifo",
         callback_url=callback_url,
     )
@@ -850,7 +851,7 @@ async def checkout_start(body: _CheckoutStartBody, user=Depends(_current_web_use
 
     authority = result["track_id"]
     await TransactionService(_web_db()).create_pending_transaction(
-        user.user_id, amount, body.tier, authority
+        user.user_id, amount_toman, body.tier, authority  # store toman in DB
     )
     return {
         "payment_url": result["payment_url"],
