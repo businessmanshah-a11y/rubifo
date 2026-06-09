@@ -1157,6 +1157,8 @@ async def _handle_webhook_payload(data: dict) -> JSONResponse:
 
     logger.info(f"[WEBHOOK] received keys={list(data.keys())} raw={str(data)[:200]}")
 
+    # Webhook is registered as ReceiveInlineMessage — only process inline button presses.
+    # NewMessage/StartedBot events arrive via polling and must not be double-processed here.
     if "inline_message" in data:
         msg = data.get("inline_message") or {}
         chat_id = msg.get("chat_id") or msg.get("sender_id")
@@ -1173,36 +1175,10 @@ async def _handle_webhook_payload(data: dict) -> JSONResponse:
             logger.warning("[WEBHOOK] inline_message received but bot client not ready")
         return _json_response({"ok": True})
 
-    raw = data.get("update") or data
-    update_type = raw.get("type", "")
-    chat_id = raw.get("chat_id")
-
-    if not chat_id:
-        return _json_response({"ok": True})
-
-    if update_type == "NewMessage":
-        msg = raw.get("new_message") or {}
-        text = (msg.get("text") or "").strip()
-        if not text:
-            btn_id = (msg.get("aux_data") or {}).get("button_id", "")
-            if btn_id:
-                text = f"/{btn_id}"
-        entry = {"user_id": str(chat_id), "text": text, "new_message": msg}
-        fwd = msg.get("forwarded_from") or {}
-        if fwd:
-            entry["forwarded_from_chat"] = str(
-                fwd.get("from_chat_id") or fwd.get("chat_id") or fwd.get("object_guid", "")
-            )
-            entry["forwarded_message_id"] = str(msg.get("message_id", ""))
-    elif update_type == "StartedBot":
-        entry = {"user_id": str(chat_id), "text": "/start", "new_message": {}}
-    else:
-        return _json_response({"ok": True})
-
-    if _bot_ref and _bot_ref.client:
-        from src.bot.handlers import route_message
-        asyncio.create_task(route_message(_bot_ref.client, str(chat_id), entry))
-
+    # Any other event type (NewMessage, StartedBot, etc.) is handled by the polling loop.
+    # Acknowledge receipt without processing to avoid duplicate message delivery.
+    update_type = (data.get("update") or data).get("type", "")
+    logger.info(f"[WEBHOOK] ignoring non-inline event type={update_type!r} (handled by polling)")
     return _json_response({"ok": True})
 
 
