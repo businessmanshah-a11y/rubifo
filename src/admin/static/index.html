@@ -1826,7 +1826,7 @@
         <div class="plan-inner">
           <div class="plan-name"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> شروع حرفه‌ای</div>
           <div class="plan-target">برای یک جریان جدی</div>
-          <div class="plan-price">۱.۹۹۸<span class="unit"> م.ت</span></div>
+          <div class="plan-price" id="price-basic">۱.۹۹۸<span class="unit"> م.ت</span></div>
           <div class="plan-period">ماهیانه</div>
           <div class="plan-rule"></div>
           <ul class="plan-features">
@@ -1847,7 +1847,7 @@
           <div class="popular-pill">محبوب‌ترین</div>
           <div class="plan-name" style="margin-top:16px"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> رشد</div>
           <div class="plan-target">برای مدیران چندکاناله</div>
-          <div class="plan-price">
+          <div class="plan-price" id="price-pro">
             <span class="grad-gold">۳.۹۹۸</span><span class="unit"> م.ت</span>
           </div>
           <div class="plan-period">ماهیانه</div>
@@ -1869,7 +1869,7 @@
         <div class="plan-inner">
           <div class="plan-name"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M2 14l4-8 6 4 6-4 4 8"/></svg> مقیاس</div>
           <div class="plan-target">برای شبکه‌های بزرگ</div>
-          <div class="plan-price">۹.۹۹۸<span class="unit"> م.ت</span></div>
+          <div class="plan-price" id="price-enterprise">۹.۹۹۸<span class="unit"> م.ت</span></div>
           <div class="plan-period">ماهیانه</div>
           <div class="plan-rule"></div>
           <ul class="plan-features">
@@ -2613,6 +2613,38 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   initAuth();
+})();
+</script>
+
+<script>
+(function loadPlanPrices() {
+  function formatToman(rial) {
+    // Convert rial to toman and format as X.XXX م.ت
+    const toman = Math.round(rial / 10);
+    if (toman >= 1000000) {
+      const m = (toman / 1000000).toFixed(3).replace(/\.?0+$/, '');
+      return m + '<span class="unit"> م.ت</span>';
+    }
+    return toman.toLocaleString('fa-IR') + '<span class="unit"> ت</span>';
+  }
+
+  fetch('/api/plans')
+    .then(r => r.json())
+    .then(plans => {
+      const map = { basic: 'price-basic', pro: 'price-pro', enterprise: 'price-enterprise' };
+      const proEl = document.getElementById('price-pro');
+      for (const [tier, elId] of Object.entries(map)) {
+        const el = document.getElementById(elId);
+        if (!el || !plans[tier]) continue;
+        const price = plans[tier].price_monthly;
+        if (tier === 'pro' && proEl) {
+          proEl.innerHTML = '<span class="grad-gold">' + formatToman(price).replace('<span class="unit"> م.ت</span>', '') + '</span><span class="unit"> م.ت</span>';
+        } else {
+          el.innerHTML = formatToman(price);
+        }
+      }
+    })
+    .catch(() => {}); // fail silently - static fallback stays
 })();
 </script>
 

@@ -661,6 +661,20 @@ async def web_user_register(body: _UserRegisterBody):
     }
 
 
+@app.get("/api/plans")
+async def public_plans():
+    """Public endpoint returning current plan prices from DB."""
+    tiers = await SettingsService(_web_db()).get_plans()
+    return {
+        tier: {
+            "name": cfg["display_name_fa"],
+            "price_monthly": cfg["price_monthly"],
+            "max_destinations": cfg["max_destinations"],
+        }
+        for tier, cfg in tiers.items()
+    }
+
+
 @app.get("/api/me/subscription")
 async def web_user_subscription(user=Depends(_current_web_user)):
     subscription = await SubscriptionService(_web_db()).get_active_subscription(user.user_id)
@@ -679,7 +693,8 @@ async def web_user_subscription(user=Depends(_current_web_user)):
 
 @app.get("/checkout")
 async def checkout_page(tier: str = "basic"):
-    if tier not in SUBSCRIPTION_TIERS:
+    tiers = await SettingsService(_web_db()).get_plans()
+    if tier not in tiers:
         return _html_page(
             "پلن نامعتبر",
             f"""
@@ -701,7 +716,7 @@ async def checkout_page(tier: str = "basic"):
             page_class="failure",
         )
 
-    cfg = SUBSCRIPTION_TIERS[tier]
+    cfg = tiers[tier]
     tier_name = cfg["display_name_fa"]
     price = _format_toman(cfg["price_monthly"])
     destinations = cfg["max_destinations"]
