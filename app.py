@@ -714,8 +714,8 @@ async def checkout_page(tier: str = "basic"):
         <div class="checkout-copy">
           <div class="brand-mark">Rubifo checkout</div>
           <h1>پلن را ببندیم، ربات شروع کند.</h1>
-          <p class="lead">این مسیر پرداخت فعلاً موک سازگار با زیبال است تا موفق، ناموفق و لغو را کامل تست کنیم.</p>
-          <span class="status-chip">پرداخت تست زیبال</span>
+          <p class="lead">پرداخت امن از طریق درگاه زیبال. بعد از پرداخت، اشتراک فوری فعال می‌شود.</p>
+          <span class="status-chip">درگاه زیبال</span>
         </div>
         <div class="checkout-panel">
           <div class="panel-kicker">خلاصه سفارش</div>
@@ -738,7 +738,7 @@ async def checkout_page(tier: str = "basic"):
           <div id="subscription-status" class="status-box" hidden
                data-renew-text="اشتراک فعال دارید؛ این خرید تمدید می‌شود."
                data-change-text="اشتراک فعال دارید؛ این خرید پلن شما را تغییر می‌دهد."></div>
-          <button id="pay" class="btn btn-primary" type="button">پرداخت تست زیبال</button>
+          <button id="pay" class="btn btn-primary" type="button">پرداخت از طریق زیبال</button>
           <p id="checkout-error" class="error-note"></p>
           <div class="hint-box">بعد از پرداخت موفق، همین صفحه اشتراک را فعال می‌کند و لینک مستقیم شروع در ربات را نشان می‌دهد.</div>
         </div>
