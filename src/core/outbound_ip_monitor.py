@@ -17,6 +17,16 @@ from src.logger import logger
 FetchIP = Callable[[], Union[str, Awaitable[str]]]
 SendAlert = Callable[[str], Union[Any, Awaitable[Any]]]
 
+# Fallback URLs tried in order until one succeeds
+_IP_CHECK_URLS = [
+    "http://api.ipify.org",
+    "http://icanhazip.com",
+    "http://checkip.amazonaws.com",
+    "http://ipecho.net/plain",
+    "https://api.ipify.org",
+    "https://icanhazip.com",
+]
+
 
 async def _maybe_await(value):
     if inspect.isawaitable(value):
@@ -25,7 +35,7 @@ async def _maybe_await(value):
 
 
 class OutboundIPMonitor:
-    """Tracks the app's public outbound IP and alerts only when it changes."""
+    """Tracks the app's public outbound IP and alerts when it changes."""
 
     def __init__(
         self,
@@ -100,6 +110,7 @@ class OutboundIPMonitor:
                 raise RuntimeError("empty IP response")
         except Exception as exc:
             error = str(exc)
+            logger.error(f"Outbound IP check failed: {error}")
             await self._save_state(
                 current_ip=old_ip,
                 previous_ip=existing["previous_ip"] if existing else None,
@@ -117,12 +128,16 @@ class OutboundIPMonitor:
         alert_sent_at = existing["alert_sent_at"] if existing else None
 
         if changed:
+            logger.warning(f"Outbound IP changed: {old_ip} → {current_ip}")
             message = self._build_change_message(old_ip, current_ip)
             try:
                 await self._notify(message)
                 alert_sent_at = datetime.utcnow()
+                logger.info(f"Outbound IP change alert sent via Telegram")
             except Exception as exc:
                 logger.error(f"Outbound IP Telegram alert failed: {exc}")
+        else:
+            logger.info(f"Outbound IP check OK: {current_ip}")
 
         await self._save_state(
             current_ip=current_ip,
@@ -149,10 +164,23 @@ class OutboundIPMonitor:
         if self._fetch_ip:
             return await _maybe_await(self._fetch_ip())
 
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(self.check_url)
-            response.raise_for_status()
-            return response.text
+        urls = [self.check_url] + [u for u in _IP_CHECK_URLS if u != self.check_url]
+        last_error = None
+        for url in urls:
+            try:
+                async with httpx.AsyncClient(timeout=8) as client:
+                    response = await client.get(url)
+                    response.raise_for_status()
+                    ip = response.text.strip()
+                    if ip:
+                        logger.info(f"IP fetched from {url}: {ip}")
+                        return ip
+            except Exception as exc:
+                last_error = exc
+                logger.debug(f"IP check failed for {url}: {exc}")
+                continue
+
+        raise RuntimeError(f"All IP check URLs failed. Last error: {last_error}")
 
     async def _notify(self, message: str) -> None:
         if self._send_alert:
@@ -169,6 +197,7 @@ class OutboundIPMonitor:
                 json={
                     "chat_id": self.telegram_chat_id,
                     "text": message,
+                    "parse_mode": "HTML",
                     "disable_web_page_preview": True,
                 },
             )
@@ -210,11 +239,14 @@ class OutboundIPMonitor:
         )
 
     def _build_change_message(self, old_ip: str, current_ip: str) -> str:
-        checked_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        checked_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
         return (
-            "هشدار روبیفو: IP خروجی سرور تغییر کرد.\n"
-            f"IP قبلی: {old_ip}\n"
-            f"IP جدید: {current_ip}\n"
-            f"زمان بررسی: {checked_at}\n"
-            "لطفاً IP مجاز در پنل درگاه پرداخت را بررسی/به‌روزرسانی کنید."
+            "⚠️ <b>هشدار روبیفو: IP خروجی سرور تغییر کرد</b>\n\n"
+            f"IP قبلی: <code>{old_ip}</code>\n"
+            f"IP جدید: <code>{current_ip}</code>\n"
+            f"زمان: {checked_at}\n\n"
+            "🔴 <b>اقدام فوری لازم است:</b>\n"
+            "پنل زیبال → تنظیمات درگاه → آدرس‌های IP مجاز\n"
+            f"IP جدید را اضافه کنید: <code>{current_ip}</code>\n\n"
+            "🔗 پنل ادمین: https://rubifo.ir/admin/settings.html"
         )

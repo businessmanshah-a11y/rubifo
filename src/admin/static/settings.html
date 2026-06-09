@@ -111,7 +111,7 @@
 
                 <div class="setting-item">
                     <h3>درگاه پرداخت</h3>
-                    <p>وضعیت اتصال به زرین‌پال</p>
+                    <p>وضعیت اتصال به زیبال</p>
                     <div class="setting-controls">
                         <p style="font-size:var(--f-sm);color:var(--text-2);">
                             <strong style="color:var(--text-3);">وضعیت:</strong>
@@ -124,11 +124,20 @@
                     <h3>مانیتور IP خروجی</h3>
                     <p>بررسی دوره‌ای IP خروجی سرور برای جلوگیری از خطای IP غیرمجاز در درگاه پرداخت</p>
                     <div class="setting-controls" style="align-items:stretch;">
-                        <div class="ip-monitor-grid">
-                            <div class="ip-monitor-field">
-                                <span>IP فعلی</span>
-                                <strong id="outboundCurrentIp">—</strong>
+
+                        <!-- IP فعلی - برجسته -->
+                        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                            <div>
+                                <div style="font-size:var(--f-xs);color:var(--text-3);margin-bottom:4px;">IP خروجی فعال سرور</div>
+                                <code id="outboundCurrentIp" style="font-size:1.15rem;color:var(--accent);letter-spacing:1px;">در حال بررسی…</code>
                             </div>
+                            <div style="display:flex;gap:8px;flex-shrink:0;">
+                                <button class="btn btn-secondary btn-small" onclick="copyCurrentIp()" title="کپی IP">📋 کپی</button>
+                                <a id="zibalPanelLink" href="https://zibal.ir/dashboard/gateway" target="_blank" class="btn btn-primary btn-small">افزودن در زیبال ←</a>
+                            </div>
+                        </div>
+
+                        <div class="ip-monitor-grid">
                             <div class="ip-monitor-field">
                                 <span>IP قبلی</span>
                                 <strong id="outboundPreviousIp">—</strong>
@@ -278,6 +287,19 @@
         function runBackup()   { showMessage('پشتیبان‌گیری با موفقیت انجام شد.', 'success'); }
         function optimizeDB()  { showMessage('بهینه‌سازی پایگاه داده انجام شد.', 'success'); }
         function editTier(t)   { showMessage(`ویرایش پلن ${t} به‌زودی اضافه می‌شود.`, 'info'); }
+
+        function copyCurrentIp() {
+            const ip = document.getElementById('outboundCurrentIp').textContent.trim();
+            if (!ip || ip === '—' || ip === 'در حال بررسی…') {
+                showMessage('IP هنوز در دسترس نیست.', 'error');
+                return;
+            }
+            navigator.clipboard.writeText(ip).then(() => {
+                showMessage(`IP کپی شد: ${ip}`, 'success');
+            }).catch(() => {
+                showMessage(`IP: ${ip}`, 'info');
+            });
+        }
 
         function formatDateTime(value) {
             if (!value) return '—';
